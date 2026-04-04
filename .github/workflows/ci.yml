@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-import:
+    name: Lint & Import Check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt5 PyQt-Fluent-Widgets pyserial pyqtgraph nuitka
+
+      - name: Syntax check (compile all .py)
+        run: python -m compileall app/ main.py deploy.py -q
+
+      - name: Import smoke test
+        shell: cmd
+        run: |
+          set QT_QPA_PLATFORM=offscreen
+          python -c "from app.common.config import cfg, APP_VERSION; print('Config OK, version:', APP_VERSION)"
+          python -c "from app.core.serial_manager import SerialManager; print('SerialManager OK')"
+          python -c "from app.core.data_binding import bindingEngine; print('DataBinding OK')"
+          python -c "from app.core.code_generator import generate_project; print('CodeGenerator OK')"
+
+      - name: Nuitka dry-run (version info only)
+        run: python -m nuitka --version

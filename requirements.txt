@@ -1,0 +1,4 @@
+PyQt-Fluent-Widgets>=1.5.5
+pyserial>=3.5
+pyqtgraph>=0.13.3
+nuitka>=4.0.7

@@ -1,0 +1,807 @@
+# coding: utf-8
+"""Preview interface — build and run the designed UI in a live window."""
+from functools import partial
+
+from PyQt5.QtCore import Qt, QProcess, QTimer
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
+    QDialog, QFileDialog, QSizePolicy,
+)
+from PyQt5.QtWidgets import QAbstractSpinBox, QLineEdit, QAbstractButton, QTabBar, QTabWidget
+from PyQt5.QtGui import QFont, QTextCursor, QColor
+from qfluentwidgets import (
+    PrimaryPushButton, PushButton, BodyLabel, InfoBar,
+    InfoBarPosition, FluentIcon as FIF, CardWidget, isDarkTheme,
+    SwitchButton, StrongBodyLabel, CaptionLabel, TextEdit,
+    ProgressBar,
+)
+
+from app.common.signal_bus import signalBus
+from app.widgets.basic import create_widget
+from app.core.project import ProjectData
+from app.core.data_binding import bindingEngine
+
+
+class PreviewCanvas(QWidget):
+    """The actual preview surface that renders widgets at their designed positions."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._widgets = []
+        self._update_style()
+
+    def _update_style(self):
+        if isDarkTheme():
+            self.setStyleSheet("PreviewCanvas { background: #2b2b2b; border: 1px solid #444; }")
+        else:
+            self.setStyleSheet("PreviewCanvas { background: white; border: 1px solid #ddd; }")
+
+    def build_from_project(self, project: ProjectData):
+        self.clear()
+        self._update_style()
+        self.setFixedSize(project.canvas_width, project.canvas_height)
+
+        for wd in project.widgets:
+            self._create_widget_recursive(wd, self)
+
+    def _create_widget_recursive(self, wd: dict, parent_widget: QWidget):
+        type_name = wd["type"]
+        props = wd.get("properties", {})
+        geo = wd.get("geometry", {})
+
+        try:
+            actual_parent = parent_widget
+            if isinstance(parent_widget, QTabWidget):
+                tab_idx = wd.get("tabIndex", 0)
+                page = parent_widget.widget(tab_idx)
+                if page is None and parent_widget.count() > 0:
+                    page = parent_widget.widget(0)
+                if page:
+                    actual_parent = page
+
+            widget = create_widget(type_name, props, actual_parent)
+            self._enable_interaction(widget)
+            widget.setGeometry(
+                int(geo.get("x", 0)), int(geo.get("y", 0)),
+                int(geo.get("w", 120)), int(geo.get("h", 40)),
+            )
+            widget.show()
+            self._widgets.append(widget)
+
+            widget_id = wd.get("id")
+            if widget_id:
+                bindingEngine.register_widget(widget_id, widget)
+
+            self._wire_commands(widget, type_name, props)
+
+            if type_name == "RealtimeChart" and hasattr(widget, "start_listening"):
+                widget.start_listening()
+
+            if props.get("notify"):
+                self._wire_notification(widget, type_name, props)
+
+            for child_data in wd.get("children", []):
+                self._create_widget_recursive(child_data, widget)
+        except (ValueError, KeyError):
+            pass
+
+    @staticmethod
+    def _enable_interaction(widget: QWidget):
+        widget.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        widget.setFocusPolicy(Qt.StrongFocus)
+        for child in widget.findChildren(QWidget):
+            child.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            if isinstance(child, (QAbstractSpinBox, QLineEdit, QAbstractButton, QTabBar)):
+                child.setFocusPolicy(Qt.StrongFocus)
+                child.setEnabled(True)
+
+    _NEWLINE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
+    _FC_MAP = {
+        "01 读线圈": 0x01, "02 读离散输入": 0x02,
+        "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
+        "05 写单线圈": 0x05, "06 写单寄存器": 0x06,
+    }
+
+    @staticmethod
+    def _parse_hex_field(s: str) -> bytes:
+        """Parse a hex string like 'AA 55' into bytes, return empty bytes on failure."""
+        s = s.replace(" ", "")
+        if not s:
+            return b""
+        if len(s) % 2 != 0:
+            s = "0" + s
+        try:
+            return bytes.fromhex(s)
+        except ValueError:
+            return b""
+
+    @staticmethod
+    def _send_modbus_frame(props: dict, value: int = None):
+        """Build and send a Modbus RTU frame from widget properties.
+        If value is provided, it overrides mbValue from props."""
+        from app.core.serial_manager import serialManager
+        if not serialManager.is_connected:
+            signalBus.showNotification.emit("提示", "串口未连接，命令未发送", "警告", 2000)
+            return
+        from app.core.protocol_parser import build_modbus_frame
+        slave = int(props.get("mbSlave", 1))
+        fc_text = props.get("mbFunc", "06 写单寄存器")
+        fc = PreviewCanvas._FC_MAP.get(fc_text, 0x06)
+        addr = int(props.get("mbAddress", 0))
+        val = value if value is not None else int(props.get("mbValue", 1))
+        frame = build_modbus_frame(slave, fc, addr, val, val)
+        serialManager.send(frame)
+
+    @staticmethod
+    def _send_serial_bytes(raw: bytes):
+        from app.core.serial_manager import serialManager
+        if not serialManager.is_connected:
+            signalBus.showNotification.emit("提示", "串口未连接，命令未发送", "警告", 2000)
+            return
+        serialManager.send(raw)
+
+    @staticmethod
+    def _send_command(cmd: str, mode: str, newline: str, props: dict):
+        from app.core.serial_manager import serialManager
+        if not serialManager.is_connected:
+            signalBus.showNotification.emit("提示", "串口未连接，命令未发送", "警告", 2000)
+            return
+
+        if mode == "Modbus":
+            try:
+                val = int(cmd) if cmd.strip() else int(props.get("mbValue", 1))
+            except (ValueError, TypeError):
+                val = int(props.get("mbValue", 1))
+            PreviewCanvas._send_modbus_frame(props, val)
+            return
+        elif mode == "HEX":
+            hex_str = cmd.replace(" ", "")
+            if len(hex_str) % 2 != 0:
+                hex_str = "0" + hex_str
+            try:
+                payload = bytes.fromhex(hex_str)
+            except ValueError:
+                signalBus.showNotification.emit("提示", "HEX格式错误", "错误", 2000)
+                return
+            header = PreviewCanvas._parse_hex_field(props.get("frameHeader", ""))
+            tail = PreviewCanvas._parse_hex_field(props.get("frameTail", ""))
+            serialManager.send(header + payload + tail)
+        else:
+            suffix = PreviewCanvas._NEWLINE_MAP.get(newline, "\r\n")
+            serialManager.send_text(cmd + suffix)
+
+    _STRUCT_FMT = {
+        "uint8": ("B", int), "int8": ("b", int),
+        "uint16": ("H", int), "int16": ("h", int),
+        "uint32": ("I", int), "int32": ("i", int),
+        "float32": ("f", float),
+    }
+
+    @staticmethod
+    def _apply_template(tpl: str, value: str, mode: str, newline: str, props: dict):
+        """Apply template and send via the appropriate mode.
+
+        For HEX mode with a struct data type, packs the value as binary first,
+        then applies the template to the hex representation.
+        """
+        if mode == "HEX":
+            dt = props.get("dataType", "HEX字符串")
+            fmt_info = PreviewCanvas._STRUCT_FMT.get(dt)
+            if fmt_info:
+                import struct
+                fmt_char, cast = fmt_info
+                bo = ">" if props.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"
+                try:
+                    packed = struct.pack(bo + fmt_char, cast(value))
+                except (struct.error, ValueError, OverflowError):
+                    signalBus.showNotification.emit("提示", "数值超出类型范围", "错误", 2000)
+                    return
+                hex_val = packed.hex().upper()
+                cmd = tpl.replace("{value}", hex_val) if "{value}" in tpl else tpl
+                PreviewCanvas._send_command(cmd, mode, newline, props)
+                return
+
+        cmd = tpl.replace("{value}", value) if "{value}" in tpl else tpl
+        PreviewCanvas._send_command(cmd, mode, newline, props)
+
+    @staticmethod
+    def _wire_commands(widget: QWidget, type_name: str, props: dict):
+        """Connect command properties to serial sending."""
+        mode = props.get("commandMode", "文本")
+        newline = props.get("commandNewline", "\\r\\n")
+        tpl = props.get("commandTemplate", "{value}")
+
+        if type_name == "PushButton":
+            cmd = props.get("command", "").strip()
+            if cmd or mode == "Modbus":
+                widget.clicked.connect(
+                    lambda _, c=cmd, m=mode, n=newline, p=props, t=tpl:
+                        PreviewCanvas._apply_template(t, c, m, n, p))
+
+        elif type_name == "ToggleSwitch":
+            on_cmd = props.get("onCommand", "").strip()
+            off_cmd = props.get("offCommand", "").strip()
+            if on_cmd or off_cmd or mode == "Modbus":
+                sw = widget.findChild(SwitchButton)
+                if sw:
+                    def _on_toggle(checked, _on=on_cmd, _off=off_cmd,
+                                   _m=mode, _n=newline, _p=props, _t=tpl):
+                        if _m == "Modbus":
+                            val = 0xFF00 if checked else 0x0000
+                            PreviewCanvas._send_modbus_frame(_p, val)
+                        else:
+                            c = _on if checked else _off
+                            if c:
+                                PreviewCanvas._apply_template(_t, c, _m, _n, _p)
+                    sw.checkedChanged.connect(_on_toggle)
+
+        elif type_name == "LineEdit" and (props.get("sendOnEnter") or mode == "Modbus"):
+            def _on_enter(_w=widget, _m=mode, _n=newline, _p=props, _t=tpl):
+                text = _w.text().strip()
+                if text or _m == "Modbus":
+                    PreviewCanvas._apply_template(_t, text, _m, _n, _p)
+            widget.returnPressed.connect(_on_enter)
+
+        elif type_name == "ComboBox" and (props.get("sendOnSelect") or mode == "Modbus"):
+            cmd_lines = [s.strip() for s in
+                         props.get("commands", "").split("\n")]
+
+            def _on_select(idx, _w=widget, _m=mode, _n=newline,
+                           _p=props, _cmds=cmd_lines, _t=tpl):
+                raw = _cmds[idx] if idx < len(_cmds) and _cmds[idx] else _w.currentText()
+                if raw:
+                    PreviewCanvas._apply_template(_t, raw, _m, _n, _p)
+            widget.currentIndexChanged.connect(_on_select)
+
+        elif type_name in ("Slider", "SpinBox") and (props.get("sendOnChange") or mode == "Modbus"):
+            def _on_value_changed(val, _tpl=tpl, _m=mode, _n=newline, _p=props):
+                PreviewCanvas._apply_template(_tpl, str(val), _m, _n, _p)
+            widget.valueChanged.connect(_on_value_changed)
+
+    @staticmethod
+    def _wire_notification(widget: QWidget, type_name: str, props: dict):
+        title = props.get("notifyTitle", "提示")
+        content = props.get("notifyContent", "")
+        ntype = props.get("notifyType", "信息")
+        duration = int(props.get("notifyDuration", 3000))
+        emit = partial(signalBus.showNotification.emit,
+                       title, content, ntype, duration)
+
+        if type_name == "PushButton":
+            widget.clicked.connect(emit)
+        elif type_name == "ToggleSwitch":
+            sw = widget.findChild(SwitchButton)
+            if sw:
+                sw.checkedChanged.connect(lambda _: emit())
+
+    def clear(self):
+        for w in self._widgets:
+            if hasattr(w, "stop_listening"):
+                w.stop_listening()
+            w.deleteLater()
+        self._widgets.clear()
+
+
+class NuitkaPackDialog(QDialog):
+    """Dialog that runs Nuitka packaging with real-time terminal output."""
+
+    def __init__(self, project_dir: str, app_name: str = "上位机", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Nuitka 打包")
+        self.resize(800, 560)
+        self.setMinimumSize(640, 400)
+        self._project_dir = project_dir
+        self._app_name = app_name
+        self._process = None
+        self._init_ui()
+
+    def _init_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(16, 12, 16, 12)
+        root.setSpacing(8)
+
+        hdr = QHBoxLayout()
+        self._title = StrongBodyLabel("Nuitka 打包")
+        self._status = CaptionLabel("就绪")
+        self._status.setStyleSheet("color:#888;")
+        hdr.addWidget(self._title)
+        hdr.addStretch()
+        hdr.addWidget(self._status)
+        root.addLayout(hdr)
+
+        self._progress = ProgressBar()
+        self._progress.setRange(0, 0)
+        self._progress.hide()
+        root.addWidget(self._progress)
+
+        self._terminal = TextEdit()
+        self._terminal.setReadOnly(True)
+        self._terminal.setFont(QFont("Consolas", 9))
+        self._terminal.setStyleSheet(
+            "QTextEdit { background: #1e1e1e; color: #cccccc; "
+            "border: 1px solid #333; border-radius: 6px; padding: 8px; }"
+        )
+        root.addWidget(self._terminal, 1)
+
+        btn_row = QHBoxLayout()
+        self._start_btn = PrimaryPushButton("开始打包")
+        self._start_btn.clicked.connect(self._start_pack)
+        self._cancel_btn = PushButton("取消")
+        self._cancel_btn.clicked.connect(self._on_cancel)
+        self._open_dir_btn = PushButton("打开输出目录")
+        self._open_dir_btn.clicked.connect(self._open_output_dir)
+        self._open_dir_btn.setEnabled(False)
+        btn_row.addWidget(self._start_btn)
+        btn_row.addWidget(self._cancel_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(self._open_dir_btn)
+        root.addLayout(btn_row)
+
+    def _append_text(self, text: str, color: str = None):
+        cursor = self._terminal.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        if color:
+            fmt = cursor.charFormat()
+            fmt.setForeground(QColor(color))
+            cursor.setCharFormat(fmt)
+        cursor.insertText(text)
+        self._terminal.setTextCursor(cursor)
+        self._terminal.ensureCursorVisible()
+
+    @staticmethod
+    def _find_python() -> tuple:
+        """Find Python 3.11/3.12. Returns (cmd_list, has_nuitka)."""
+        import sys
+        import os
+        import shutil
+        import subprocess
+        from pathlib import Path
+
+        CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+        _kw = dict(stderr=subprocess.STDOUT, creationflags=CREATE_NO_WINDOW)
+
+        def _py_ver(cmd: list) -> bool:
+            try:
+                out = subprocess.check_output(
+                    cmd + ["--version"], timeout=5, **_kw
+                ).decode().strip()
+                return "3.11" in out or "3.12" in out
+            except Exception:
+                return False
+
+        def _has_nuitka(cmd: list) -> bool:
+            try:
+                subprocess.check_output(
+                    cmd + ["-m", "nuitka", "--version"], timeout=10, **_kw
+                )
+                return True
+            except Exception:
+                return False
+
+        all_candidates = []
+
+        if not getattr(sys, "frozen", False) and "nuitka" not in sys.executable.lower():
+            all_candidates.append([sys.executable])
+
+        venv_dirs = []
+        for base in (Path.home(), Path(os.environ.get("USERPROFILE", ""))):
+            for name in (".venv", "venv", ".conda"):
+                d = base / name
+                if d.exists():
+                    venv_dirs.append(d)
+        for env_var in ("VIRTUAL_ENV", "CONDA_PREFIX"):
+            v = os.environ.get(env_var)
+            if v:
+                venv_dirs.append(Path(v))
+        for vd in venv_dirs:
+            for sub in ("Scripts/python.exe", "bin/python", "python.exe"):
+                exe = vd / sub
+                if exe.exists():
+                    all_candidates.append([str(exe)])
+
+        for name in [["python3.12"], ["python3.11"], ["python"], ["python3"]]:
+            if shutil.which(name[0]):
+                all_candidates.append(name)
+        if sys.platform == "win32":
+            for name in [["py", "-3.12"], ["py", "-3.11"]]:
+                if shutil.which(name[0]):
+                    all_candidates.append(name)
+
+        first_valid_py = None
+        for cmd in all_candidates:
+            if _py_ver(cmd):
+                if _has_nuitka(cmd):
+                    return cmd, True
+                if first_valid_py is None:
+                    first_valid_py = cmd
+
+        if first_valid_py:
+            return first_valid_py, False
+
+        return [], False
+
+    def _build_nuitka_args(self) -> list:
+        import sys
+        from pathlib import Path
+
+        proj = Path(self._project_dir)
+        main_py = proj / "main.py"
+        build_dir = proj / "build"
+
+        args = list(self._python_cmd) + [
+            "-m", "nuitka",
+            "--standalone",
+            "--assume-yes-for-downloads",
+        ]
+        if sys.platform == "win32" and sys.version_info < (3, 13):
+            args.append("--mingw64")
+
+        icon = proj / "logo.ico"
+        if icon.exists():
+            args.append(f"--windows-icon-from-ico={icon}")
+
+        args.extend([
+            "--enable-plugins=pyqt5",
+            "--windows-console-mode=disable",
+            "--windows-product-version=1.0.0.0",
+            "--windows-file-version=1.0.0.0",
+            "--show-progress",
+            "--show-memory",
+            f"--output-dir={build_dir}",
+            str(main_py),
+        ])
+        return args
+
+    def _start_pack(self):
+        import os
+        from pathlib import Path
+
+        main_py = Path(self._project_dir) / "main.py"
+        if not main_py.exists():
+            self._append_text("错误: 找不到 main.py，请先导出代码\n", "#f44")
+            return
+
+        self._start_btn.setEnabled(False)
+        self._open_dir_btn.setEnabled(False)
+        self._progress.show()
+        self._terminal.clear()
+        self._status.setText("正在查找 Python 环境...")
+        self._status.setStyleSheet("color:#0078d4;")
+
+        py_cmd, has_nuitka = self._find_python()
+
+        if not py_cmd:
+            self._append_text(
+                "错误: 未找到 Python 3.11 或 3.12\n\n"
+                "请安装 Python 3.11/3.12 并确保已加入系统 PATH。\n",
+                "#f44",
+            )
+            self._start_btn.setEnabled(True)
+            self._progress.hide()
+            self._status.setText("未找到 Python")
+            self._status.setStyleSheet("color:#f44;")
+            return
+
+        self._python_cmd = py_cmd
+        py_display = " ".join(py_cmd)
+
+        if not has_nuitka:
+            self._append_text(
+                f"检测到 Python: {py_display}\n"
+                f"Nuitka 未安装，正在自动安装...\n\n", "#dcdcaa"
+            )
+            self._status.setText("正在安装 Nuitka...")
+            self._install_nuitka_then_pack(py_cmd)
+            return
+
+        self._append_text(f"Python: {py_display}\n", "#6a9955")
+        self._do_pack()
+
+    def _install_nuitka_then_pack(self, py_cmd: list):
+        import os
+        pip_args = list(py_cmd) + [
+            "-m", "pip", "install",
+            "nuitka", "ordered-set",
+            "PyQt5", "PyQt-Fluent-Widgets", "pyserial", "pyqtgraph",
+        ]
+        self._append_text(f"$ {' '.join(pip_args)}\n\n", "#569cd6")
+
+        self._pip_process = QProcess(self)
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+        self._pip_process.setProcessEnvironment(self._to_qenv(env))
+        self._pip_process.readyReadStandardOutput.connect(
+            lambda: self._append_text(
+                bytes(self._pip_process.readAllStandardOutput()).decode("utf-8", errors="replace")
+            )
+        )
+        self._pip_process.readyReadStandardError.connect(
+            lambda: self._append_text(
+                bytes(self._pip_process.readAllStandardError()).decode("utf-8", errors="replace"),
+                "#f44",
+            )
+        )
+        self._pip_process.finished.connect(self._on_pip_finished)
+        self._pip_process.start(pip_args[0], pip_args[1:])
+
+    def _on_pip_finished(self, exit_code, _status):
+        if exit_code != 0:
+            self._append_text(
+                f"\nNuitka 安装失败 (exit code: {exit_code})\n"
+                "请手动执行: pip install nuitka\n", "#f44"
+            )
+            self._start_btn.setEnabled(True)
+            self._progress.hide()
+            self._status.setText("Nuitka 安装失败")
+            self._status.setStyleSheet("color:#f44;")
+            return
+
+        self._append_text("\n✓ Nuitka 安装成功，开始打包...\n\n", "#4ec9b0")
+        self._do_pack()
+
+    def _do_pack(self):
+        import os
+
+        self._status.setText("打包中...")
+        self._status.setStyleSheet("color:#0078d4;")
+
+        args = self._build_nuitka_args()
+        self._append_text(f"$ {' '.join(args)}\n\n", "#569cd6")
+
+        env = os.environ.copy()
+        env["CL"] = ("/utf-8 " + env.get("CL", "")).strip()
+        env["PYTHONUNBUFFERED"] = "1"
+
+        self._process = QProcess(self)
+        self._process.setWorkingDirectory(self._project_dir)
+        self._process.setProcessEnvironment(self._to_qenv(env))
+        self._process.readyReadStandardOutput.connect(self._on_stdout)
+        self._process.readyReadStandardError.connect(self._on_stderr)
+        self._process.finished.connect(self._on_finished)
+        self._process.start(args[0], args[1:])
+
+    @staticmethod
+    def _to_qenv(env: dict):
+        from PyQt5.QtCore import QProcessEnvironment
+        qenv = QProcessEnvironment()
+        for k, v in env.items():
+            qenv.insert(k, v)
+        return qenv
+
+    def _on_stdout(self):
+        data = self._process.readAllStandardOutput()
+        text = bytes(data).decode("utf-8", errors="replace")
+        self._append_text(text)
+
+    def _on_stderr(self):
+        data = self._process.readAllStandardError()
+        text = bytes(data).decode("utf-8", errors="replace")
+        self._append_text(text, "#e8a838")
+
+    def _on_finished(self, exit_code, _status):
+        self._progress.hide()
+        self._start_btn.setEnabled(True)
+        if exit_code == 0:
+            self._append_text("\n✓ Nuitka 编译成功!\n", "#2ecc71")
+            self._post_build_cleanup()
+        else:
+            self._status.setText(f"打包失败 (exit {exit_code})")
+            self._status.setStyleSheet("color:#e74c3c;")
+            self._append_text(f"\n✗ 打包失败, exit code: {exit_code}\n", "#e74c3c")
+
+    def _post_build_cleanup(self):
+        """Delete build intermediates, rename dist folder, create zip archive."""
+        import shutil
+        from pathlib import Path
+
+        build_dir = Path(self._project_dir) / "build"
+        dist_dir = build_dir / "main.dist"
+        build_tmp = build_dir / "main.build"
+        onefile_tmp = build_dir / "main.onefile-build"
+        safe_name = self._app_name.strip().replace("/", "_").replace("\\", "_") or "app"
+        final_dir = build_dir / safe_name
+        zip_path = build_dir / f"{safe_name}.zip"
+
+        # 1) delete build intermediates
+        for d in (build_tmp, onefile_tmp):
+            if d.exists():
+                self._append_text(f"清理编译缓存: {d.name}\n", "#888")
+                shutil.rmtree(d, ignore_errors=True)
+
+        # 2) rename main.dist -> app_name
+        if dist_dir.exists():
+            if final_dir.exists() and final_dir != dist_dir:
+                self._append_text(f"删除旧目录: {final_dir.name}\n", "#888")
+                shutil.rmtree(final_dir, ignore_errors=True)
+            self._append_text(f"重命名: main.dist → {safe_name}\n", "#569cd6")
+            try:
+                dist_dir.rename(final_dir)
+            except OSError as e:
+                self._append_text(f"重命名失败: {e}\n", "#e74c3c")
+                final_dir = dist_dir
+        elif final_dir.exists():
+            pass
+        else:
+            self._append_text("未找到 main.dist 目录，跳过后续步骤\n", "#f39c12")
+            self._status.setText("打包完成 (无dist)")
+            self._status.setStyleSheet("color:#2ecc71;")
+            self._open_dir_btn.setEnabled(True)
+            return
+
+        # 3) zip archive
+        self._append_text(f"压缩: {safe_name}.zip ...\n", "#569cd6")
+        self._status.setText("压缩中...")
+        try:
+            if zip_path.exists():
+                zip_path.unlink()
+            shutil.make_archive(str(build_dir / safe_name), "zip",
+                                root_dir=str(build_dir), base_dir=safe_name)
+            size_mb = zip_path.stat().st_size / (1024 * 1024)
+            self._append_text(f"✓ 压缩完成: {safe_name}.zip ({size_mb:.1f} MB)\n", "#2ecc71")
+        except Exception as e:
+            self._append_text(f"压缩失败: {e}\n", "#e74c3c")
+
+        self._status.setText("打包完成")
+        self._status.setStyleSheet("color:#2ecc71;")
+        self._open_dir_btn.setEnabled(True)
+
+    def _on_cancel(self):
+        if self._process and self._process.state() != QProcess.NotRunning:
+            self._process.kill()
+            self._append_text("\n用户取消打包\n", "#f39c12")
+            self._status.setText("已取消")
+            self._status.setStyleSheet("color:#f39c12;")
+        else:
+            self.close()
+
+    def _open_output_dir(self):
+        import os, subprocess
+        from pathlib import Path
+        build_dir = Path(self._project_dir) / "build"
+        if build_dir.exists():
+            subprocess.Popen(f'explorer "{build_dir}"')
+        else:
+            self._append_text("输出目录不存在\n", "#f44")
+
+    def closeEvent(self, event):
+        if self._process and self._process.state() != QProcess.NotRunning:
+            self._process.kill()
+            self._process.waitForFinished(3000)
+        super().closeEvent(event)
+
+
+class PreviewInterface(QWidget):
+    """Preview page with start/stop controls and the preview canvas."""
+
+    _NOTIFY_TYPE_MAP = {
+        "成功": "success", "信息": "info", "警告": "warning", "错误": "error",
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("previewInterface")
+        self._project_data = None
+        self._running = False
+        self._init_ui()
+        signalBus.showNotification.connect(self._show_notification)
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        # controls
+        ctrl_layout = QHBoxLayout()
+        self._run_btn = PrimaryPushButton(FIF.PLAY, "运行预览")
+        self._stop_btn = PushButton(FIF.CLOSE, "停止")
+        self._stop_btn.setEnabled(False)
+        self._status_label = BodyLabel("未运行")
+
+        self._run_btn.clicked.connect(self._start_preview)
+        self._stop_btn.clicked.connect(self._stop_preview)
+
+        self._pack_btn = PushButton(FIF.ZIP_FOLDER, "一键打包")
+        self._pack_btn.clicked.connect(self._on_pack)
+
+        ctrl_layout.addWidget(self._run_btn)
+        ctrl_layout.addWidget(self._stop_btn)
+        ctrl_layout.addWidget(self._status_label)
+        ctrl_layout.addStretch()
+        ctrl_layout.addWidget(self._pack_btn)
+        layout.addLayout(ctrl_layout)
+
+        # scroll area for canvas
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setAlignment(Qt.AlignCenter)
+
+        self._preview_canvas = PreviewCanvas()
+        scroll.setWidget(self._preview_canvas)
+        layout.addWidget(scroll, 1)
+
+        self._placeholder = BodyLabel("在设计器中设计界面后，点击「运行预览」查看效果")
+        self._placeholder.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self._placeholder)
+
+    def set_project_data(self, data: ProjectData):
+        self._project_data = data
+
+    def _show_notification(self, title: str, content: str,
+                           ntype: str, duration: int):
+        if not self._running:
+            return
+        method_name = self._NOTIFY_TYPE_MAP.get(ntype, "info")
+        method = getattr(InfoBar, method_name, InfoBar.info)
+        method(
+            title=title,
+            content=content,
+            orient=Qt.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=duration,
+            parent=self,
+        )
+
+    def _start_preview(self):
+        if not self._project_data or not self._project_data.widgets:
+            InfoBar.warning(
+                "提示", "当前没有可预览的控件，请先在设计器中添加控件",
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
+            )
+            return
+
+        bindingEngine.stop()
+        bindingEngine.clear()
+
+        self._preview_canvas.build_from_project(self._project_data)
+
+        bindingEngine.load_bindings_from_project(self._project_data.widgets)
+        bindingEngine.start()
+
+        self._placeholder.hide()
+        self._running = True
+        self._run_btn.setEnabled(False)
+        self._stop_btn.setEnabled(True)
+        self._status_label.setText("● 运行中")
+        signalBus.previewStarted.emit()
+
+    def _stop_preview(self):
+        bindingEngine.stop()
+        bindingEngine.clear()
+
+        self._preview_canvas.clear()
+        self._placeholder.show()
+        self._running = False
+        self._run_btn.setEnabled(True)
+        self._stop_btn.setEnabled(False)
+        self._status_label.setText("已停止")
+        signalBus.previewStopped.emit()
+
+    def _on_pack(self):
+        if not self._project_data or not self._project_data.widgets:
+            InfoBar.warning(
+                "提示", "当前没有可打包的控件，请先在设计器中添加控件",
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
+            )
+            return
+
+        directory = QFileDialog.getExistingDirectory(self, "选择打包输出目录")
+        if not directory:
+            return
+
+        try:
+            from app.core.code_generator import generate_project
+            generate_project(self._project_data, directory)
+        except Exception as e:
+            InfoBar.error(
+                "导出失败", str(e),
+                parent=self, position=InfoBarPosition.TOP, duration=5000,
+            )
+            return
+
+        app_name = self._project_data.app_name if self._project_data else "上位机"
+        dlg = NuitkaPackDialog(directory, app_name, self)
+        dlg.exec_()
+
+    def on_theme_changed(self):
+        self._preview_canvas._update_style()

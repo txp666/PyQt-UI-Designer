@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Nuitka build output
+build/
+*.build/
+*.dist/
+*.onefile-build/
+
+# Packaging output
+*.zip
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Project exports
+output/
+*.uidp
+
+# Cursor
+.cursor/

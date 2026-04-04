@@ -1,0 +1,81 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Nuitka Build (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt5 PyQt-Fluent-Widgets pyserial pyqtgraph nuitka ordered-set
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          VER="${TAG#v}"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Build with Nuitka
+        shell: cmd
+        run: |
+          set CL=/utf-8
+          python -m nuitka ^
+            --standalone ^
+            --assume-yes-for-downloads ^
+            --mingw64 ^
+            --enable-plugins=pyqt5 ^
+            --windows-console-mode=disable ^
+            --windows-icon-from-ico=logo.ico ^
+            --windows-product-version=${{ steps.version.outputs.ver }}.0 ^
+            --windows-file-version=${{ steps.version.outputs.ver }}.0 ^
+            --show-progress ^
+            --output-dir=build ^
+            main.py
+
+      - name: Prepare distribution
+        shell: pwsh
+        run: |
+          $distName = "PyQt-UI-Designer-${{ steps.version.outputs.tag }}"
+          $distSrc  = "build\main.dist"
+
+          if (Test-Path $distSrc) {
+            Rename-Item $distSrc $distName
+            $distPath = "build\$distName"
+          } else {
+            Write-Error "Nuitka output not found at $distSrc"
+            exit 1
+          }
+
+          # Copy logo if exists
+          if (Test-Path "logo.ico") {
+            Copy-Item "logo.ico" "$distPath\logo.ico"
+          }
+
+          # Create zip
+          Compress-Archive -Path $distPath -DestinationPath "build\$distName.zip" -Force
+          echo "ASSET_PATH=build\$distName.zip" >> $env:GITHUB_ENV
+          echo "ASSET_NAME=$distName.zip" >> $env:GITHUB_ENV
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET_PATH }}
