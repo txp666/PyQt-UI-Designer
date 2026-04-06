@@ -3,11 +3,13 @@
   <h1 align="center">PyQt UI Designer</h1>
   <p align="center">面向硬件工程师的可视化上位机设计工具</p>
   <p align="center">
-    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/github/v/release/txp666/PyQt-UI-Designer?style=flat-square&label=最新版本" alt="Latest Release"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/txp666/PyQt-UI-Designer?style=flat-square&label=许可证" alt="License"></a>
+    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/github/v/release/txp666/PyQt-UI-Designer?style=flat-square" alt="Release"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/txp666/PyQt-UI-Designer?style=flat-square" alt="License"></a>
+    <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
+    <img src="https://img.shields.io/badge/platform-Windows-lightgrey?style=flat-square" alt="Platform">
   </p>
   <p align="center">
-    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/📦 下载最新安装包-blue?style=for-the-badge" alt="Download"></a>
+    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows" alt="Download"></a>
   </p>
   <p align="center">
     <a href="#通信协议支持">通信协议</a> •
