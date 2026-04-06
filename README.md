@@ -3,6 +3,13 @@
   <h1 align="center">PyQt UI Designer</h1>
   <p align="center">面向硬件工程师的可视化上位机设计工具</p>
   <p align="center">
+    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/github/v/release/txp666/PyQt-UI-Designer?style=flat-square&label=最新版本" alt="Latest Release"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/txp666/PyQt-UI-Designer?style=flat-square&label=许可证" alt="License"></a>
+  </p>
+  <p align="center">
+    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/📦 下载最新安装包-blue?style=for-the-badge" alt="Download"></a>
+  </p>
+  <p align="center">
     <a href="#通信协议支持">通信协议</a> •
     <a href="#功能特性">功能特性</a> •
     <a href="#快速开始">快速开始</a> •
@@ -14,6 +21,8 @@
 </p>
 
 ---
+
+> **快速体验**：无需安装 Python 环境，直接从 [Releases](https://github.com/txp666/PyQt-UI-Designer/releases/latest) 下载最新 zip 包，解压后运行 `main.exe` 即可。
 
 **PyQt UI Designer** 是一个零代码/低代码的桌面上位机设计器。通过拖拽控件、配置属性、绑定通信数据，即可快速生成可独立运行的 PyQt5 上位机程序，并支持一键打包为 exe。
 
