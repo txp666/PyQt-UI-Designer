@@ -115,6 +115,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         '    FluentIcon as FIF, InfoBar, InfoBarPosition, isDarkTheme,',
         ')',
         '',
+        'from serial_handler import _list_all_ports',
+        '',
         'try:',
         '    import serial',
         '    import serial.tools.list_ports',
@@ -612,12 +614,22 @@ class SerialReaderThread(QThread):
                     data = self._port.read(self._port.in_waiting)
                     self.rawReceived.emit(data)
                     self._buf += data
+                    self._buf = self._buf.replace(b"\\\\r\\\\n", b"\\n").replace(b"\\\\n", b"\\n")
+                    _found = False
                     while b"\\n" in self._buf:
                         line, self._buf = self._buf.split(b"\\n", 1)
                         text = line.decode("utf-8", errors="replace").strip()
                         if text:
                             parsed = self._parse_line(text)
                             if parsed:
+                                self.parsedReceived.emit(parsed)
+                                _found = True
+                    if not _found and self._buf:
+                        text = self._buf.decode("utf-8", errors="replace").strip()
+                        if text and ("=" in text or text.startswith("{{")):
+                            parsed = self._parse_line(text)
+                            if parsed:
+                                self._buf = b""
                                 self.parsedReceived.emit(parsed)
                 else:
                     self.msleep(10)
@@ -1106,12 +1118,12 @@ class RealtimeLineChart(QWidget):
         self._vlbs = []; main_h.addLayout(rp)
         self._root.addLayout(main_h, 1)
         tb = QHBoxLayout(); tb.setContentsMargins(4,2,4,0); tb.setSpacing(6)
-        tb.addWidget(QLabel("显示点数"))
-        self._dsp = QLineEdit(); self._dsp.setText(str(self._disp_pts))
+        tb.addWidget(BodyLabel("显示点数"))
+        self._dsp = LineEdit(); self._dsp.setText(str(self._disp_pts))
         self._dsp.setFixedWidth(80); self._dsp.editingFinished.connect(self._on_dsp)
         tb.addWidget(self._dsp); tb.addStretch()
-        sb = QPushButton("保存"); sb.setFixedWidth(56); sb.clicked.connect(self._save); tb.addWidget(sb)
-        lb = QPushButton("加载"); lb.setFixedWidth(56); lb.clicked.connect(self._load); tb.addWidget(lb)
+        sb = PushButton("保存"); sb.setFixedWidth(64); sb.clicked.connect(self._save); tb.addWidget(sb)
+        lb = PushButton("加载"); lb.setFixedWidth(64); lb.clicked.connect(self._load); tb.addWidget(lb)
         self._root.addLayout(tb)
         self._cb_row = QHBoxLayout(); self._cb_row.setContentsMargins(4,0,4,2)
         self._root.addLayout(self._cb_row)
@@ -1139,8 +1151,8 @@ class RealtimeLineChart(QWidget):
                 c = self._plot.plot(pen=pg.mkPen(color=clr, width=2), name=nm)
                 self._curves.append(c)
             else: self._curves.append(None)
-            cb = QCheckBox(nm); cb.setChecked(True)
-            cb.setStyleSheet(f"QCheckBox {{ color: rgb{clr}; font-size: 11px; }}")
+            cb = CheckBox(nm); cb.setChecked(True)
+            cb.setStyleSheet(f"CheckBox {{ color: rgb{clr}; font-size: 11px; }}")
             idx = i; cb.toggled.connect(lambda v, ci=idx: self._toggle(ci, v))
             self._cbs.append(cb); self._cb_row.addWidget(cb)
             vl = QLabel(f"<b style='color:rgb{clr}'>{nm}</b>  --")
@@ -1454,7 +1466,13 @@ class SerialConfigCard(CardWidget):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         root = QVBoxLayout(self); root.setContentsMargins(16,12,16,12); root.setSpacing(8)
-        root.addWidget(StrongBodyLabel("串口配置"))
+        title_row = QHBoxLayout()
+        title_row.addWidget(StrongBodyLabel("串口配置"))
+        title_row.addStretch()
+        self._status = CaptionLabel("未连接")
+        self._status.setStyleSheet("color: #888;")
+        title_row.addWidget(self._status)
+        root.addLayout(title_row)
         g = QGridLayout(); g.setSpacing(6)
         g.addWidget(BodyLabel("端口"), 0, 0)
         self._port_combo = ComboBox(); g.addWidget(self._port_combo, 0, 1)
@@ -1474,21 +1492,40 @@ class SerialConfigCard(CardWidget):
         self._handler = None; self._refresh_ports()
     def set_serial_handler(self, h):
         self._handler = h
-        if h: h.connectionChanged.connect(self._on_conn_change)
+        if h:
+            h.connectionChanged.connect(self._on_conn_change)
+            h.error.connect(self._on_error)
+            h.connected.connect(lambda p: self._set_status(f"已连接: {p}", "#4CAF50"))
+            h.disconnected.connect(lambda: self._set_status("未连接", "#888"))
     def _refresh_ports(self):
         self._port_combo.clear()
         for port, desc in _list_all_ports():
-            self._port_combo.addItem(f"{port} - {desc}", port)
+            self._port_combo.addItem(f"{port}  {desc}")
+    def _set_status(self, text, color):
+        self._status.setText(text); self._status.setStyleSheet(f"color: {color};")
+    def _on_error(self, msg):
+        self._set_status(f"错误: {msg}", "#F44336")
+        self._conn_btn.setEnabled(True)
     def _do_connect(self):
-        if not self._handler: return
-        port = self._port_combo.currentData() or self._port_combo.currentText().split(" ")[0]
+        if not self._handler:
+            self._set_status("handler未绑定", "#F44336")
+            return
+        text = self._port_combo.currentText()
+        if not text or text == "无可用串口":
+            self._set_status("未选择端口", "#FF9800")
+            return
+        port = text.split()[0]
         baud = int(self._baud_combo.currentText())
+        self._set_status("连接中...", "#FF9800")
+        self._conn_btn.setEnabled(False)
         self._handler.connect(port, baud)
     def _do_disconnect(self):
         if self._handler: self._handler.disconnect()
     def _on_conn_change(self, connected):
         self._conn_btn.setEnabled(not connected)
         self._disconn_btn.setEnabled(connected)
+        for w in (self._port_combo, self._baud_combo, self._refresh_btn):
+            w.setEnabled(not connected)
 '''
 
 
