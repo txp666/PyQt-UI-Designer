@@ -296,7 +296,7 @@ class SerialConfigCard(CardWidget):
         for combo in (self._port_combo, self._sl_port):
             combo.clear()
             for p in ports:
-                combo.addItem(p["description"], p["port"])
+                combo.addItem(f"{p['port']}  {p['description']}")
             if combo.count() == 0:
                 combo.addItem("无可用串口")
 
@@ -345,7 +345,10 @@ class SerialConfigCard(CardWidget):
     @property
     def port(self):
         c = self._sl_port if self._display_mode == "单行" else self._port_combo
-        return c.currentData() or c.currentText()
+        text = c.currentText()
+        if not text or text == "无可用串口":
+            return ""
+        return text.split()[0]
 
     @property
     def baudrate(self):

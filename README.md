@@ -17,6 +17,16 @@
 
 **PyQt UI Designer** 是一个零代码/低代码的桌面上位机设计器。通过拖拽控件、配置属性、绑定通信数据，即可快速生成可独立运行的 PyQt5 上位机程序，并支持一键打包为 exe。
 
+## 界面预览
+
+### 设计器界面
+
+![设计器界面](images/designer.png)
+
+### 预览运行
+
+![预览运行](images/preview.png)
+
 ## 通信协议支持
 
 | 协议 | 状态 | 说明 |
@@ -83,8 +93,8 @@
 ### 安装
 
 ```bash
-git clone https://github.com/your-username/pyqtUIDesigner.git
-cd pyqtUIDesigner
+git clone https://github.com/txp666/PyQt-UI-Designer.git
+cd PyQt-UI-Designer
 
 # 创建虚拟环境（推荐）
 python -m venv .venv
