@@ -60,8 +60,11 @@ args.extend(
     + [
         "--enable-plugins=pyqt5",
         "--windows-console-mode=disable",
+        '--windows-product-name=PyQt UI Designer',
         f"--windows-product-version={_VERSION_NUM}",
         f"--windows-file-version={_VERSION_NUM}",
+        '--windows-file-description=PyQt UI Designer - HMI Application Builder',
+        '--windows-company-name=PyQt-UI-Designer',
         "--show-progress",
         "--show-memory",
         f"--output-dir={_build}",

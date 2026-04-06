@@ -203,6 +203,12 @@ pyqtUIDesigner/
 - [PyQt-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets) — 提供了精美的 Fluent Design 控件
 - [pyqtgraph](https://github.com/pyqtgraph/pyqtgraph) — 高性能科学绘图库
 
+## 常见问题
+
+### Windows SmartScreen 弹出"Windows 已保护你的电脑"
+
+这是因为 exe 没有数字签名（代码签名证书需要付费购买）。这不是病毒，点击 **"更多信息"** → **"仍要运行"** 即可。
+
 ## 许可证
 
 本项目采用 [GPLv3](LICENSE) 许可证开源。

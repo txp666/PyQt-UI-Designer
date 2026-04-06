@@ -45,8 +45,11 @@ jobs:
             --enable-plugins=pyqt5 ^
             --windows-console-mode=disable ^
             --windows-icon-from-ico=logo.ico ^
+            --windows-product-name="PyQt UI Designer" ^
             --windows-product-version=${{ steps.version.outputs.ver }}.0 ^
             --windows-file-version=${{ steps.version.outputs.ver }}.0 ^
+            --windows-file-description="PyQt UI Designer - HMI Application Builder" ^
+            --windows-company-name="PyQt-UI-Designer" ^
             --show-progress ^
             --output-dir=build ^
             main.py
