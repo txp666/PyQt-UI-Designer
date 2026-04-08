@@ -373,7 +373,21 @@ class CanvasItem(QGraphicsRectItem):
                 if hasattr(self._inner_widget, "load_from_props"):
                     self._inner_widget.load_from_props(self.properties)
                 return
+
+        layout = self._inner_widget.layout()
+        old_hint_h = layout.sizeHint().height() if layout else -1
+
         apply_property(self._inner_widget, self.type_name, name, value)
+
+        if layout:
+            layout.activate()
+            new_hint_h = layout.sizeHint().height()
+            if old_hint_h > 0 and new_hint_h > 0 and abs(new_hint_h - old_hint_h) > 5:
+                meta = registry.get(self.type_name)
+                min_h = meta.min_height if meta else MIN_SIZE
+                r = self.rect()
+                self.set_rect(QRectF(0, 0, r.width(), max(min_h, new_hint_h)))
+
         if self.is_container() and name in ("spacing", "direction", "currentTab", "layout"):
             self.relayout_children()
 
