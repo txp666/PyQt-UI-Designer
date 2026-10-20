@@ -10,8 +10,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PyQt5.QtCore import QEvent
-from PyQt5.QtTest import QTest
+from PyQt5.QtCore import QEvent, QTimer
+from PyQt5.QtTest import QSignalSpy
 from PyQt5.QtWidgets import QApplication
 from PyQt5 import sip
 
@@ -43,14 +43,28 @@ class ChartTests(unittest.TestCase):
         for cls in self.chart_classes:
             chart = self.make_chart(cls)
             curve = chart._curves[0]
+            refreshes = QSignalSpy(chart._refresh_timer.timeout)
             with patch.object(curve, "setData", wraps=curve.setData) as render:
                 for i in range(2000):
                     chart.append_value(0, i)
                 render.assert_not_called()
-                QTest.qWait(90)
+                self.assertTrue(chart._refresh_timer.isActive())
+                # Wait for the real Qt timeout; a busy CI event loop may deliver
+                # the 33 ms timer after a fixed 90 ms wall-clock wait expires.
+                self.assertTrue(refreshes.wait(3000), "Chart refresh timer did not fire")
+                self.assertEqual(len(refreshes), 1)
                 render.assert_called_once()
                 self.assertEqual(list(render.call_args.args[0]), list(range(1800, 2000)))
-                QTest.qWait(90)
+                self.assertFalse(chart._refresh_timer.isActive())
+                # Advance the event loop through several refresh intervals
+                # without new samples, and verify no refresh gets scheduled.
+                idle_timer = QTimer()
+                idle_timer.setSingleShot(True)
+                idle_elapsed = QSignalSpy(idle_timer.timeout)
+                idle_timer.start(chart.REFRESH_MS * 3)
+                self.assertTrue(idle_elapsed.wait(3000), "Idle observation timer did not fire")
+                self.assertEqual(len(refreshes), 1)
+                self.assertFalse(chart._refresh_timer.isActive())
                 render.assert_called_once()
 
     def test_cache_limit_does_not_truncate_csv_or_json_history(self):

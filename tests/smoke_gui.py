@@ -32,15 +32,30 @@ with tempfile.TemporaryDirectory() as folder:
     loop = QEventLoop()
     selected_python = []
     dialog._install_nuitka_then_pack = lambda cmd: (selected_python.extend(cmd), loop.quit())
-    dialog._prepare_build_environment([sys.executable])
-    QTimer.singleShot(15000, loop.quit)
-    loop.exec()
-    assert selected_python and Path(selected_python[0]).is_file()
-    prefix = subprocess.check_output(
-        selected_python + ["-c", "import sys; print(sys.prefix)"], text=True,
-    ).strip()
-    assert Path(prefix).resolve() == (Path(folder) / ".build-venv").resolve()
-    dialog.close()
+    deadline = QTimer()
+    deadline.setSingleShot(True)
+    deadline.timeout.connect(loop.quit)
+    try:
+        dialog._prepare_build_environment([sys.executable])
+        # A loaded runner can take longer to install pip into the fresh venv.
+        # Finish on the actual process result, with a bounded failure deadline.
+        dialog._pip_process.finished.connect(loop.quit)
+        dialog._pip_process.errorOccurred.connect(loop.quit)
+        deadline.start(120000)
+        loop.exec()
+        assert selected_python and Path(selected_python[0]).is_file(), (
+            "Build venv did not finish successfully",
+            dialog._terminal.toPlainText(),
+        )
+        prefix = subprocess.check_output(
+            selected_python + ["-c", "import sys; print(sys.prefix)"],
+            text=True, timeout=30,
+        ).strip()
+        assert Path(prefix).resolve() == (Path(folder) / ".build-venv").resolve()
+    finally:
+        deadline.stop()
+        # Stop owned processes before TemporaryDirectory removes their files.
+        dialog.close()
 
 project = ProjectData()
 for index, meta in enumerate(registry.all()):
