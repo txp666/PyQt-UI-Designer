@@ -73,7 +73,7 @@ class ChartTests(unittest.TestCase):
                     rows = list(csv.reader(source))
                 self.assertEqual(rows[0], ["temperature"])
                 self.assertEqual([float(row[0]) for row in rows[1:]], list(range(count)))
-                self.assertEqual(json.loads(json_path.read_text())["temperature"], list(range(count)))
+                self.assertEqual(json.loads(json_path.read_text(encoding="utf-8"))["temperature"], list(range(count)))
                 # Saving must restore the append position in the spool file.
                 chart.append_value(0, count)
                 self.assertEqual(list(chart._data[0].values())[-1], count)
@@ -138,7 +138,7 @@ class StandaloneExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             generate_project(project, folder)
             for source in Path(folder).glob("*.py"):
-                compile(source.read_text(), str(source), "exec")
+                compile(source.read_text(encoding="utf-8"), str(source), "exec")
             code = """
 from unittest.mock import patch, Mock
 from PyQt5.QtWidgets import QApplication
@@ -195,6 +195,6 @@ print("STANDALONE_MODBUS_CHART_OK")
                 output = target / "export"
                 generate_project(ProjectData(), str(output))
                 for source in output.glob("*.py"):
-                    compile(source.read_text(), str(source), "exec")
+                    compile(source.read_text(encoding="utf-8"), str(source), "exec")
                 for name in runtime_sources.RUNTIME_FILES:
                     self.assertTrue(runtime_sources.runtime_source(name))

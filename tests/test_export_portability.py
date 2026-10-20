@@ -67,7 +67,7 @@ class ExportPortabilityTests(unittest.TestCase):
             generate_project(project, output, theme_mode="Light")
             self.assertEqual(project.widgets, original_widgets)
             self.assertEqual(len(list((output / "assets").iterdir())), 2)
-            self.assertNotIn(str(source_dir), (output / "ui.py").read_text())
+            self.assertNotIn(str(source_dir), (output / "ui.py").read_text(encoding="utf-8"))
 
             moved = root / "moved"
             shutil.move(output, moved)
@@ -160,7 +160,7 @@ print("RELOCATED_IMAGES_OK")
             ]
             generate_project(project, output)
             for source in output.glob("*.py"):
-                compile(source.read_text(), str(source), "exec")
+                compile(source.read_text(encoding="utf-8"), str(source), "exec")
             code = f"KEYS = {keys!r}\n" + r'''
 import sys
 from types import SimpleNamespace

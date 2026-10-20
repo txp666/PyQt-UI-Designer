@@ -403,7 +403,7 @@ with ExitStack() as stack:
                 generate_project(project, folder, theme_mode=mode)
                 self.assertTrue((Path(folder) / "theme_support.py").is_file())
                 for source in Path(folder).glob("*.py"):
-                    compile(source.read_text(), str(source), "exec")
+                    compile(source.read_text(encoding="utf-8"), str(source), "exec")
                 expected_mode = mode or "Dark"
                 script = f"EXPECTED_MODE = {expected_mode!r}\n" + code
                 result = subprocess.run(
