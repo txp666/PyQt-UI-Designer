@@ -6,7 +6,7 @@
     <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/github/v/release/txp666/PyQt-UI-Designer?style=flat-square" alt="Release"></a>
     <a href="LICENSE"><img src="https://img.shields.io/github/license/txp666/PyQt-UI-Designer?style=flat-square" alt="License"></a>
     <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
-    <img src="https://img.shields.io/badge/platform-Windows-lightgrey?style=flat-square" alt="Platform">
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey?style=flat-square" alt="Platform">
   </p>
   <p align="center">
     <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows" alt="Download"></a>
@@ -24,9 +24,9 @@
 
 ---
 
-> **快速体验**：无需安装 Python 环境，直接从 [Releases](https://github.com/txp666/PyQt-UI-Designer/releases/latest) 下载最新 zip 包，解压后运行 `main.exe` 即可。
+> **快速体验**：从 [Releases](https://github.com/txp666/PyQt-UI-Designer/releases/latest) 下载对应平台的 zip。Windows 解压运行 `main.exe`；Apple Silicon Mac 选择 `macos-arm64`，Intel Mac 选择 `macos-x64`，解压后打开 `.app`。
 
-**PyQt UI Designer** 是一个零代码/低代码的桌面上位机设计器。通过拖拽控件、配置属性、绑定通信数据，即可快速生成可独立运行的 PyQt5 上位机程序，并支持一键打包为 exe。
+**PyQt UI Designer** 是一个零代码/低代码的桌面上位机设计器。通过拖拽控件、配置属性、绑定通信数据，即可快速生成可独立运行的 PyQt5 上位机程序，并支持在 Windows 打包为 exe、在 macOS 打包为 `.app`。
 
 ## 界面预览
 
@@ -99,7 +99,8 @@
 ### 环境要求
 
 - Python 3.10+
-- Windows 10/11（串口通信依赖）
+- Windows 10/11 或 macOS（Apple Silicon / Intel）
+- 打包需本机 C/C++ 编译器：macOS 使用 Xcode Command Line Tools；Windows 使用 Nuitka 支持的编译器（Python 3.13+ 使用 MSVC）
 
 ### 安装
 
@@ -107,13 +108,26 @@
 git clone https://github.com/txp666/PyQt-UI-Designer.git
 cd PyQt-UI-Designer
 
-# 创建虚拟环境（推荐）
+# Windows 创建虚拟环境
 python -m venv .venv
 .venv\Scripts\activate
 
 # 安装依赖
 pip install -r requirements.txt
 ```
+
+macOS 在终端执行：
+
+```bash
+git clone https://github.com/txp666/PyQt-UI-Designer.git
+cd PyQt-UI-Designer
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python main.py
+```
+
+Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。依赖清单已包含 Apple Silicon 所需的 Qt 5 运行库条件；不要另行固定为只有 Intel 安装包的旧版 Qt。
 
 ### 运行
 
@@ -126,6 +140,19 @@ python main.py
 ```bash
 python deploy.py
 ```
+
+macOS 首次打包前先安装编译工具：
+
+```bash
+xcode-select --install
+source .venv/bin/activate
+python deploy.py
+open "build/PyQt UI Designer.app"
+```
+
+输出为 `build/PyQt UI Designer.app` 和同名 zip；Windows 输出为 `build/PyQt UI Designer/main.exe` 和同名 zip。两者都包含 Python、Qt 和图标资源，运行产物无需再安装 Python。打包按本机 Python 的架构生成，不支持在 Windows 交叉编译 Mac 应用。最低 macOS 版本取决于用于构建的 Python、Qt 和编译工具，请以 Nuitka 构建日志为准。
+
+`.app` 压缩使用 macOS `ditto`，保留可执行权限和框架符号链接。默认构建未做 Apple Developer ID 签名与公证，对外分发前需另行处理。
 
 ## 使用说明
 
@@ -152,8 +179,31 @@ python deploy.py
 
 ### 5. 导出与打包
 
-- **导出代码**：`Ctrl+Shift+E` 或导航栏"导出代码"，选择输出目录
+- **导出代码**：Windows 使用 `Ctrl+Shift+E`，Mac 使用 `⌘⇧E`，或点击导航栏"导出代码"
 - **一键打包**：在预览页面点击"一键打包"，选择目录后自动导出 + Nuitka 编译 + 压缩
+
+### macOS 操作
+
+- 新建、打开、保存分别使用 `⌘N`、`⌘O`、`⌘S`。
+- 选中画布控件后按 `Delete（⌫）` 删除；`Fn+Delete` 同样支持。
+- 触控板双指滚动平移画布，按住 `⌘` 滚动缩放。
+- 串口一般显示为 `/dev/cu.usbserial-*` 或 `/dev/cu.usbmodem*`，保留设备路径大小写；USB 转串口驱动按芯片厂商要求安装。
+- “打开输出目录”使用 Finder；云母效果仅在 Windows 11 可用。
+- 源码运行时，一键打包优先使用当前虚拟环境。独立 `.app` 中的一键打包仍需另外安装 Python 与编译工具；可在终端激活安装了本项目依赖的虚拟环境后启动应用。
+- 找到的 Python 缺少打包依赖时，会在导出目录创建 `.build-venv` 再安装依赖，兼容 Homebrew 的系统 Python 保护机制；后续打包可复用此环境。
+
+### 验证
+
+```bash
+python -m unittest discover -s tests -v
+python tests/smoke_gui.py
+```
+
+第二项需可用的桌面会话，会打开设计器及导出的测试程序，然后自动退出。macOS 的无边框窗口依赖 Cocoa，不能用 Qt `offscreen` 插件代替原生窗口验证。
+
+### 发布
+
+同步 `app/common/metadata.py` 中的版本号与 `docs/release-notes/vX.Y.Z.md`，提交后推送对应的 `vX.Y.Z` 标签。GitHub Actions 会构建三个平台、验证压缩包校验值及解压后的应用启动，全部通过后才发布 GitHub Release。
 
 ## 项目结构
 
@@ -207,7 +257,7 @@ pyqtUIDesigner/
 - **PyQt-Fluent-Widgets** — 现代 Fluent Design 风格控件库
 - **pyqtgraph** — 高性能实时图表
 - **pyserial** — 串口通信
-- **Nuitka** — Python → exe 编译打包
+- **Nuitka** — Python → Windows exe / macOS `.app` 编译打包
 
 ## 致谢
 

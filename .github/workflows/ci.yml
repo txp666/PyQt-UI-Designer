@@ -7,33 +7,26 @@ on:
     branches: [main, master]
 
 jobs:
-  lint-and-import:
-    name: Lint & Import Check
-    runs-on: windows-latest
+  compatibility:
+    name: Compatibility (${{ matrix.os }}, Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, macos-15-intel]
+        python: ['3.12', '3.14']
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-
+          python-version: ${{ matrix.python }}
       - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Check dependencies and syntax
         run: |
-          python -m pip install --upgrade pip
-          pip install PyQt5 PyQt-Fluent-Widgets pyserial pyqtgraph nuitka
-
-      - name: Syntax check (compile all .py)
-        run: python -m compileall app/ main.py deploy.py -q
-
-      - name: Import smoke test
-        shell: cmd
-        run: |
-          set QT_QPA_PLATFORM=offscreen
-          python -c "from app.common.config import cfg, APP_VERSION; print('Config OK, version:', APP_VERSION)"
-          python -c "from app.core.serial_manager import SerialManager; print('SerialManager OK')"
-          python -c "from app.core.data_binding import bindingEngine; print('DataBinding OK')"
-          python -c "from app.core.code_generator import generate_project; print('CodeGenerator OK')"
-
-      - name: Nuitka dry-run (version info only)
-        run: python -m nuitka --version
+          python -m pip check
+          python -m compileall -q app main.py deploy.py tests
+      - name: Platform regression tests
+        run: python -m unittest discover -s tests -v
+      - name: Native GUI and exported application smoke test
+        run: python tests/smoke_gui.py

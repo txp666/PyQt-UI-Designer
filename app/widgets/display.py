@@ -68,7 +68,7 @@ class LEDIndicator(QWidget):
 
         if self._label_text:
             painter.setPen(QColor(60, 60, 60))
-            painter.setFont(QFont("Microsoft YaHei", 10))
+            painter.setFont(QFont(self.font().family(), 10))
             text_x = x + size + 8
             painter.drawText(text_x, 0, self.width() - text_x, self.height(),
                              Qt.AlignVCenter | Qt.AlignLeft, self._label_text)

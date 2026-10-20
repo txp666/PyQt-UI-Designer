@@ -1,6 +1,7 @@
 # coding: utf-8
 """Design canvas based on QGraphicsScene/View with grid, drag-drop, selection."""
 import json
+import sys
 from typing import Optional, List, Dict
 
 from PyQt5.QtCore import Qt, QRectF, QPointF, pyqtSignal
@@ -213,11 +214,19 @@ class DesignView(QGraphicsView):
     # ------------------------------------------------------------------
 
     def wheelEvent(self, event):
-        factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
-        new_zoom = self._zoom * factor
-        if 0.2 <= new_zoom <= 5.0:
-            self._zoom = new_zoom
-            self.setTransform(self.transform().scale(factor, factor))
+        # On Mac a two-finger gesture pans; Command + scroll zooms.
+        if sys.platform == "darwin" and not event.modifiers() & Qt.ControlModifier:
+            super().wheelEvent(event)
+            return
+        delta = event.angleDelta().y()
+        if not delta:
+            event.ignore()
+            return
+        factor = 1.15 ** (delta / 120)
+        new_zoom = max(0.2, min(5.0, self._zoom * factor))
+        self.scale(new_zoom / self._zoom, new_zoom / self._zoom)
+        self._zoom = new_zoom
+        event.accept()
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat(MIME_WIDGET_TYPE):
@@ -271,9 +280,11 @@ class DesignView(QGraphicsView):
             super().dropEvent(event)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Delete:
+        if (event.key() == Qt.Key_Delete
+                or (sys.platform == "darwin" and event.key() == Qt.Key_Backspace)):
             for item in self.scene().selectedItems():
                 if isinstance(item, CanvasItem):
                     self._scene.remove_canvas_item(item)
+            event.accept()
         else:
             super().keyPressEvent(event)

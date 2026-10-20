@@ -20,7 +20,9 @@ else:
     )
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
 
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 app = QApplication(sys.argv)
+app.setApplicationName("PyQt UI Designer")
 app.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
 
 locale = cfg.get(cfg.language).value
@@ -35,7 +37,7 @@ if sys.platform == "win32":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
         "pyqt.ui.designer"
     )
-_icon_path = Path(__file__).resolve().parent / "logo.ico"
+_icon_path = Path(__file__).resolve().parent / "logo.png"
 if _icon_path.exists():
     _icon = QIcon(str(_icon_path))
     app.setWindowIcon(_icon)

@@ -484,7 +484,7 @@ class DataRecvCard(CardWidget):
         self._output = TextEdit()
         self._output.setReadOnly(True)
         self._output.setStyleSheet(
-            "font-family: Consolas, 'Courier New', monospace; font-size: 12px; "
+            "font-family: Menlo, Consolas, 'Courier New', monospace; font-size: 12px; "
             "background: #1e1e2e; color: #cdd6f4; border-radius: 4px; padding: 4px;"
         )
         layout.addWidget(self._output, 1)
@@ -578,7 +578,7 @@ class LogDisplayBox(QFrame):
         self._output = QTextEdit()
         self._output.setReadOnly(True)
         self._output.setStyleSheet(
-            "QTextEdit { font-family: Consolas, 'Courier New', monospace; "
+            "QTextEdit { font-family: Menlo, Consolas, 'Courier New', monospace; "
             "font-size: 11px; background: #1a1a2e; color: #a8d8ea; "
             "border: 1px solid #333; border-radius: 6px; padding: 6px; }"
         )

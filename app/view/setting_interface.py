@@ -12,7 +12,7 @@ from qfluentwidgets import (
     setTheme, Theme, MessageBox,
 )
 
-from app.common.config import cfg, APP_VERSION
+from app.common.config import cfg, APP_VERSION, isWin11
 from app.common.signal_bus import signalBus
 from app.common.update_checker import UpdateCheckThread, RELEASE_URL
 
@@ -55,6 +55,7 @@ class SettingInterface(ScrollArea):
             parent=self.personalGroup,
         )
         self.micaCard.checkedChanged.connect(signalBus.micaEnableChanged)
+        self.micaCard.setEnabled(isWin11())
 
         self.zoomCard = ComboBoxSettingCard(
             cfg.dpiScale, FIF.ZOOM, "界面缩放",

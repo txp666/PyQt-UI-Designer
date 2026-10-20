@@ -15,6 +15,8 @@ def generate_project(project: ProjectData, output_dir: str):
 
     # requirements.txt
     (out / "requirements.txt").write_text(
+        "PyQt5>=5.15.11,<5.16\n"
+        'PyQt5-Qt5>=5.15.19; sys_platform == "darwin" and platform_machine == "arm64"\n'
         "PyQt-Fluent-Widgets>=1.5.5\npyserial>=3.5\npyqtgraph>=0.13.3\n",
         encoding="utf-8",
     )
@@ -42,12 +44,13 @@ def generate_project(project: ProjectData, output_dir: str):
         encoding="utf-8",
     )
 
-    # copy logo.ico if exists
+    # Keep icons beside main.py in both source exports and compiled apps.
     import shutil
     _root = Path(__file__).resolve().parent.parent.parent
-    _ico = _root / "logo.ico"
-    if _ico.exists():
-        shutil.copy2(str(_ico), str(out / "logo.ico"))
+    for name in ("logo.ico", "logo.png", "logo.icns"):
+        source = _root / name
+        if source.exists() and source.resolve() != (out / name).resolve():
+            shutil.copy2(str(source), str(out / name))
 
 
 def _gen_main() -> str:
@@ -67,8 +70,12 @@ QApplication.setHighDpiScaleFactorRoundingPolicy(
     Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
 )
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 
 app = QApplication(sys.argv)
+from qfluentwidgets import qconfig
+if sys.platform == "darwin" and hasattr(qconfig, "fontFamilies"):
+    qconfig.set(qconfig.fontFamilies, ["PingFang SC", "Helvetica Neue"], save=False)
 
 from ui import MainUI
 from serial_handler import SerialHandler
@@ -80,7 +87,7 @@ binding = DataBinding(window, serial_handler)
 
 if sys.platform == "win32":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("pyqt.ui.app")
-_ico = Path(__file__).resolve().parent / "logo.ico"
+_ico = Path(__file__).resolve().parent / "logo.png"
 if _ico.exists():
     _icon = QIcon(str(_ico))
     app.setWindowIcon(_icon)
@@ -197,6 +204,8 @@ class MainUI(FluentWindow):
 ''')
 
     _gen_widgets_recursive(widgets, lines, "self._page")
+    if not widgets:
+        lines.append("        pass")
 
     def _has_commands(items):
         for w in items:
@@ -571,7 +580,8 @@ def _list_all_ports():
     found = {{}}
     if HAS_SERIAL:
         for p in serial.tools.list_ports.comports():
-            found[p.device.upper()] = p.description
+            device = p.device.upper() if sys.platform == "win32" else p.device
+            found[device] = p.description
     if sys.platform == "win32":
         try:
             import winreg
@@ -1046,7 +1056,7 @@ class LEDIndicator(QWidget):
         painter.drawEllipse(4, (self.height()-size)//2, size, size)
         if self._label_text:
             painter.setPen(QColor(60,60,60))
-            painter.setFont(QFont("Microsoft YaHei", 10))
+            painter.setFont(QFont(self.font().family(), 10))
             painter.drawText(size+12, 0, self.width()-size-12, self.height(), Qt.AlignVCenter, self._label_text)
         painter.end()
 '''
@@ -1351,7 +1361,7 @@ class GaugeMeter(QWidget):
         vp = QPen(QColor(0,120,212), max(6,side/12)); vp.setCapStyle(Qt.RoundCap)
         p.setPen(vp); p.drawArc(arc, 225*16, int(-270*ratio*16))
         p.setPen(QColor(30,30,30)); fs=max(10,int(side/6))
-        p.setFont(QFont("Microsoft YaHei",fs,QFont.Bold))
+        p.setFont(QFont(self.font().family(),fs,QFont.Bold))
         p.drawText(self.rect(), Qt.AlignCenter, f"{self._value:.1f}")
         p.end()
 '''
@@ -1366,7 +1376,7 @@ class SerialTerminal(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self); layout.setContentsMargins(4,4,4,4)
         self._output = _FTextEdit(); self._output.setReadOnly(True)
-        self._output.setStyleSheet("font-family:Consolas;font-size:12px;background:#1e1e1e;color:#d4d4d4;")
+        self._output.setStyleSheet("font-family:Menlo,Consolas,monospace;font-size:12px;background:#1e1e1e;color:#d4d4d4;")
         layout.addWidget(self._output, 1)
         row = QHBoxLayout()
         self._input = _FLineEdit(); self._input.setPlaceholderText("输入命令...")
@@ -1445,7 +1455,7 @@ class LogDisplayBox(QWidget):
         super().__init__(parent)
         lo = QVBoxLayout(self); lo.setContentsMargins(2,2,2,2)
         self._text = TextEdit(); self._text.setReadOnly(True)
-        self._text.setStyleSheet("font-family:Consolas;font-size:12px;")
+        self._text.setStyleSheet("font-family:Menlo,Consolas,monospace;font-size:12px;")
         lo.addWidget(self._text)
         self._max = 500
     def append_log(self, msg):
@@ -1587,7 +1597,7 @@ class DataRecvCard(CardWidget):
         root.addLayout(opt)
         self._text = TextEdit(); self._text.setReadOnly(True)
         self._text.setStyleSheet(
-            "font-family:Consolas,'Courier New',monospace;font-size:12px;"
+            "font-family:Menlo,Consolas,'Courier New',monospace;font-size:12px;"
             "background:#1e1e2e;color:#cdd6f4;border-radius:4px;padding:4px;")
         root.addWidget(self._text, 1)
         self._count = 0; self._max_lines = 1000; self._handler = None

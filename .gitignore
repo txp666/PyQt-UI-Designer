@@ -9,6 +9,7 @@ dist/
 
 # Virtual Environment
 .venv/
+.build-venv/
 venv/
 ENV/
 
@@ -24,6 +25,8 @@ build/
 *.build/
 *.dist/
 *.onefile-build/
+*.app/
+nuitka-crash-report.xml
 
 # Packaging output
 *.zip

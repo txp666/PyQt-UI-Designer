@@ -11,7 +11,7 @@ from qfluentwidgets import (
     FluentIcon as FIF, InfoBar, InfoBarPosition, MessageBox,
 )
 
-from app.common.config import cfg, APP_NAME
+from app.common.config import cfg, APP_NAME, isWin11
 from app.common.signal_bus import signalBus
 from app.core.project import ProjectManager
 from app.view.designer_interface import DesignerInterface
@@ -117,20 +117,21 @@ class MainWindow(FluentWindow):
         self.setMinimumSize(1000, 600)
         self.setWindowTitle(APP_NAME)
 
-        _ico = Path(__file__).resolve().parent.parent.parent / "logo.ico"
+        _ico = Path(__file__).resolve().parent.parent.parent / "logo.png"
         if _ico.exists():
             self.setWindowIcon(QIcon(str(_ico)))
 
         self.setCustomBackgroundColor(QColor(240, 244, 249), QColor(32, 32, 32))
-        self.setMicaEffectEnabled(cfg.get(cfg.micaEnabled))
+        self.setMicaEffectEnabled(isWin11() and cfg.get(cfg.micaEnabled))
 
         self.splashScreen = SplashScreen(self.windowIcon(), self)
         self.splashScreen.setIconSize(QSize(106, 106))
         self.splashScreen.raise_()
 
         desktop = QApplication.primaryScreen().availableGeometry()
-        w, h = desktop.width(), desktop.height()
-        self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
+        self.resize(min(self.width(), desktop.width()),
+                    min(self.height(), desktop.height()))
+        self.move(desktop.center() - self.rect().center())
         self.show()
         QApplication.processEvents()
 

@@ -1,14 +1,15 @@
 # coding: utf-8
 """Preview interface — build and run the designed UI in a live window."""
 from functools import partial
+import sys
 
-from PyQt5.QtCore import Qt, QProcess, QTimer
+from PyQt5.QtCore import Qt, QProcess, QTimer, QUrl
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
     QDialog, QFileDialog, QSizePolicy,
 )
 from PyQt5.QtWidgets import QAbstractSpinBox, QLineEdit, QAbstractButton, QTabBar, QTabWidget
-from PyQt5.QtGui import QFont, QTextCursor, QColor
+from PyQt5.QtGui import QFontDatabase, QTextCursor, QColor, QDesktopServices
 from qfluentwidgets import (
     PrimaryPushButton, PushButton, BodyLabel, InfoBar,
     InfoBarPosition, FluentIcon as FIF, CardWidget, isDarkTheme,
@@ -17,6 +18,7 @@ from qfluentwidgets import (
 )
 
 from app.common.signal_bus import signalBus
+from app.common.build_support import archive_build, build_environment, build_nuitka_command
 from app.widgets.basic import create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
@@ -293,6 +295,7 @@ class NuitkaPackDialog(QDialog):
         self._project_dir = project_dir
         self._app_name = app_name
         self._process = None
+        self._pip_process = None
         self._init_ui()
 
     def _init_ui(self):
@@ -316,7 +319,7 @@ class NuitkaPackDialog(QDialog):
 
         self._terminal = TextEdit()
         self._terminal.setReadOnly(True)
-        self._terminal.setFont(QFont("Consolas", 9))
+        self._terminal.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
         self._terminal.setStyleSheet(
             "QTextEdit { background: #1e1e1e; color: #cccccc; "
             "border: 1px solid #333; border-radius: 6px; padding: 8px; }"
@@ -349,8 +352,8 @@ class NuitkaPackDialog(QDialog):
         self._terminal.ensureCursorVisible()
 
     @staticmethod
-    def _find_python() -> tuple:
-        """Find Python 3.11/3.12. Returns (cmd_list, has_nuitka)."""
+    def _find_python(project_dir=None) -> tuple:
+        """Find Python 3.10+ with build dependencies, including Finder launches."""
         import sys
         import os
         import shutil
@@ -363,16 +366,19 @@ class NuitkaPackDialog(QDialog):
         def _py_ver(cmd: list) -> bool:
             try:
                 out = subprocess.check_output(
-                    cmd + ["--version"], timeout=5, **_kw
+                    cmd + ["-c", "import sys; print(sys.version_info.major, sys.version_info.minor)"], timeout=5, **_kw
                 ).decode().strip()
-                return "3.11" in out or "3.12" in out
+                major, minor = map(int, out.split())
+                return major == 3 and minor >= 10
             except Exception:
                 return False
 
         def _has_nuitka(cmd: list) -> bool:
             try:
                 subprocess.check_output(
-                    cmd + ["-m", "nuitka", "--version"], timeout=10, **_kw
+                    cmd + ["-c", "import nuitka, ordered_set, PyQt5, qfluentwidgets, serial, pyqtgraph"
+                           + (", imageio, PIL" if sys.platform == "darwin" else "")],
+                    timeout=15, **_kw
                 )
                 return True
             except Exception:
@@ -380,10 +386,12 @@ class NuitkaPackDialog(QDialog):
 
         all_candidates = []
 
-        if not getattr(sys, "frozen", False) and "nuitka" not in sys.executable.lower():
+        if not getattr(sys, "frozen", False) and "__compiled__" not in globals():
             all_candidates.append([sys.executable])
 
         venv_dirs = []
+        if project_dir:
+            venv_dirs.extend(Path(project_dir) / name for name in (".build-venv", ".venv"))
         for base in (Path.home(), Path(os.environ.get("USERPROFILE", ""))):
             for name in (".venv", "venv", ".conda"):
                 d = base / name
@@ -399,13 +407,19 @@ class NuitkaPackDialog(QDialog):
                 if exe.exists():
                     all_candidates.append([str(exe)])
 
-        for name in [["python3.12"], ["python3.11"], ["python"], ["python3"]]:
+        for name in [["python3"], ["python"], ["python3.14"], ["python3.13"], ["python3.12"], ["python3.11"], ["python3.10"]]:
             if shutil.which(name[0]):
                 all_candidates.append(name)
         if sys.platform == "win32":
-            for name in [["py", "-3.12"], ["py", "-3.11"]]:
+            for name in [["py", "-3"], ["py", "-3.12"]]:
                 if shutil.which(name[0]):
                     all_candidates.append(name)
+
+        if sys.platform == "darwin":
+            for prefix in (Path("/opt/homebrew/bin"), Path("/usr/local/bin")):
+                for name in ("python3", "python3.14", "python3.13", "python3.12"):
+                    if (prefix / name).is_file():
+                        all_candidates.append([str(prefix / name)])
 
         first_valid_py = None
         for cmd in all_candidates:
@@ -421,39 +435,11 @@ class NuitkaPackDialog(QDialog):
         return [], False
 
     def _build_nuitka_args(self) -> list:
-        import sys
-        from pathlib import Path
-
-        proj = Path(self._project_dir)
-        main_py = proj / "main.py"
-        build_dir = proj / "build"
-
-        args = list(self._python_cmd) + [
-            "-m", "nuitka",
-            "--standalone",
-            "--assume-yes-for-downloads",
-        ]
-        if sys.platform == "win32" and sys.version_info < (3, 13):
-            args.append("--mingw64")
-
-        icon = proj / "logo.ico"
-        if icon.exists():
-            args.append(f"--windows-icon-from-ico={icon}")
-
-        args.extend([
-            "--enable-plugins=pyqt5",
-            "--windows-console-mode=disable",
-            "--windows-product-version=1.0.0.0",
-            "--windows-file-version=1.0.0.0",
-            "--show-progress",
-            "--show-memory",
-            f"--output-dir={build_dir}",
-            str(main_py),
-        ])
-        return args
+        return build_nuitka_command(
+            self._project_dir, self._python_cmd, self._app_name,
+        )
 
     def _start_pack(self):
-        import os
         from pathlib import Path
 
         main_py = Path(self._project_dir) / "main.py"
@@ -468,12 +454,12 @@ class NuitkaPackDialog(QDialog):
         self._status.setText("正在查找 Python 环境...")
         self._status.setStyleSheet("color:#0078d4;")
 
-        py_cmd, has_nuitka = self._find_python()
+        py_cmd, has_nuitka = self._find_python(self._project_dir)
 
         if not py_cmd:
             self._append_text(
-                "错误: 未找到 Python 3.11 或 3.12\n\n"
-                "请安装 Python 3.11/3.12 并确保已加入系统 PATH。\n",
+                "错误: 未找到 Python 3.10 或更新版本\n\n"
+                "请安装 Python 3.10+ 并确保已加入系统 PATH。\n",
                 "#f44",
             )
             self._start_btn.setEnabled(True)
@@ -488,22 +474,54 @@ class NuitkaPackDialog(QDialog):
         if not has_nuitka:
             self._append_text(
                 f"检测到 Python: {py_display}\n"
-                f"Nuitka 未安装，正在自动安装...\n\n", "#dcdcaa"
+                f"打包依赖不完整，正在安装...\n\n", "#dcdcaa"
             )
-            self._status.setText("正在安装 Nuitka...")
-            self._install_nuitka_then_pack(py_cmd)
+            self._status.setText("正在安装打包依赖...")
+            self._prepare_build_environment(py_cmd)
             return
 
         self._append_text(f"Python: {py_display}\n", "#6a9955")
         self._do_pack()
 
+    def _prepare_build_environment(self, py_cmd: list):
+        """Homebrew Python is externally managed: install only in a build venv."""
+        from pathlib import Path
+        venv = Path(self._project_dir).resolve() / ".build-venv"
+        self._build_python = venv / ("Scripts/python.exe" if sys.platform == "win32"
+                                     else "bin/python")
+        self._append_text(f"创建打包虚拟环境: {venv}\n", "#569cd6")
+        self._pip_process = QProcess(self)
+        self._pip_process.setProcessEnvironment(self._to_qenv(build_environment()))
+        self._pip_process.setProcessChannelMode(QProcess.MergedChannels)
+        self._pip_process.readyReadStandardOutput.connect(
+            lambda: self._append_text(
+                bytes(self._pip_process.readAllStandardOutput()).decode("utf-8", errors="replace")
+            )
+        )
+        self._pip_process.errorOccurred.connect(self._on_process_error)
+        self._pip_process.finished.connect(self._on_venv_finished)
+        args = list(py_cmd) + ["-m", "venv", str(venv)]
+        self._pip_process.start(args[0], args[1:])
+
+    def _on_venv_finished(self, exit_code, status):
+        if exit_code != 0 or status != QProcess.NormalExit:
+            self._progress.hide()
+            self._start_btn.setEnabled(True)
+            self._status.setText("虚拟环境创建失败")
+            self._append_text("请检查 Python venv 支持和输出目录写入权限。\n", "#f44")
+            return
+        self._python_cmd = [str(self._build_python)]
+        self._install_nuitka_then_pack(self._python_cmd)
+
     def _install_nuitka_then_pack(self, py_cmd: list):
         import os
         pip_args = list(py_cmd) + [
             "-m", "pip", "install",
-            "nuitka", "ordered-set",
+            "nuitka>=4.0.7", "ordered-set",
             "PyQt5", "PyQt-Fluent-Widgets", "pyserial", "pyqtgraph",
         ]
+        if sys.platform == "darwin":
+            pip_args.extend(["imageio", "Pillow"])
         self._append_text(f"$ {' '.join(pip_args)}\n\n", "#569cd6")
 
         self._pip_process = QProcess(self)
@@ -522,13 +540,14 @@ class NuitkaPackDialog(QDialog):
             )
         )
         self._pip_process.finished.connect(self._on_pip_finished)
+        self._pip_process.errorOccurred.connect(self._on_process_error)
         self._pip_process.start(pip_args[0], pip_args[1:])
 
-    def _on_pip_finished(self, exit_code, _status):
-        if exit_code != 0:
+    def _on_pip_finished(self, exit_code, status):
+        if exit_code != 0 or status != QProcess.NormalExit:
             self._append_text(
                 f"\nNuitka 安装失败 (exit code: {exit_code})\n"
-                "请手动执行: pip install nuitka\n", "#f44"
+                "请检查网络和日志中的依赖安装错误。\n", "#f44"
             )
             self._start_btn.setEnabled(True)
             self._progress.hide()
@@ -540,17 +559,13 @@ class NuitkaPackDialog(QDialog):
         self._do_pack()
 
     def _do_pack(self):
-        import os
-
         self._status.setText("打包中...")
         self._status.setStyleSheet("color:#0078d4;")
 
         args = self._build_nuitka_args()
         self._append_text(f"$ {' '.join(args)}\n\n", "#569cd6")
 
-        env = os.environ.copy()
-        env["CL"] = ("/utf-8 " + env.get("CL", "")).strip()
-        env["PYTHONUNBUFFERED"] = "1"
+        env = build_environment()
 
         self._process = QProcess(self)
         self._process.setWorkingDirectory(self._project_dir)
@@ -558,6 +573,7 @@ class NuitkaPackDialog(QDialog):
         self._process.readyReadStandardOutput.connect(self._on_stdout)
         self._process.readyReadStandardError.connect(self._on_stderr)
         self._process.finished.connect(self._on_finished)
+        self._process.errorOccurred.connect(self._on_process_error)
         self._process.start(args[0], args[1:])
 
     @staticmethod
@@ -578,10 +594,10 @@ class NuitkaPackDialog(QDialog):
         text = bytes(data).decode("utf-8", errors="replace")
         self._append_text(text, "#e8a838")
 
-    def _on_finished(self, exit_code, _status):
+    def _on_finished(self, exit_code, status):
         self._progress.hide()
         self._start_btn.setEnabled(True)
-        if exit_code == 0:
+        if exit_code == 0 and status == QProcess.NormalExit:
             self._append_text("\n✓ Nuitka 编译成功!\n", "#2ecc71")
             self._post_build_cleanup()
         else:
@@ -590,64 +606,34 @@ class NuitkaPackDialog(QDialog):
             self._append_text(f"\n✗ 打包失败, exit code: {exit_code}\n", "#e74c3c")
 
     def _post_build_cleanup(self):
-        """Delete build intermediates, rename dist folder, create zip archive."""
-        import shutil
-        from pathlib import Path
-
-        build_dir = Path(self._project_dir) / "build"
-        dist_dir = build_dir / "main.dist"
-        build_tmp = build_dir / "main.build"
-        onefile_tmp = build_dir / "main.onefile-build"
-        safe_name = self._app_name.strip().replace("/", "_").replace("\\", "_") or "app"
-        final_dir = build_dir / safe_name
-        zip_path = build_dir / f"{safe_name}.zip"
-
-        # 1) delete build intermediates
-        for d in (build_tmp, onefile_tmp):
-            if d.exists():
-                self._append_text(f"清理编译缓存: {d.name}\n", "#888")
-                shutil.rmtree(d, ignore_errors=True)
-
-        # 2) rename main.dist -> app_name
-        if dist_dir.exists():
-            if final_dir.exists() and final_dir != dist_dir:
-                self._append_text(f"删除旧目录: {final_dir.name}\n", "#888")
-                shutil.rmtree(final_dir, ignore_errors=True)
-            self._append_text(f"重命名: main.dist → {safe_name}\n", "#569cd6")
-            try:
-                dist_dir.rename(final_dir)
-            except OSError as e:
-                self._append_text(f"重命名失败: {e}\n", "#e74c3c")
-                final_dir = dist_dir
-        elif final_dir.exists():
-            pass
-        else:
-            self._append_text("未找到 main.dist 目录，跳过后续步骤\n", "#f39c12")
-            self._status.setText("打包完成 (无dist)")
-            self._status.setStyleSheet("color:#2ecc71;")
-            self._open_dir_btn.setEnabled(True)
-            return
-
-        # 3) zip archive
-        self._append_text(f"压缩: {safe_name}.zip ...\n", "#569cd6")
-        self._status.setText("压缩中...")
         try:
-            if zip_path.exists():
-                zip_path.unlink()
-            shutil.make_archive(str(build_dir / safe_name), "zip",
-                                root_dir=str(build_dir), base_dir=safe_name)
-            size_mb = zip_path.stat().st_size / (1024 * 1024)
-            self._append_text(f"✓ 压缩完成: {safe_name}.zip ({size_mb:.1f} MB)\n", "#2ecc71")
-        except Exception as e:
-            self._append_text(f"压缩失败: {e}\n", "#e74c3c")
-
+            bundle, archive = archive_build(self._project_dir, self._app_name)
+        except Exception as error:
+            self._append_text(f"产物整理失败: {error}\n", "#e74c3c")
+            self._status.setText("打包失败")
+            self._status.setStyleSheet("color:#e74c3c;")
+            return
+        size_mb = archive.stat().st_size / (1024 * 1024)
+        self._append_text(f"✓ {bundle.name}\n✓ {archive.name} ({size_mb:.1f} MB)\n", "#2ecc71")
         self._status.setText("打包完成")
         self._status.setStyleSheet("color:#2ecc71;")
         self._open_dir_btn.setEnabled(True)
 
+    def _on_process_error(self, error):
+        if error == QProcess.FailedToStart:
+            self._progress.hide()
+            self._start_btn.setEnabled(True)
+            self._status.setText("进程启动失败")
+            self._append_text("无法启动 Python，请检查解释器路径和执行权限。\n", "#f44")
+
     def _on_cancel(self):
-        if self._process and self._process.state() != QProcess.NotRunning:
-            self._process.kill()
+        running = False
+        for process in (self._pip_process, self._process):
+            if process and process.state() != QProcess.NotRunning:
+                running = True
+                process.kill()
+                process.waitForFinished(3000)
+        if running:
             self._append_text("\n用户取消打包\n", "#f39c12")
             self._status.setText("已取消")
             self._status.setStyleSheet("color:#f39c12;")
@@ -655,18 +641,18 @@ class NuitkaPackDialog(QDialog):
             self.close()
 
     def _open_output_dir(self):
-        import os, subprocess
         from pathlib import Path
-        build_dir = Path(self._project_dir) / "build"
-        if build_dir.exists():
-            subprocess.Popen(f'explorer "{build_dir}"')
-        else:
+        build_dir = Path(self._project_dir).resolve() / "build"
+        if not build_dir.exists():
             self._append_text("输出目录不存在\n", "#f44")
+        elif not QDesktopServices.openUrl(QUrl.fromLocalFile(str(build_dir))):
+            self._append_text("无法打开输出目录\n", "#f44")
 
     def closeEvent(self, event):
-        if self._process and self._process.state() != QProcess.NotRunning:
-            self._process.kill()
-            self._process.waitForFinished(3000)
+        for process in (self._pip_process, self._process):
+            if process and process.state() != QProcess.NotRunning:
+                process.kill()
+                process.waitForFinished(3000)
         super().closeEvent(event)
 
 

@@ -9,9 +9,7 @@ from qfluentwidgets import (
     qconfig, QConfig, ConfigItem, OptionsConfigItem,
     BoolValidator, OptionsValidator, Theme, ConfigSerializer,
 )
-
-APP_NAME = "PyQt UI Designer"
-APP_VERSION = "0.1.0"
+from app.common.metadata import APP_NAME, APP_VERSION
 
 CONFIG_DIR = Path(os.path.expanduser("~")) / ".pyqt_ui_designer"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -66,3 +64,5 @@ class Config(QConfig):
 cfg = Config()
 cfg.themeMode.value = Theme.AUTO
 qconfig.load(str(CONFIG_FILE), cfg)
+if sys.platform == "darwin" and hasattr(cfg, "fontFamilies"):
+    qconfig.set(cfg.fontFamilies, ["PingFang SC", "Helvetica Neue"], save=False)

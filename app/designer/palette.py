@@ -88,7 +88,7 @@ class _DraggableListWidget(QListWidget):
             text_color = QColor(0, 120, 212)
         painter = QPainter(pixmap)
         painter.setPen(text_color)
-        painter.setFont(QFont("Microsoft YaHei", 10))
+        painter.setFont(QFont(self.font().family(), 10))
         painter.drawText(pixmap.rect(), Qt.AlignCenter, item.text())
         painter.end()
 

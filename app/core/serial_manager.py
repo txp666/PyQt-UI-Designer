@@ -23,7 +23,8 @@ def _list_all_ports() -> List[Dict[str, str]]:
 
     if HAS_SERIAL:
         for p in serial.tools.list_ports.comports():
-            found[p.device.upper()] = p.description
+            device = p.device.upper() if sys.platform == "win32" else p.device
+            found[device] = p.description
 
     if sys.platform == "win32":
         try:

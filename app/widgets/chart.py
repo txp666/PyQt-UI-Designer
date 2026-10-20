@@ -621,18 +621,18 @@ class GaugeMeter(QWidget):
         # value text
         painter.setPen(QColor(30, 30, 30))
         font_size = max(10, int(side / 6))
-        painter.setFont(QFont("Microsoft YaHei", font_size, QFont.Bold))
+        painter.setFont(QFont(self.font().family(), font_size, QFont.Bold))
         val_text = f"{self._value:.1f}"
         painter.drawText(self.rect(), Qt.AlignCenter, val_text)
 
         # unit text below
-        painter.setFont(QFont("Microsoft YaHei", max(8, int(font_size * 0.6))))
+        painter.setFont(QFont(self.font().family(), max(8, int(font_size * 0.6))))
         painter.setPen(QColor(120, 120, 120))
         unit_rect = self.rect().adjusted(0, int(font_size * 1.5), 0, 0)
         painter.drawText(unit_rect, Qt.AlignHCenter | Qt.AlignTop, self._unit)
 
         # title text above
-        painter.setFont(QFont("Microsoft YaHei", max(8, int(font_size * 0.5))))
+        painter.setFont(QFont(self.font().family(), max(8, int(font_size * 0.5))))
         painter.setPen(QColor(160, 160, 160))
         title_rect = self.rect().adjusted(0, 0, 0, -int(font_size * 1.5))
         painter.drawText(title_rect, Qt.AlignHCenter | Qt.AlignBottom, self._title)

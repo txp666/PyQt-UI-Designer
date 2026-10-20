@@ -40,7 +40,7 @@ class HBoxContainer(QFrame):
         if self._title:
             p = QPainter(self)
             p.setPen(QColor(150, 150, 150))
-            p.setFont(QFont("Microsoft YaHei", 8))
+            p.setFont(QFont(self.font().family(), 8))
             p.drawText(6, 14, self._title)
             p.end()
 
@@ -73,7 +73,7 @@ class VBoxContainer(QFrame):
         if self._title:
             p = QPainter(self)
             p.setPen(QColor(150, 150, 150))
-            p.setFont(QFont("Microsoft YaHei", 8))
+            p.setFont(QFont(self.font().family(), 8))
             p.drawText(6, 14, self._title)
             p.end()
 
@@ -105,7 +105,7 @@ class FlexContainer(QFrame):
         super().paintEvent(event)
         p = QPainter(self)
         p.setPen(QColor(150, 150, 150))
-        p.setFont(QFont("Microsoft YaHei", 8))
+        p.setFont(QFont(self.font().family(), 8))
         p.drawText(6, 14, self._title)
         p.end()
 
@@ -185,7 +185,7 @@ class CardContainer(CardWidget):
         if self._title:
             p = QPainter(self)
             p.setPen(QColor(120, 120, 120))
-            p.setFont(QFont("Microsoft YaHei", 9))
+            p.setFont(QFont(self.font().family(), 9))
             p.drawText(12, 18, self._title)
             p.end()
 
