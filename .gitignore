@@ -39,6 +39,7 @@ Desktop.ini
 # Project exports
 output/
 *.uidp
+!demo/project.uidp
 
 # Cursor
 .cursor/

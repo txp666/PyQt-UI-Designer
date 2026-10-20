@@ -1,15 +1,53 @@
 # coding: utf-8
 """Data frame parsers for serial communication."""
 import json
-import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 class BaseParser:
-    """Base class for protocol parsers."""
+    """Incremental parsers return every complete message, in arrival order."""
 
-    def feed(self, data: bytes) -> Optional[Dict[str, Any]]:
+    def feed(self, data: bytes) -> List[Dict[str, Any]]:
         raise NotImplementedError
+
+
+class RawFrameBuffer:
+    """Frame raw widget bindings when both delimiters are configured.
+
+    Without both delimiters, the read chunk remains the legacy input unit:
+    no total packet length can be inferred from a single widget's byte offset.
+    """
+    def __init__(self, header=b"", footer=b"", max_buffer=65536):
+        self.header, self.footer = header, footer
+        self.max_buffer = max_buffer
+        self._buf = b""
+
+    def reset(self):
+        self._buf = b""
+
+    def feed(self, data):
+        if not self.header or not self.footer:
+            return [data]
+        self._buf += data
+        frames = []
+        while self._buf:
+            start = self._buf.find(self.header)
+            if start < 0:
+                keep = len(self.header) - 1
+                self._buf = self._buf[-keep:] if keep else b""
+                break
+            self._buf = self._buf[start:]
+            end = self._buf.find(self.footer, len(self.header))
+            if end < 0:
+                if len(self._buf) > self.max_buffer:
+                    self._buf = self._buf[1:]
+                    continue
+                break
+            end += len(self.footer)
+            if end <= self.max_buffer:
+                frames.append(self._buf[:end])
+            self._buf = self._buf[end:]
+        return frames
 
 
 class LineParser(BaseParser):
@@ -21,40 +59,45 @@ class LineParser(BaseParser):
       - JSON per line: '{"temp": 25.3}\\n'
     """
 
-    def __init__(self, separator: str = ","):
+    def __init__(self, separator: str = ",", max_buffer: int = 65536):
+        if not separator:
+            raise ValueError("行分隔符不能为空")
         self._buf = b""
         self._sep = separator
+        self._max_buffer = max_buffer
+        self._discarding = False
 
-    def feed(self, data: bytes) -> Optional[Dict[str, Any]]:
-        self._buf += data
-        # Normalize literal escape sequences (\r\n, \n) to real newline bytes
-        self._buf = self._buf.replace(b"\\r\\n", b"\n").replace(b"\\n", b"\n")
+    def feed(self, data: bytes) -> List[Dict[str, Any]]:
+        # Only actual LF terminates a record. JSON may contain escaped \n.
         results = []
-        while b"\n" in self._buf:
-            line, self._buf = self._buf.split(b"\n", 1)
-            text = line.decode("utf-8", errors="replace").strip()
-            if not text:
-                continue
-            parsed = self._parse_line(text)
-            if parsed:
-                results.append(parsed)
-        # Fallback: no newline found but buffer looks like a complete message
-        if not results and self._buf:
-            text = self._buf.decode("utf-8", errors="replace").strip()
-            if text and ("=" in text or text.startswith("{")):
-                parsed = self._parse_line(text)
-                if parsed:
-                    results.append(parsed)
+        parts = data.split(b"\n")
+        for index, part in enumerate(parts):
+            complete = index < len(parts) - 1
+            if not self._discarding:
+                if len(self._buf) + len(part) > self._max_buffer:
                     self._buf = b""
-        return results[-1] if results else None
+                    self._discarding = True
+                else:
+                    self._buf += part
+            if complete:
+                if not self._discarding:
+                    text = self._buf.decode("utf-8", errors="replace").strip()
+                    if text:
+                        parsed = self._parse_line(text)
+                        if parsed:
+                            results.append(parsed)
+                self._buf = b""
+                self._discarding = False
+        return results
 
     def _parse_line(self, text: str) -> Optional[Dict[str, Any]]:
         # try JSON
         if text.startswith("{"):
             try:
-                return json.loads(text)
+                value = json.loads(text)
+                return value if isinstance(value, dict) else None
             except json.JSONDecodeError:
-                pass
+                return None
 
         parts = [p.strip() for p in text.split(self._sep)]
 
@@ -96,33 +139,41 @@ class HexFrameParser(BaseParser):
     """
 
     def __init__(self, header: bytes = b"\xAA\x55", footer: bytes = b"\x55\xAA",
-                 fields: list = None):
+                 fields: list = None, max_buffer: int = 65536):
+        if not header or not footer:
+            raise ValueError("HEX 帧头和帧尾不能为空")
         self._buf = b""
         self._header = header
         self._footer = footer
         self._fields = fields or []
+        self._max_buffer = max_buffer
+        sizes = {"uint8": 1, "int8": 1, "uint16": 2, "int16": 2, "float32": 4}
+        for name, offset, length, dtype in self._fields:
+            if offset < 0 or length <= 0 or (dtype in sizes and length != sizes[dtype]):
+                raise ValueError(f"无效 HEX 字段: {name}")
 
-    def feed(self, data: bytes) -> Optional[Dict[str, Any]]:
+    def feed(self, data: bytes) -> List[Dict[str, Any]]:
         self._buf += data
         results = []
-
-        while True:
-            hdr_idx = self._buf.find(self._header)
-            if hdr_idx < 0:
+        while self._buf:
+            start = self._buf.find(self._header)
+            if start < 0:
+                self._buf = self._buf[-(len(self._header) - 1):] if len(self._header) > 1 else b""
                 break
-            ftr_idx = self._buf.find(self._footer, hdr_idx + len(self._header))
-            if ftr_idx < 0:
+            self._buf = self._buf[start:]
+            end = self._buf.find(self._footer, len(self._header))
+            if end < 0:
+                if len(self._buf) > self._max_buffer:
+                    self._buf = self._buf[1:]
+                    continue
                 break
-
-            frame = self._buf[hdr_idx:ftr_idx + len(self._footer)]
-            self._buf = self._buf[ftr_idx + len(self._footer):]
-
-            payload = frame[len(self._header):-len(self._footer)]
-            parsed = self._parse_payload(payload)
-            if parsed:
-                results.append(parsed)
-
-        return results[-1] if results else None
+            frame_end = end + len(self._footer)
+            if frame_end <= self._max_buffer:
+                parsed = self._parse_payload(self._buf[len(self._header):end])
+                if parsed:
+                    results.append(parsed)
+            self._buf = self._buf[frame_end:]
+        return results
 
     def _parse_payload(self, payload: bytes) -> Dict[str, Any]:
         result = {}
@@ -158,56 +209,61 @@ class ModbusRTUParser(BaseParser):
         self._buf = b""
         self._fields = fields or []
 
-    def feed(self, data: bytes) -> Optional[Dict[str, Any]]:
+    @staticmethod
+    def _frame_length(buf):
+        if len(buf) < 3:
+            return None
+        if not 1 <= buf[0] <= 247:
+            return 0
+        fc = buf[1]
+        if fc in (1, 2, 3, 4):
+            count = buf[2]
+            if not 1 <= count <= 250 or (fc in (3, 4) and count % 2):
+                return 0
+            return count + 5
+        if fc in (5, 6, 15, 16):
+            return 8
+        if fc in (0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x8F, 0x90):
+            return 5
+        return 0
+
+    def feed(self, data: bytes) -> List[Dict[str, Any]]:
         self._buf += data
         results = []
-
         while len(self._buf) >= 5:
-            slave = self._buf[0]
-            fc = self._buf[1]
-
-            if fc in (0x01, 0x02, 0x03, 0x04):
-                if len(self._buf) < 3:
-                    break
-                byte_count = self._buf[2]
-                frame_len = 3 + byte_count + 2
-                if len(self._buf) < frame_len:
-                    break
-                frame = self._buf[:frame_len]
-                if modbus_crc(frame[:-2]) != frame[-2:]:
-                    self._buf = self._buf[1:]
-                    continue
-                self._buf = self._buf[frame_len:]
-                parsed = self._parse_read_response(slave, fc, frame[3:3 + byte_count])
-                if parsed:
-                    results.append(parsed)
-
-            elif fc in (0x05, 0x06, 0x0F, 0x10):
-                frame_len = 8
-                if len(self._buf) < frame_len:
-                    break
-                frame = self._buf[:frame_len]
-                if modbus_crc(frame[:-2]) != frame[-2:]:
-                    self._buf = self._buf[1:]
-                    continue
-                self._buf = self._buf[frame_len:]
-                addr = int.from_bytes(frame[2:4], "big")
-                val = int.from_bytes(frame[4:6], "big")
-                results.append({"slave": slave, "fc": fc,
-                                "address": addr, "value": val})
-
-            elif fc >= 0x80:
-                frame_len = 5
-                if len(self._buf) < frame_len:
-                    break
-                frame = self._buf[:frame_len]
-                self._buf = self._buf[frame_len:]
-                results.append({"slave": slave, "fc": fc,
-                                "error": frame[2]})
-            else:
+            length = self._frame_length(self._buf)
+            if not length:
                 self._buf = self._buf[1:]
-
-        return results[-1] if results else None
+                continue
+            if len(self._buf) < length:
+                # Noise may imitate a long header. Resync only to a complete,
+                # CRC-verified response; otherwise keep the partial frame.
+                found = False
+                for offset in range(1, len(self._buf) - 4):
+                    tail = self._buf[offset:]
+                    size = self._frame_length(tail)
+                    if size and len(tail) >= size and modbus_crc(tail[:size - 2]) == tail[size - 2:size]:
+                        self._buf = tail
+                        found = True
+                        break
+                if found:
+                    continue
+                break
+            frame = self._buf[:length]
+            if modbus_crc(frame[:-2]) != frame[-2:]:
+                self._buf = self._buf[1:]
+                continue
+            self._buf = self._buf[length:]
+            slave, fc = frame[:2]
+            if fc in (1, 2, 3, 4):
+                results.append(self._parse_read_response(slave, fc, frame[3:-2]))
+            elif fc >= 0x80:
+                results.append({"slave": slave, "fc": fc, "error": frame[2]})
+            else:
+                results.append({"slave": slave, "fc": fc,
+                                "address": int.from_bytes(frame[2:4], "big"),
+                                "value": int.from_bytes(frame[4:6], "big")})
+        return results
 
     def _parse_read_response(self, slave: int, fc: int,
                              payload: bytes) -> Dict[str, Any]:
@@ -278,4 +334,4 @@ def create_parser(parser_type: str, config: dict = None) -> BaseParser:
         )
     elif parser_type == "modbus":
         return ModbusRTUParser(fields=config.get("fields", []))
-    return LineParser()
+    raise ValueError(f"未知解析模式: {parser_type}")

@@ -4,7 +4,7 @@ import sys
 import ctypes
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentTranslator
@@ -25,6 +25,10 @@ app = QApplication(sys.argv)
 app.setApplicationName("PyQt UI Designer")
 app.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
 
+from app.core.theme_runtime import ThemeController
+
+theme_controller = ThemeController(app, cfg.get(cfg.themeMode))
+
 locale = cfg.get(cfg.language).value
 translator = FluentTranslator(locale)
 app.installTranslator(translator)
@@ -44,4 +48,10 @@ if _icon_path.exists():
     w.setWindowIcon(_icon)
 
 w.show()
-app.exec()
+exit_code = app.exec()
+# Dispose the widget tree while QApplication still exists. Letting SIP tear
+# down these native objects during interpreter finalization is order-dependent.
+w.deleteLater()
+theme_controller.deleteLater()
+app.sendPostedEvents(None, QEvent.DeferredDelete)
+sys.exit(exit_code)

@@ -117,7 +117,6 @@ class SettingInterface(ScrollArea):
 
     def _on_theme_changed(self, ci):
         setTheme(cfg.get(ci))
-        signalBus.themeChanged.emit()
 
     def _check_update(self):
         if self._update_thread and self._update_thread.isRunning():

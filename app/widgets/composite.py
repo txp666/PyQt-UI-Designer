@@ -10,7 +10,7 @@ from qfluentwidgets import (
     CardWidget, StrongBodyLabel, BodyLabel, CaptionLabel,
     PushButton, PrimaryPushButton, ComboBox, LineEdit, SpinBox,
     ProgressRing, FluentIcon as FIF, ToolButton,
-    CheckBox, TextEdit, isDarkTheme,
+    CheckBox, TextEdit, isDarkTheme, setCustomStyleSheet,
 )
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
@@ -27,333 +27,14 @@ except ImportError:
 # Serial Config Card
 # ---------------------------------------------------------------------------
 
-class SerialConfigCard(CardWidget):
-    """Serial port configuration card with three display modes:
-    完整 (full), 简洁 (simple: port+baud+buttons), 单行 (single-line toolbar).
-    Buttons are wired to SerialManager so the card works in preview mode."""
+from app.core.serial_card import SerialConfigCard as RuntimeSerialCard
 
-    _BAUDS = ["9600", "19200", "38400", "57600", "115200",
-              "230400", "460800", "921600"]
 
+class SerialConfigCard(RuntimeSerialCard):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._display_mode = "完整"
-        self._connected = False
-
-        self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(16, 12, 16, 12)
-        self._root.setSpacing(10)
-
-        # ---- title row ----
-        self._title_w = self._make_row()
-        tl = self._title_w.layout()
-        self._title = StrongBodyLabel("串口配置")
-        self._status = CaptionLabel("未连接")
-        self._status.setStyleSheet("color: #888;")
-        tl.addWidget(self._title); tl.addStretch(); tl.addWidget(self._status)
-        self._root.addWidget(self._title_w)
-
-        LW = 48
-
-        # ---- port row ----
-        self._port_w = self._make_row()
-        pl = self._port_w.layout()
-        self._port_label = BodyLabel("端口"); self._port_label.setFixedWidth(LW)
-        self._port_combo = ComboBox(); self._port_combo.setMinimumWidth(120)
-        self._port_combo.setPlaceholderText("选择串口")
-        self._search_btn = ToolButton(FIF.SEARCH)
-        self._search_btn.setToolTip("搜索串口")
-        self._search_btn.clicked.connect(self.refresh_ports)
-        pl.addWidget(self._port_label); pl.addWidget(self._port_combo, 1)
-        pl.addWidget(self._search_btn)
-        self._root.addWidget(self._port_w)
-
-        # ---- baud row ----
-        self._baud_w = self._make_row()
-        bl = self._baud_w.layout()
-        self._baud_label = BodyLabel("波特率"); self._baud_label.setFixedWidth(LW)
-        self._baud_combo = ComboBox()
-        self._baud_combo.addItems(self._BAUDS); self._baud_combo.setCurrentIndex(4)
-        bl.addWidget(self._baud_label); bl.addWidget(self._baud_combo, 1)
-        self._root.addWidget(self._baud_w)
-
-        # ---- params row (databits / parity / stopbits) ----
-        self._params_w = self._make_row(spacing=6)
-        pal = self._params_w.layout()
-        first = True
-        for lbl_text, cb_items, attr, idx in [
-            ("数据位", ["5", "6", "7", "8"], "_databits_combo", 3),
-            ("校验",   ["None", "Even", "Odd", "Mark", "Space"], "_parity_combo", 0),
-            ("停止位", ["1", "1.5", "2"], "_stopbits_combo", 0),
-        ]:
-            lbl = CaptionLabel(lbl_text)
-            if first:
-                lbl.setFixedWidth(LW)
-                first = False
-            cb = ComboBox(); cb.addItems(cb_items); cb.setCurrentIndex(idx)
-            setattr(self, attr, cb)
-            pal.addWidget(lbl); pal.addWidget(cb, 1)
-        self._root.addWidget(self._params_w)
-
-        # ---- flow row ----
-        self._flow_w = self._make_row()
-        fl = self._flow_w.layout()
-        self._flow_label = BodyLabel("流控"); self._flow_label.setFixedWidth(LW)
-        self._flow_combo = ComboBox()
-        self._flow_combo.addItems(["无", "RTS/CTS", "XON/XOFF", "DTR/DSR"])
-        fl.addWidget(self._flow_label); fl.addWidget(self._flow_combo, 1)
-        self._root.addWidget(self._flow_w)
-
-        # ---- button row ----
-        self._btn_w = self._make_row()
-        btl = self._btn_w.layout()
-        self._connect_btn = PrimaryPushButton(FIF.CONNECT, "连接")
-        self._disconnect_btn = PushButton(FIF.CLOSE, "断开")
-        self._disconnect_btn.setEnabled(False)
-        self._connect_btn.clicked.connect(self._on_connect)
-        self._disconnect_btn.clicked.connect(self._on_disconnect)
-        btl.addWidget(self._connect_btn, 1); btl.addWidget(self._disconnect_btn, 1)
-        self._root.addWidget(self._btn_w)
-
-        # ---- single-line row (hidden by default) ----
-        self._sl_w = QWidget()
-        sl = QHBoxLayout(self._sl_w)
-        sl.setContentsMargins(0, 0, 0, 0)
-        sl.setSpacing(6)
-
-        H = 33
-        self._sl_port = ComboBox(); self._sl_port.setPlaceholderText("串口")
-        self._sl_port.setMinimumWidth(90); self._sl_port.setFixedHeight(H)
-        self._sl_baud = ComboBox(); self._sl_baud.addItems(self._BAUDS)
-        self._sl_baud.setCurrentIndex(4)
-        self._sl_baud.setFixedWidth(90); self._sl_baud.setFixedHeight(H)
-        self._sl_search = ToolButton(FIF.SEARCH)
-        self._sl_search.clicked.connect(self.refresh_ports)
-        self._sl_search.setFixedSize(H, H)
-        self._sl_conn = PrimaryPushButton("连接")
-        self._sl_conn.setFixedSize(56, H)
-        self._sl_disconn = PushButton("断开")
-        self._sl_disconn.setFixedSize(56, H)
-        self._sl_disconn.setEnabled(False)
-        self._sl_conn.clicked.connect(self._on_connect)
-        self._sl_disconn.clicked.connect(self._on_disconnect)
-        self._sl_status = CaptionLabel("未连接")
-        self._sl_status.setStyleSheet("color: #888;")
-        self._sl_status.setAlignment(Qt.AlignCenter)
-        self._sl_status.setFixedHeight(H)
-
-        for w, stretch in [(self._sl_port, 2), (self._sl_baud, 0),
-                           (self._sl_search, 0), (self._sl_conn, 0),
-                           (self._sl_disconn, 0), (self._sl_status, 0)]:
-            sl.addWidget(w, stretch, Qt.AlignVCenter)
-
-        self._sl_w.setFixedHeight(H)
-        self._root.addWidget(self._sl_w)
-        self._sl_w.hide()
-
-        self._root.addStretch(1)
-
-        self.refresh_ports()
-
-        from app.common.signal_bus import signalBus
-        signalBus.serialConnected.connect(self._on_serial_connected)
-        signalBus.serialDisconnected.connect(self._on_serial_disconnected)
-        signalBus.serialError.connect(self._on_serial_error)
-
-    @staticmethod
-    def _make_row(spacing=8):
-        w = QWidget()
-        lay = QHBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(spacing)
-        return w
-
-    # ---- compact paint ----
-
-    def _content_height(self):
-        m = self._root.contentsMargins()
-        h = m.top() + m.bottom()
-        for i in range(self._root.count()):
-            w = self._root.itemAt(i).widget()
-            if w and not w.isHidden():
-                h += w.sizeHint().height() + self._root.spacing()
-        return max(h, 30)
-
-    def paintEvent(self, event):
-        if self._display_mode == "完整":
-            super().paintEvent(event)
-            return
-        ch = self._content_height()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        if isDarkTheme():
-            painter.setBrush(QColor(44, 44, 44))
-            painter.setPen(QColor(55, 55, 55))
-        else:
-            painter.setBrush(QColor(255, 255, 255, 230))
-            painter.setPen(QColor(220, 220, 220))
-        painter.drawRoundedRect(0, 0, self.width(), ch, 6, 6)
-        painter.end()
-
-    # ---- mode switching ----
-
-    def set_display_mode(self, mode: str):
-        self._display_mode = mode
-        is_sl = mode == "单行"
-        compact = mode != "完整"
-        self.setAttribute(Qt.WA_TranslucentBackground, compact)
-        self.setAutoFillBackground(not compact)
-        self._title_w.setVisible(not is_sl)
-        self._port_w.setVisible(not is_sl)
-        self._baud_w.setVisible(not is_sl)
-        self._params_w.setVisible(mode == "完整")
-        self._flow_w.setVisible(mode == "完整")
-        self._btn_w.setVisible(not is_sl)
-        self._sl_w.setVisible(is_sl)
-        if is_sl:
-            self._root.setContentsMargins(8, 6, 8, 6)
-            self._root.setSpacing(0)
-            self._sync_to_sl()
-        else:
-            self._root.setContentsMargins(16, 12, 16, 12)
-            self._root.setSpacing(10)
-            self._sync_from_sl()
-        self.update()
-        self.adjustSize()
-        self.updateGeometry()
-
-    def _sync_to_sl(self):
-        self._sl_port.clear()
-        for i in range(self._port_combo.count()):
-            self._sl_port.addItem(self._port_combo.itemText(i), self._port_combo.itemData(i))
-        self._sl_port.setCurrentIndex(self._port_combo.currentIndex())
-        self._sl_baud.setCurrentIndex(self._baud_combo.currentIndex())
-        self._sl_conn.setEnabled(self._connect_btn.isEnabled())
-        self._sl_disconn.setEnabled(self._disconnect_btn.isEnabled())
-        self._sl_status.setText(self._status.text())
-        self._sl_status.setStyleSheet(self._status.styleSheet())
-
-    def _sync_from_sl(self):
-        idx = self._sl_port.currentIndex()
-        if 0 <= idx < self._port_combo.count():
-            self._port_combo.setCurrentIndex(idx)
-        self._baud_combo.setCurrentIndex(self._sl_baud.currentIndex())
-
-    # ---- connect / disconnect ----
-
-    def _on_connect(self):
         from app.core.serial_manager import serialManager
-        port = self.port
-        baud = self.baudrate
-        if not port:
-            return
-
-        flow_map = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}
-        parity_map = {"None": "N", "Even": "E", "Odd": "O", "Mark": "M", "Space": "S"}
-
-        for btn in (self._connect_btn, self._sl_conn):
-            btn.setEnabled(False)
-        self._set_status("连接中...", "#FF9800")
-
-        ok = serialManager.connect(
-            port, baud,
-            databits=int(self._databits_combo.currentText()),
-            parity=parity_map.get(self._parity_combo.currentText(), "N"),
-            stopbits=float(self._stopbits_combo.currentText()),
-            flowcontrol=flow_map.get(self._flow_combo.currentText(), "none"),
-        )
-        if not ok:
-            for btn in (self._connect_btn, self._sl_conn):
-                btn.setEnabled(True)
-            self._set_status("连接失败", "#F44336")
-
-    def _on_disconnect(self):
-        from app.core.serial_manager import serialManager
-        serialManager.disconnect()
-
-    def _on_serial_connected(self, port_name: str):
-        self.set_connected(True)
-
-    def _on_serial_disconnected(self):
-        self.set_connected(False)
-
-    def _on_serial_error(self, msg: str):
-        self._set_status("错误", "#F44336")
-        self._status.setToolTip(msg)
-        self._sl_status.setToolTip(msg)
-
-    def _set_status(self, text: str, color: str):
-        css = f"color: {color};"
-        self._status.setText(text); self._status.setStyleSheet(css)
-        self._sl_status.setText(text); self._sl_status.setStyleSheet(css)
-
-    # ---- ports / state ----
-
-    def refresh_ports(self):
-        from app.core.serial_manager import _list_all_ports
-        ports = _list_all_ports()
-        for combo in (self._port_combo, self._sl_port):
-            combo.clear()
-            for p in ports:
-                combo.addItem(f"{p['port']}  {p['description']}")
-            if combo.count() == 0:
-                combo.addItem("无可用串口")
-
-    def set_connected(self, connected: bool):
-        self._connected = connected
-        editable = not connected
-        for btn in (self._connect_btn, self._sl_conn):
-            btn.setEnabled(editable)
-        for btn in (self._disconnect_btn, self._sl_disconn):
-            btn.setEnabled(connected)
-        for w in (self._port_combo, self._sl_port, self._baud_combo, self._sl_baud,
-                  self._search_btn, self._sl_search,
-                  self._databits_combo, self._parity_combo,
-                  self._stopbits_combo, self._flow_combo):
-            w.setEnabled(editable)
-        if connected:
-            self._set_status("● 已连接", "#4CAF50")
-        else:
-            self._set_status("未连接", "#888")
-
-    # ---- property setters ----
-
-    def set_title(self, t): self._title.setText(t)
-
-    def set_default_baud(self, baud: str):
-        for cb in (self._baud_combo, self._sl_baud):
-            idx = cb.findText(baud)
-            if idx >= 0: cb.setCurrentIndex(idx)
-
-    def set_default_databits(self, v: str):
-        idx = self._databits_combo.findText(v)
-        if idx >= 0: self._databits_combo.setCurrentIndex(idx)
-
-    def set_default_parity(self, v: str):
-        idx = self._parity_combo.findText(v)
-        if idx >= 0: self._parity_combo.setCurrentIndex(idx)
-
-    def set_default_stopbits(self, v: str):
-        idx = self._stopbits_combo.findText(v)
-        if idx >= 0: self._stopbits_combo.setCurrentIndex(idx)
-
-    def set_default_flow(self, v: str):
-        idx = self._flow_combo.findText(v)
-        if idx >= 0: self._flow_combo.setCurrentIndex(idx)
-
-    @property
-    def port(self):
-        c = self._sl_port if self._display_mode == "单行" else self._port_combo
-        text = c.currentText()
-        if not text or text == "无可用串口":
-            return ""
-        return text.split()[0]
-
-    @property
-    def baudrate(self):
-        c = self._sl_baud if self._display_mode == "单行" else self._baud_combo
-        return int(c.currentText())
+        self.set_serial_handler(serialManager)
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +141,7 @@ class DataRecvCard(CardWidget):
         title_row = QHBoxLayout()
         self._title = StrongBodyLabel("数据接收")
         self._counter = CaptionLabel("0 条")
-        self._counter.setStyleSheet("color: #888;")
+        self._counter.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         title_row.addWidget(self._title)
         title_row.addStretch()
         title_row.addWidget(self._counter)
@@ -483,10 +164,14 @@ class DataRecvCard(CardWidget):
 
         self._output = TextEdit()
         self._output.setReadOnly(True)
-        self._output.setStyleSheet(
-            "font-family: Menlo, Consolas, 'Courier New', monospace; font-size: 12px; "
-            "background: #1e1e2e; color: #cdd6f4; border-radius: 4px; padding: 4px;"
+        terminal_style = (
+            "QTextEdit { font-family: Menlo, Consolas, 'Courier New', monospace; "
+            "font-size: 12px; background: #1e1e2e; color: #cdd6f4; "
+            "border-radius: 4px; padding: 4px; }"
         )
+        # Received messages retain their semantic colors, so keep the terminal
+        # background in both themes and register it with Fluent's style manager.
+        setCustomStyleSheet(self._output, terminal_style, terminal_style)
         layout.addWidget(self._output, 1)
 
         self._count = 0
@@ -510,7 +195,7 @@ class DataRecvCard(CardWidget):
             if not text:
                 return
         self._output.append(
-            f'<span style="color:#666">[{ts}]</span> '
+            f'<span style="color:#9399b2">[{ts}]</span> '
             f'<span style="color:#a6e3a1">&lt;&lt; {text}</span>')
         self._count += 1
         self._counter.setText(f"{self._count} 条")
@@ -527,7 +212,7 @@ class DataRecvCard(CardWidget):
             if not text:
                 return
         self._output.append(
-            f'<span style="color:#666">[{ts}]</span> '
+            f'<span style="color:#9399b2">[{ts}]</span> '
             f'<span style="color:#f9e2af">&gt;&gt; {text}</span>')
         self._trim()
         self._scroll()
@@ -603,7 +288,7 @@ class LogDisplayBox(QFrame):
         color = color_map.get(level, "#a8d8ea")
         from datetime import datetime
         ts = datetime.now().strftime("%H:%M:%S")
-        self._output.append(f'<span style="color:#666">[{ts}]</span> '
+        self._output.append(f'<span style="color:#9399b2">[{ts}]</span> '
                             f'<span style="color:{color}">{text}</span>')
         self._trim()
 
@@ -683,7 +368,7 @@ class ModbusConfigCard(CardWidget):
         title_row = QHBoxLayout()
         self._title = StrongBodyLabel("Modbus 配置")
         self._status = CaptionLabel("就绪")
-        self._status.setStyleSheet("color: #888;")
+        self._status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         title_row.addWidget(self._title)
         title_row.addStretch()
         title_row.addWidget(self._status)
@@ -833,12 +518,14 @@ SERIAL_CONFIG_META = WidgetMeta(
     display_name="串口配置卡片",
     category=WidgetCategory.COMPOSITE,
     icon="CONNECT",
-    default_width=360, default_height=300,
+    default_width=360, default_height=340,
     min_width=200, min_height=50,
     properties=[
         PropDef("title", "标题", PropType.STRING, "串口配置"),
         PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
                 options=["完整", "简洁", "单行"]),
+        PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
+                options=["项目设置", "line", "hex", "modbus"]),
         PropDef("defaultBaud", "默认波特率", PropType.ENUM, "115200",
                 options=["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]),
         PropDef("defaultDatabits", "默认数据位", PropType.ENUM, "8",
@@ -925,6 +612,7 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         w.set_default_parity(props.get("defaultParity", "None"))
         w.set_default_stopbits(props.get("defaultStopbits", "1"))
         w.set_default_flow(props.get("defaultFlow", "无"))
+        w.set_default_parser(props.get("defaultParser", "项目设置"))
         return w
     if type_name == "ModbusConfigCard":
         w = ModbusConfigCard(parent)
@@ -967,6 +655,7 @@ def apply_composite_property(widget, type_name: str, prop_name: str, value):
         elif prop_name == "defaultParity": widget.set_default_parity(value)
         elif prop_name == "defaultStopbits": widget.set_default_stopbits(value)
         elif prop_name == "defaultFlow": widget.set_default_flow(value)
+        elif prop_name == "defaultParser": widget.set_default_parser(value)
     elif type_name == "ModbusConfigCard":
         if prop_name == "title": widget.set_title(value)
         elif prop_name == "defaultSlave": widget.set_default_slave(value)

@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, List
 from PyQt5.QtCore import QObject
 
 from app.common.signal_bus import signalBus
+from app.core.protocol_parser import RawFrameBuffer
 
 _STRUCT_FMT = {
     "uint8": ("B", 1), "int8": ("b", 1),
@@ -52,6 +53,7 @@ class BindingEntry:
         self.led_off_value = led_off_value
         self.frame_header = self._hex_to_bytes(frame_header)
         self.frame_tail = self._hex_to_bytes(frame_tail)
+        self._raw_frames = RawFrameBuffer(self.frame_header, self.frame_tail)
         self.mb_reg_index = mb_reg_index
         self.mb_slave_filter = mb_slave_filter
         self.mb_data_type = mb_data_type
@@ -175,6 +177,12 @@ class BindingEntry:
         except struct.error:
             return None
 
+    def extract_all_from_raw(self, raw: bytes):
+        for frame in self._raw_frames.feed(raw):
+            value = self.extract_from_raw(frame)
+            if value is not None:
+                yield value
+
     @staticmethod
     def _resolve_path(data: Any, path: str) -> Any:
         """Traverse nested dict/list via dot-notation path like 'a.b.0.c'."""
@@ -241,12 +249,18 @@ class DataBindingEngine(QObject):
 
         signalBus.serialDataReceived.connect(self._on_data)
         signalBus.serialRawReceived.connect(self._on_raw)
+        signalBus.serialDisconnected.connect(self.reset_stream)
+
+    def reset_stream(self):
+        for binding in self._bindings:
+            binding._raw_frames.reset()
 
     def start(self):
         self._active = True
 
     def stop(self):
         self._active = False
+        self.reset_stream()
 
     def clear(self):
         self._bindings.clear()
@@ -341,10 +355,8 @@ class DataBindingEngine(QObject):
         for b in self._bindings:
             if b.parse_mode != "HEX字节提取":
                 continue
-            value = b.extract_from_raw(raw)
-            if value is None:
-                continue
-            self._push_value(b, value)
+            for value in b.extract_all_from_raw(raw):
+                self._push_value(b, value)
 
     def _push_value(self, b: BindingEntry, raw_value):
         value = b.evaluate(raw_value)

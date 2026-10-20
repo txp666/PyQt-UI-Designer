@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtWidgets import QScrollArea
 from qfluentwidgets import (
-    StrongBodyLabel, FluentIcon as FIF, isDarkTheme, Theme, getIconColor,
+    StrongBodyLabel, FluentIcon as FIF, isDarkTheme, Theme, getIconColor, qconfig,
 )
 
 from app.core.widget_registry import registry
@@ -50,9 +50,15 @@ class _DraggableListWidget(QListWidget):
         self.setSpacing(2)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
+
+    def apply_theme(self):
+        foreground = "#f3f3f3" if isDarkTheme() else "#202020"
         self.setStyleSheet("""
             QListWidget {
                 background: transparent;
+                color: FOREGROUND;
                 border: none;
                 outline: none;
             }
@@ -65,8 +71,9 @@ class _DraggableListWidget(QListWidget):
             }
             QListWidget::item:selected {
                 background: rgba(0, 120, 212, 0.15);
+                color: FOREGROUND;
             }
-        """)
+        """.replace("FOREGROUND", foreground))
 
     def startDrag(self, supportedActions):
         item = self.currentItem()
@@ -167,6 +174,7 @@ class WidgetPalette(QWidget):
 
         self._scroll.setWidget(self._container)
         outer.addWidget(self._scroll)
+        qconfig.themeChangedFinished.connect(self.refresh_icons)
 
     def populate(self):
         self._cards = []

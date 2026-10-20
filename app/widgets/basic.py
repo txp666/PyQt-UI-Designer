@@ -260,7 +260,6 @@ def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidge
 
     if type_name == "Label":
         w = BodyLabel(props.get("text", "标签"), parent)
-        w.setStyleSheet("border: none; background: transparent; padding: 0px;")
         font = w.font()
         font.setPointSize(props.get("fontSize", 14))
         font.setBold(props.get("bold", False))
@@ -290,7 +289,7 @@ def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidge
         container = QWidget(parent)
         layout = QHBoxLayout(container)
         layout.setContentsMargins(4, 0, 4, 0)
-        label = QLabel(props.get("label", "开关"))
+        label = BodyLabel(props.get("label", "开关"))
         sw = SwitchButton()
         sw.setChecked(props.get("checked", False))
         layout.addWidget(label)

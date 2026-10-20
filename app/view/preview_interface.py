@@ -29,17 +29,22 @@ class PreviewCanvas(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("previewCanvas")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self._widgets = []
         self._update_style()
 
     def _update_style(self):
         if isDarkTheme():
-            self.setStyleSheet("PreviewCanvas { background: #2b2b2b; border: 1px solid #444; }")
+            self.setStyleSheet("QWidget#previewCanvas { background: #2b2b2b; border: 1px solid #444; }")
         else:
-            self.setStyleSheet("PreviewCanvas { background: white; border: 1px solid #ddd; }")
+            self.setStyleSheet("QWidget#previewCanvas { background: white; border: 1px solid #ddd; }")
 
     def build_from_project(self, project: ProjectData):
         self.clear()
+        from app.core.serial_manager import serialManager
+        serialManager.disconnect()
+        serialManager.configure(project.serial)
         self._update_style()
         self.setFixedSize(project.canvas_width, project.canvas_height)
 
@@ -697,7 +702,8 @@ class PreviewInterface(QWidget):
         layout.addLayout(ctrl_layout)
 
         # scroll area for canvas
-        scroll = QScrollArea()
+        scroll = self._scroll = QScrollArea()
+        scroll.setObjectName("previewScroll")
         scroll.setWidgetResizable(True)
         scroll.setAlignment(Qt.AlignCenter)
 
@@ -708,6 +714,7 @@ class PreviewInterface(QWidget):
         self._placeholder = BodyLabel("在设计器中设计界面后，点击「运行预览」查看效果")
         self._placeholder.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._placeholder)
+        self.on_theme_changed()
 
     def set_project_data(self, data: ProjectData):
         self._project_data = data
@@ -791,3 +798,6 @@ class PreviewInterface(QWidget):
 
     def on_theme_changed(self):
         self._preview_canvas._update_style()
+        background = "#202020" if isDarkTheme() else "#f5f5f5"
+        self._scroll.setStyleSheet(
+            f"QScrollArea#previewScroll {{ background: {background}; border: none; }}")

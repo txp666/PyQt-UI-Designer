@@ -1,0 +1,312 @@
+{
+  "version": "1.0",
+  "appName": "串口采集 Demo",
+  "canvas": {
+    "width": 1080,
+    "height": 740,
+    "gridSize": 10
+  },
+  "widgets": [
+    {
+      "id": "title",
+      "type": "Label",
+      "geometry": {
+        "x": 24,
+        "y": 12,
+        "w": 850,
+        "h": 36
+      },
+      "properties": {
+        "text": "串口采集 Demo",
+        "fontSize": 22,
+        "bold": true,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      }
+    },
+    {
+      "id": "help",
+      "type": "Label",
+      "geometry": {
+        "x": 24,
+        "y": 50,
+        "w": 1020,
+        "h": 28
+      },
+      "properties": {
+        "text": "连接设备查看温度与压力，可控制设备运行、保存曲线或发送自定义命令。",
+        "fontSize": 13,
+        "bold": false,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      }
+    },
+    {
+      "id": "serial",
+      "type": "SerialConfigCard",
+      "geometry": {
+        "x": 24,
+        "y": 90,
+        "w": 1032,
+        "h": 48
+      },
+      "properties": {
+        "title": "串口配置",
+        "displayMode": "单行",
+        "defaultParser": "项目设置",
+        "defaultBaud": "115200",
+        "defaultDatabits": "8",
+        "defaultParity": "None",
+        "defaultStopbits": "1",
+        "defaultFlow": "无"
+      }
+    },
+    {
+      "id": "temperature",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 24,
+        "y": 155,
+        "w": 240,
+        "h": 120
+      },
+      "properties": {
+        "title": "温度",
+        "value": "0.00",
+        "unit": "°C",
+        "fontSize": 34,
+        "displayFormat": "自动"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "temperature"
+      }
+    },
+    {
+      "id": "pressure",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 282,
+        "y": 155,
+        "w": 240,
+        "h": 120
+      },
+      "properties": {
+        "title": "压力",
+        "value": "0.00",
+        "unit": "kPa",
+        "fontSize": 34,
+        "displayFormat": "自动"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "pressure"
+      }
+    },
+    {
+      "id": "gauge",
+      "type": "GaugeMeter",
+      "geometry": {
+        "x": 530,
+        "y": 145,
+        "w": 150,
+        "h": 140
+      },
+      "properties": {
+        "title": "压力指示",
+        "unit": "kPa",
+        "value": 0,
+        "minimum": 0,
+        "maximum": 100
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "pressure"
+      }
+    },
+    {
+      "id": "running",
+      "type": "LEDIndicator",
+      "geometry": {
+        "x": 730,
+        "y": 154,
+        "w": 220,
+        "h": 40
+      },
+      "properties": {
+        "label": "设备运行",
+        "color": "green",
+        "on": false,
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "running"
+      }
+    },
+    {
+      "id": "start",
+      "type": "PushButton",
+      "geometry": {
+        "x": 712,
+        "y": 217,
+        "w": 150,
+        "h": 40
+      },
+      "properties": {
+        "text": "启动设备",
+        "enabled": true,
+        "commandMode": "文本",
+        "command": "START",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "03 读保持寄存器",
+        "mbAddress": 0,
+        "mbValue": 1,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "按钮已按下",
+        "notifyType": "成功",
+        "notifyDuration": 3000
+      }
+    },
+    {
+      "id": "stop",
+      "type": "PushButton",
+      "geometry": {
+        "x": 886,
+        "y": 217,
+        "w": 150,
+        "h": 40
+      },
+      "properties": {
+        "text": "停止设备",
+        "enabled": true,
+        "commandMode": "文本",
+        "command": "STOP",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "03 读保持寄存器",
+        "mbAddress": 0,
+        "mbValue": 1,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "按钮已按下",
+        "notifyType": "成功",
+        "notifyDuration": 3000
+      }
+    },
+    {
+      "id": "chart",
+      "type": "RealtimeChart",
+      "geometry": {
+        "x": 24,
+        "y": 300,
+        "w": 642,
+        "h": 365
+      },
+      "properties": {
+        "title": "实时采样",
+        "displayPoints": 200,
+        "curveCount": 2,
+        "currentCurve": 0,
+        "curveName": "曲线1",
+        "curveParseMode": "键值匹配",
+        "curveKey": "",
+        "curveJsonPath": "",
+        "curveByteOffset": 0,
+        "curveDataType": "float32",
+        "curveByteOrder": "大端(BE)",
+        "curveFrameHeader": "",
+        "curveFrameTail": "",
+        "curveRegIndex": 0,
+        "curveMbDataType": "uint16",
+        "curveMbRegOrder": "大端(AB CD)",
+        "curveMbFcFilter": -1,
+        "curveMbSlaveFilter": -1,
+        "_curve_0_name": "温度",
+        "_curve_0_key": "temperature",
+        "_curve_1_name": "压力",
+        "_curve_1_key": "pressure"
+      }
+    },
+    {
+      "id": "receive",
+      "type": "DataRecvCard",
+      "geometry": {
+        "x": 688,
+        "y": 300,
+        "w": 368,
+        "h": 365
+      },
+      "properties": {
+        "title": "数据接收",
+        "maxLines": 1000
+      }
+    },
+    {
+      "id": "command",
+      "type": "LineEdit",
+      "geometry": {
+        "x": 24,
+        "y": 690,
+        "w": 440,
+        "h": 36
+      },
+      "properties": {
+        "placeholderText": "输入 READ、START 或 STOP，按回车发送",
+        "text": "",
+        "readOnly": false,
+        "sendOnEnter": true,
+        "commandMode": "文本",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      }
+    },
+    {
+      "id": "protocol_hint",
+      "type": "Label",
+      "geometry": {
+        "x": 490,
+        "y": 690,
+        "w": 566,
+        "h": 36
+      },
+      "properties": {
+        "text": "默认 115200 / 8N1 · 每行 JSON 或键值文本",
+        "fontSize": 12,
+        "bold": false,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      }
+    }
+  ],
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  }
+}

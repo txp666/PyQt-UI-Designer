@@ -34,7 +34,7 @@ class SerialPortTests(unittest.TestCase):
                      SimpleNamespace(device=device, description="USB UART")
                  ]):
                 self.assertEqual(serial_manager._list_all_ports()[0]["port"], expected)
-                self.assertEqual(generated["_list_all_ports"]()[0][0], expected)
+                self.assertEqual(generated["_list_all_ports"]()[0]["port"], expected)
 
     def test_windows_keeps_com_normalization_and_numeric_order(self):
         generated = {}
@@ -49,7 +49,7 @@ class SerialPortTests(unittest.TestCase):
              ]):
             self.assertEqual([p["port"] for p in serial_manager._list_all_ports()],
                              ["COM2", "COM10"])
-            self.assertEqual([p[0] for p in generated["_list_all_ports"]()],
+            self.assertEqual([p["port"] for p in generated["_list_all_ports"]()],
                              ["COM2", "COM10"])
 
 
@@ -66,6 +66,32 @@ class PackagingTests(unittest.TestCase):
                                  platform == "win32")
                 self.assertEqual("--macos-create-app-bundle" in args, platform == "darwin")
                 self.assertNotIn("--mingw64", args)  # Compiler follows the selected Python.
+
+    def test_image_assets_are_included_only_when_directory_exists(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve() / "export with spaces"
+            root.mkdir()
+            assets = root / "assets"
+            for kind in ("missing", "file", "directory"):
+                if kind == "file":
+                    assets.touch()
+                elif kind == "directory":
+                    assets.unlink()
+                    (assets / "nested").mkdir(parents=True)
+                    (assets / "nested" / "picture.png").write_bytes(b"image")
+                for platform in ("darwin", "win32", "linux"):
+                    with self.subTest(kind=kind, platform=platform):
+                        args = build_nuitka_command(
+                            root, ["python"], "测试应用", platform=platform,
+                        )
+                        directories = [
+                            arg for arg in args if arg.startswith("--include-data-dir=")
+                        ]
+                        self.assertEqual(
+                            directories,
+                            [f"--include-data-dir={assets}=assets"]
+                            if kind == "directory" else [],
+                        )
 
     def test_missing_output_never_reuses_old_artifact(self):
         with tempfile.TemporaryDirectory() as folder:

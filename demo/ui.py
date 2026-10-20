@@ -1,0 +1,1438 @@
+# coding: utf-8
+"""Auto-generated UI module."""
+import struct, math, json
+from pathlib import Path
+
+from PyQt5.QtCore import Qt, QTimer, QRectF
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QScrollArea, QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,
+    QSizePolicy, QHeaderView, QAbstractItemView, QTableWidget, QTableWidgetItem,
+    QSpinBox, QPushButton, QFileDialog, QLineEdit,
+)
+from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient, QPixmap
+
+from qfluentwidgets import (
+    PushButton, PrimaryPushButton, BodyLabel, StrongBodyLabel,
+    CaptionLabel, LineEdit, ComboBox, TextEdit, CheckBox,
+    SwitchButton, Slider, SpinBox, ProgressBar, ProgressRing,
+    CardWidget, TableWidget, ToolButton,
+    FluentWindow, NavigationItemPosition,
+    FluentIcon as FIF, InfoBar, InfoBarPosition, isDarkTheme,
+    qconfig, setCustomStyleSheet,
+)
+
+from serial_handler import _list_all_ports
+
+try:
+    import serial
+    import serial.tools.list_ports
+    HAS_SERIAL = True
+except ImportError:
+    HAS_SERIAL = False
+
+try:
+    import pyqtgraph as pg
+    HAS_PYQTGRAPH = True
+except ImportError:
+    HAS_PYQTGRAPH = False
+
+
+
+class LEDIndicator(QWidget):
+    COLOR_MAP = {
+        "green": QColor(76, 175, 80), "red": QColor(244, 67, 54),
+        "yellow": QColor(255, 193, 7), "blue": QColor(33, 150, 243),
+        "gray": QColor(158, 158, 158),
+    }
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._color_name = "green"
+        self._on = True
+        self._label_text = ""
+        self.setMinimumSize(20, 20)
+        qconfig.themeChangedFinished.connect(self.update)
+    def set_color(self, name): self._color_name = name; self.update()
+    def set_on(self, on): self._on = on; self.update()
+    def set_label(self, text): self._label_text = text; self.update()
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        color = self.COLOR_MAP.get(self._color_name, QColor(76, 175, 80))
+        if not self._on: color = QColor("#777777" if isDarkTheme() else "#c8c8c8")
+        size = min(self.height(), 30)
+        painter.setBrush(color); painter.setPen(Qt.NoPen)
+        painter.drawEllipse(4, (self.height()-size)//2, size, size)
+        painter.setBrush(Qt.NoBrush); painter.setPen(color.darker(120))
+        painter.drawEllipse(4, (self.height()-size)//2, size, size)
+        if self._label_text:
+            painter.setPen(QColor("#f3f3f3" if isDarkTheme() else "#3c3c3c"))
+            painter.setFont(QFont(self.font().family(), 10))
+            painter.drawText(size+12, 0, self.width()-size-12, self.height(), Qt.AlignVCenter, self._label_text)
+        painter.end()
+
+
+class NumericDisplay(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8,4,8,4); layout.setSpacing(0)
+        self._title = QLabel("标题"); self._title.setAlignment(Qt.AlignCenter)
+        self._value = QLabel("0.00"); self._value.setAlignment(Qt.AlignCenter)
+        self._unit = QLabel(""); self._unit.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self._title); layout.addWidget(self._value); layout.addWidget(self._unit)
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
+    def apply_theme(self):
+        secondary = "#b3b3b3" if isDarkTheme() else "#606060"
+        self._title.setStyleSheet(f"color:{secondary};font-size:11px;")
+        self._unit.setStyleSheet(f"color:{secondary};font-size:12px;")
+        self._update_value_style()
+    def set_title(self, t): self._title.setText(t)
+    def set_value(self, v): self._value.setText(str(v))
+    def set_unit(self, u): self._unit.setText(u)
+    def set_value_color(self, color):
+        self._val_color = color
+        self._update_value_style()
+    def set_font_size(self, size):
+        self._val_font_size = size
+        self._update_value_style()
+    def _update_value_style(self):
+        color = getattr(self, "_val_color", "#0078d4")
+        size = getattr(self, "_val_font_size", 28)
+        self._value.setStyleSheet(f"font-size:{size}px;font-weight:bold;color:{color};")
+
+"""Bounded display cache with full history spooled to a temporary file."""
+from collections import deque
+from itertools import islice
+import struct
+import tempfile
+
+
+class ChartHistory:
+    def __init__(self, capacity=10000):
+        self.cache = deque(maxlen=capacity)
+        self.count = 0
+        self._file = None
+
+    def append(self, value):
+        value = float(value)
+        if self._file is None:
+            self._file = tempfile.TemporaryFile()
+        self._file.write(struct.pack("<d", value))
+        self.cache.append(value)
+        self.count += 1
+
+    def tail(self, count):
+        return list(islice(self.cache, max(0, len(self.cache) - count), None))
+
+    def values(self):
+        if self._file is None:
+            return
+        self._file.flush()
+        self._file.seek(0)
+        try:
+            while True:
+                chunk = self._file.read(8192)
+                if not chunk:
+                    break
+                yield from (v[0] for v in struct.iter_unpack("<d", chunk))
+        finally:
+            self._file.seek(0, 2)
+
+    def clear(self):
+        self.close()
+        self.cache.clear()
+        self.count = 0
+
+    def close(self):
+        if self._file is not None:
+            self._file.close()
+            self._file = None
+
+    def __len__(self):
+        return len(self.cache)
+
+    def __getitem__(self, index):
+        return self.cache[index]
+
+    def __del__(self):
+        self.close()
+
+# coding: utf-8
+"""Chart widgets: real-time line chart (pyqtgraph) and gauge meter."""
+import csv
+import json
+import struct
+from itertools import zip_longest
+
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel
+
+from qfluentwidgets import (
+    LineEdit as FluentLineEdit, PushButton as FluentPushButton,
+    CheckBox as FluentCheckBox, BodyLabel, isDarkTheme, qconfig,
+    setCustomStyleSheet,
+)
+
+
+
+from serial_handler import RawFrameBuffer
+
+try:
+    import pyqtgraph as pg
+    HAS_PYQTGRAPH = True
+except ImportError:
+    HAS_PYQTGRAPH = False
+
+_CURVE_COLORS = [
+    (0, 120, 212), (244, 67, 54), (76, 175, 80), (255, 152, 0),
+    (156, 39, 176), (0, 188, 212), (121, 85, 72), (96, 125, 139),
+]
+
+_DARK_CURVE_COLORS = [
+    (74, 163, 223), (255, 112, 105), (129, 199, 132), (255, 183, 77),
+    (206, 147, 216), (77, 208, 225), (188, 170, 164), (176, 190, 197),
+]
+
+_STRUCT_FMT = {
+    "uint8": ("B", 1), "int8": ("b", 1),
+    "uint16": ("H", 2), "int16": ("h", 2),
+    "uint32": ("I", 4), "int32": ("i", 4),
+    "float32": ("f", 4),
+}
+
+
+# ---------------------------------------------------------------------------
+# Real-time line chart — multi-curve with built-in parsing
+# ---------------------------------------------------------------------------
+
+_DEFAULT_CURVE_CFG = {
+    "name": "曲线1", "parseMode": "键值匹配",
+    "key": "", "jsonPath": "",
+    "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",
+    "frameHeader": "", "frameTail": "",
+    "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",
+    "mbFcFilter": -1, "mbSlaveFilter": -1,
+}
+
+# Virtual prop name -> per-curve storage suffix
+_CURVE_FIELD_MAP = {
+    "curveName": "name", "curveParseMode": "parseMode",
+    "curveKey": "key", "curveJsonPath": "jsonPath",
+    "curveByteOffset": "byteOffset", "curveDataType": "dataType",
+    "curveByteOrder": "byteOrder", "curveFrameHeader": "frameHeader",
+    "curveFrameTail": "frameTail", "curveRegIndex": "regIndex",
+    "curveMbDataType": "mbDataType", "curveMbRegOrder": "mbRegOrder",
+    "curveMbFcFilter": "mbFcFilter", "curveMbSlaveFilter": "mbSlaveFilter",
+}
+
+
+def build_cfgs_from_props(props: dict) -> list:
+    """Build per-curve config list from flat ``_curve_{i}_{field}`` properties."""
+    count = max(1, min(8, int(props.get("curveCount", 1))))
+    cfgs = []
+    for i in range(count):
+        cfg = dict(_DEFAULT_CURVE_CFG)
+        cfg["name"] = props.get(f"_curve_{i}_name", f"曲线{i + 1}")
+        for field in _DEFAULT_CURVE_CFG:
+            stored = props.get(f"_curve_{i}_{field}")
+            if stored is not None:
+                cfg[field] = stored
+        cfgs.append(cfg)
+    return cfgs
+
+
+class RealtimeLineChart(QWidget):
+    """Multi-curve scrolling real-time chart with right-side value table
+    and draggable cursor. Each curve has independent parse configuration."""
+
+    HISTORY_LIMIT = 10000
+    REFRESH_MS = 33
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(0, 0, 0, 0)
+        self._root.setSpacing(2)
+
+        self._display_points = 200
+        self._title = "实时曲线"
+        self._cfgs: list = [dict(_DEFAULT_CURVE_CFG)]
+        self._curves = []
+        self._data: list = []
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(self.REFRESH_MS)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.timeout.connect(self._refresh_all)
+        self.destroyed.connect(lambda _=None, histories=self._data: [h.close() for h in histories])
+        self._checkboxes: list = []
+        self._listening = False
+        self._cursor_mode = False
+
+        # ---- main area: plot (left) + value table (right) ----
+        main_h = QHBoxLayout()
+        main_h.setSpacing(4)
+        self._missing_label = None
+
+        if HAS_PYQTGRAPH:
+            self._plot = pg.PlotWidget()
+            self._plot.showGrid(x=True, y=True, alpha=0.3)
+            main_h.addWidget(self._plot, 1)
+
+            self._cursor_line = pg.InfiniteLine(
+                angle=90, movable=True,
+                pen=pg.mkPen(color=(255, 0, 0, 180), width=1, style=Qt.DashLine))
+            self._cursor_line.setVisible(False)
+            self._plot.addItem(self._cursor_line)
+            self._cursor_line.sigPositionChanged.connect(self._on_cursor_moved)
+            self._plot.scene().sigMouseClicked.connect(self._on_plot_clicked)
+        else:
+            self._missing_label = BodyLabel("需要安装 pyqtgraph")
+            self._missing_label.setAlignment(Qt.AlignCenter)
+            main_h.addWidget(self._missing_label, 1)
+            self._plot = None
+            self._cursor_line = None
+
+        # right panel: mode label + value labels
+        right_panel = QVBoxLayout()
+        right_panel.setContentsMargins(2, 0, 2, 0)
+        right_panel.setSpacing(0)
+        self._mode_label = QLabel("实时")
+        self._mode_label.setAlignment(Qt.AlignCenter)
+        right_panel.addWidget(self._mode_label)
+
+        self._val_panel = QVBoxLayout()
+        self._val_panel.setContentsMargins(0, 0, 0, 0)
+        self._val_panel.setSpacing(0)
+        right_panel.addLayout(self._val_panel)
+        right_panel.addStretch()
+        self._val_labels: list = []
+        main_h.addLayout(right_panel)
+
+        self._root.addLayout(main_h, 1)
+
+        # ---- toolbar ----
+        tb = QHBoxLayout()
+        tb.setContentsMargins(4, 2, 4, 0)
+        tb.setSpacing(6)
+        tb.addWidget(BodyLabel("显示点数"))
+        self._disp_edit = FluentLineEdit()
+        self._disp_edit.setText(str(self._display_points))
+        self._disp_edit.setFixedWidth(80)
+        self._disp_edit.editingFinished.connect(self._on_disp_changed)
+        tb.addWidget(self._disp_edit)
+        tb.addStretch()
+        self._save_btn = FluentPushButton("保存")
+        self._save_btn.setFixedWidth(64)
+        self._save_btn.clicked.connect(self._save_data)
+        tb.addWidget(self._save_btn)
+        self._load_btn = FluentPushButton("加载")
+        self._load_btn.setFixedWidth(64)
+        self._load_btn.clicked.connect(self._load_data)
+        tb.addWidget(self._load_btn)
+        self._root.addLayout(tb)
+
+        self._cb_row = QHBoxLayout()
+        self._cb_row.setContentsMargins(4, 0, 4, 2)
+        self._root.addLayout(self._cb_row)
+
+        self._rebuild_curves()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
+
+    # -- public configuration -------------------------------------------------
+
+    @staticmethod
+    def _curve_color(index):
+        colors = _DARK_CURVE_COLORS if isDarkTheme() else _CURVE_COLORS
+        return colors[index % len(colors)]
+
+    def apply_theme(self):
+        """Update appearance without rebuilding curves, histories or controls."""
+        dark = isDarkTheme()
+        foreground = "#e5e5e5" if dark else "#202020"
+        muted = "#b0b0b0" if dark else "#606060"
+        accent = "#4aa3df" if dark else "#0078d4"
+        if self._plot:
+            self._plot.setBackground("#252525" if dark else "#ffffff")
+            self._plot.setTitle(self._title, color=foreground, size="10pt")
+            for name in ("left", "bottom", "right", "top"):
+                axis = self._plot.getAxis(name)
+                axis.setPen(pg.mkPen(muted))
+                axis.setTextPen(pg.mkPen(foreground))
+            for index, curve in enumerate(self._curves):
+                if curve:
+                    curve.setPen(pg.mkPen(self._curve_color(index), width=2))
+        elif self._missing_label is not None:
+            setCustomStyleSheet(
+                self._missing_label,
+                "FluentLabelBase { color: #606060; border: 1px dashed #ccc; background: #fafafa; }",
+                "FluentLabelBase { color: #c0c0c0; border: 1px dashed #555; background: #252525; }",
+            )
+        self._mode_label.setStyleSheet(
+            f"font-size: 10px; color: {accent}; padding: 1px 0;")
+        for label in self._val_labels:
+            label.setStyleSheet(
+                f"font-size: 11px; padding: 1px 2px; color: {foreground};")
+        if self._cursor_mode and self._cursor_line:
+            self._update_table_at_cursor(self._cursor_line.value())
+        else:
+            self._update_table_realtime()
+        self.update()
+
+    def set_title(self, title: str):
+        self._title = title
+        if self._plot:
+            self._plot.setTitle(title, color="#e5e5e5" if isDarkTheme() else "#202020", size="10pt")
+
+    def set_display_points(self, n: int):
+        self._display_points = max(10, min(self.HISTORY_LIMIT, n))
+        self._disp_edit.blockSignals(True)
+        self._disp_edit.setText(str(self._display_points))
+        self._disp_edit.blockSignals(False)
+        self._refresh_all()
+
+    def load_from_props(self, props: dict):
+        """Build curve configs from flat properties and rebuild."""
+        self._cfgs = build_cfgs_from_props(props)
+        self._rebuild_curves()
+
+    def set_curve_count(self, n: int):
+        old = len(self._cfgs)
+        n = max(1, min(8, n))
+        while len(self._cfgs) > n:
+            self._cfgs.pop()
+        while len(self._cfgs) < n:
+            idx = len(self._cfgs)
+            cfg = dict(_DEFAULT_CURVE_CFG)
+            cfg["name"] = f"曲线{idx + 1}"
+            self._cfgs.append(cfg)
+        if len(self._cfgs) != old:
+            self._rebuild_curves()
+
+    # -- internal -------------------------------------------------------------
+
+    def _on_disp_changed(self):
+        try:
+            v = int(self._disp_edit.text())
+        except (ValueError, TypeError):
+            v = self._display_points
+        self._display_points = max(10, v)
+        self._disp_edit.setText(str(self._display_points))
+        self._refresh_all()
+
+    def _refresh_all(self):
+        self._refresh_timer.stop()
+        for i in range(len(self._data)):
+            if i < len(self._curves) and self._curves[i]:
+                self._curves[i].setData(self._data[i].tail(self._display_points))
+        if self._cursor_mode and self._cursor_line:
+            self._update_table_at_cursor(self._cursor_line.value())
+        else:
+            self._update_table_realtime()
+
+    def _rebuild_curves(self):
+        self._raw_frames = [
+            RawFrameBuffer(_hex_to_bytes(cfg.get("frameHeader", "")),
+                           _hex_to_bytes(cfg.get("frameTail", ""))) for cfg in self._cfgs
+        ]
+        for c in self._curves:
+            if self._plot and c:
+                self._plot.removeItem(c)
+        self._curves.clear()
+
+        count = len(self._cfgs)
+        while self._data and len(self._data) > count:
+            self._data.pop().close()
+        while len(self._data) < count:
+            self._data.append(ChartHistory(self.HISTORY_LIMIT))
+
+        while self._cb_row.count():
+            item = self._cb_row.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._checkboxes.clear()
+
+        while self._val_panel.count():
+            it = self._val_panel.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        self._val_labels.clear()
+
+        for i, cfg in enumerate(self._cfgs):
+            color = self._curve_color(i)
+            name = cfg.get("name", f"曲线{i + 1}")
+
+            if self._plot:
+                pen = pg.mkPen(color=color, width=2)
+                curve = self._plot.plot(pen=pen, name=name)
+                self._curves.append(curve)
+            else:
+                self._curves.append(None)
+
+            cb = FluentCheckBox(name)
+            cb.setChecked(True)
+            light_color = _CURVE_COLORS[i % len(_CURVE_COLORS)]
+            dark_color = _DARK_CURVE_COLORS[i % len(_DARK_CURVE_COLORS)]
+            setCustomStyleSheet(
+                cb,
+                f"QCheckBox {{ color: rgb{light_color}; font-size: 11px; }}",
+                f"QCheckBox {{ color: rgb{dark_color}; font-size: 11px; }}",
+            )
+            idx = i
+            cb.toggled.connect(lambda checked, ci=idx: self._toggle(ci, checked))
+            self._checkboxes.append(cb)
+            self._cb_row.addWidget(cb)
+
+            vl = QLabel(f"<b style='color:rgb{color}'>{name}</b>  --")
+            vl.setStyleSheet("font-size: 11px; padding: 1px 2px;")
+            self._val_panel.addWidget(vl)
+            self._val_labels.append(vl)
+
+        self._cb_row.addStretch()
+        self._cursor_mode = False
+        self._mode_label.setText("实时")
+        self.apply_theme()
+
+    def _toggle(self, index: int, visible: bool):
+        if index < len(self._curves) and self._curves[index]:
+            self._curves[index].setVisible(visible)
+
+    # -- cursor ---------------------------------------------------------------
+
+    def _on_plot_clicked(self, evt):
+        if evt.double():
+            self._cursor_mode = False
+            self._mode_label.setText("实时")
+            if self._cursor_line:
+                self._cursor_line.setVisible(False)
+            self._update_table_realtime()
+            return
+        if not self._plot:
+            return
+        scene_pos = evt.scenePos()
+        vb = self._plot.plotItem.vb
+        mouse_point = vb.mapSceneToView(scene_pos)
+        x = mouse_point.x()
+        self._cursor_mode = True
+        if self._cursor_line:
+            self._cursor_line.setVisible(True)
+            self._cursor_line.blockSignals(True)
+            self._cursor_line.setValue(x)
+            self._cursor_line.blockSignals(False)
+        self._update_table_at_cursor(x)
+
+    def _on_cursor_moved(self):
+        if not self._cursor_line:
+            return
+        self._cursor_mode = True
+        x = self._cursor_line.value()
+        self._update_table_at_cursor(x)
+
+    def _update_table_at_cursor(self, x: float):
+        idx = int(round(x))
+        self._mode_label.setText(f"游标: x={idx}")
+        for i, lbl in enumerate(self._val_labels):
+            color = self._curve_color(i)
+            name = self._cfgs[i].get("name", f"曲线{i+1}") if i < len(self._cfgs) else ""
+            visible = self._data[i].tail(self._display_points) if i < len(self._data) else []
+            val = f"{visible[idx]:.4g}" if 0 <= idx < len(visible) else "--"
+            lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
+
+    def _update_table_realtime(self):
+        for i, lbl in enumerate(self._val_labels):
+            color = self._curve_color(i)
+            name = self._cfgs[i].get("name", f"曲线{i+1}") if i < len(self._cfgs) else ""
+            if i < len(self._data) and self._data[i]:
+                val = f"{self._data[i][-1]:.4g}"
+            else:
+                val = "--"
+            lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
+
+    # -- data input -----------------------------------------------------------
+
+    def append_value(self, channel: int, value: float):
+        if 0 <= channel < len(self._data):
+            try:
+                self._data[channel].append(value)
+            except OSError as error:
+                self._mode_label.setText(f"记录失败: {error}")
+                return
+            if not self._refresh_timer.isActive():
+                self._refresh_timer.start()
+
+    def clear_data(self):
+        self._refresh_timer.stop()
+        for i in range(len(self._data)):
+            self._data[i].clear()
+            if i < len(self._curves) and self._curves[i]:
+                self._curves[i].setData([])
+        self._update_table_realtime()
+
+    # -- save / load ----------------------------------------------------------
+
+    def save_data(self, path):
+        """Stream the complete history, including samples evicted from display."""
+        names = [c.get("name", f"曲线{i+1}") for i, c in enumerate(self._cfgs)]
+        with open(path, "w", newline="", encoding="utf-8") as output:
+            if str(path).lower().endswith(".json"):
+                output.write("{")
+                for i, name in enumerate(names):
+                    if i:
+                        output.write(",")
+                    output.write(json.dumps(name, ensure_ascii=False) + ":[")
+                    for index, value in enumerate(self._data[i].values()):
+                        if index:
+                            output.write(",")
+                        output.write(json.dumps(value))
+                    output.write("]")
+                output.write("}")
+            else:
+                writer = csv.writer(output)
+                writer.writerow(names)
+                writer.writerows(zip_longest(*(h.values() for h in self._data), fillvalue=""))
+
+    def _save_data(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "保存完整曲线数据", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
+        if path:
+            try:
+                self.save_data(path)
+            except OSError as error:
+                self._mode_label.setText(f"保存失败: {error}")
+
+    def load_data(self, path):
+        histories = []
+        try:
+            with open(path, "r", encoding="utf-8") as source:
+                if str(path).lower().endswith(".json"):
+                    # JSON is a document format; CSV is streamed for large captures.
+                    obj = json.load(source)
+                    if not isinstance(obj, dict):
+                        raise ValueError("曲线 JSON 必须是对象")
+                    names = list(obj)[:8]
+                    for name in names:
+                        history = ChartHistory(self.HISTORY_LIMIT)
+                        histories.append(history)
+                        for value in obj[name]:
+                            if value is not None:
+                                history.append(float(value))
+                else:
+                    rows = csv.reader(source)
+                    names = next(rows, [])[:8]
+                    histories = [ChartHistory(self.HISTORY_LIMIT) for _ in names]
+                    for row in rows:
+                        for index, history in enumerate(histories):
+                            if index < len(row) and row[index].strip():
+                                history.append(float(row[index]))
+            if not names:
+                raise ValueError("曲线文件没有通道")
+        except Exception:
+            for history in histories:
+                history.close()
+            raise
+        self._refresh_timer.stop()
+        for history in self._data:
+            history.close()
+        self._data[:] = histories
+        self._cfgs = [{**_DEFAULT_CURVE_CFG, "name": name} for name in names]
+        self._rebuild_curves()
+        self._refresh_all()
+
+    def _load_data(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "加载曲线数据", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
+        if path:
+            try:
+                self.load_data(path)
+            except (OSError, ValueError, TypeError) as error:
+                self._mode_label.setText(f"加载失败: {error}")
+
+    def configure(self, cfgs, disp_pts=200):
+        if isinstance(cfgs, str):
+            cfgs = json.loads(cfgs)
+        self._cfgs = list(cfgs)[:8]
+        self._rebuild_curves()
+        self.set_display_points(disp_pts)
+
+    def on_parsed(self, data):
+        self._on_parsed_data(data)
+
+    def on_raw(self, data):
+        self._on_raw_data(data)
+
+    def reset_stream(self):
+        for frames in self._raw_frames:
+            frames.reset()
+
+    # -- self-parsing (per-curve) ---------------------------------------------
+
+    def _on_parsed_data(self, data: dict):
+        for i, cfg in enumerate(self._cfgs):
+            pm = cfg.get("parseMode", "键值匹配")
+            val = None
+            if pm == "键值匹配":
+                key = cfg.get("key") or cfg.get("name", "")
+                if key and key in data:
+                    val = data[key]
+            elif pm == "JSON路径":
+                jp = cfg.get("jsonPath", "")
+                if jp:
+                    val = self._resolve_path(data, jp)
+            elif pm == "Modbus":
+                val = self._extract_modbus(cfg, data)
+            if val is not None:
+                try:
+                    self.append_value(i, float(val))
+                except (ValueError, TypeError):
+                    pass
+
+    def _on_raw_data(self, raw: bytes):
+        for i, cfg in enumerate(self._cfgs):
+            if cfg.get("parseMode") != "HEX字节提取":
+                continue
+            fi = _STRUCT_FMT.get(cfg.get("dataType", "float32"))
+            if not fi:
+                continue
+            fmt_c, sz = fi
+            bo = ">" if cfg.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"
+            off = int(cfg.get("byteOffset", 0))
+            for frame in self._raw_frames[i].feed(raw):
+                payload = self._strip_frame(frame, cfg)
+                if payload is not None and off >= 0 and off + sz <= len(payload):
+                    try:
+                        val = struct.unpack(bo + fmt_c, payload[off:off + sz])[0]
+                        self.append_value(i, float(val))
+                    except struct.error:
+                        pass
+
+    @staticmethod
+    def _extract_modbus(cfg: dict, data: dict):
+        sf = int(cfg.get("mbSlaveFilter", -1))
+        if sf >= 0 and data.get("slave") != sf:
+            return None
+        fc = data.get("fc", 0)
+        fcf = int(cfg.get("mbFcFilter", -1))
+        if fcf >= 0 and fc != fcf:
+            return None
+        idx = int(cfg.get("regIndex", 0))
+        if fc in (0x01, 0x02):
+            return data.get(f"coil{idx}")
+        r0 = data.get(f"reg{idx}")
+        if r0 is None:
+            return None
+        dt = cfg.get("mbDataType", "uint16")
+        if dt == "uint16":
+            return r0
+        if dt == "int16":
+            return r0 - 65536 if r0 > 32767 else r0
+        r1 = data.get(f"reg{idx + 1}")
+        if r1 is None:
+            return None
+        if cfg.get("mbRegOrder", "大端(AB CD)") == "大端(AB CD)":
+            hi, lo = r0, r1
+        else:
+            hi, lo = r1, r0
+        raw_b = hi.to_bytes(2, "big") + lo.to_bytes(2, "big")
+        if dt == "uint32":
+            return int.from_bytes(raw_b, "big")
+        if dt == "int32":
+            return int.from_bytes(raw_b, "big", signed=True)
+        if dt == "float32":
+            return struct.unpack(">f", raw_b)[0]
+        return r0
+
+    @staticmethod
+    def _strip_frame(raw: bytes, cfg: dict):
+        data = raw
+        fh = cfg.get("frameHeader", "")
+        ft = cfg.get("frameTail", "")
+        if fh:
+            hdr = _hex_to_bytes(fh)
+            if hdr:
+                idx = data.find(hdr)
+                if idx < 0:
+                    return None
+                data = data[idx + len(hdr):]
+        if ft:
+            tlr = _hex_to_bytes(ft)
+            if tlr:
+                idx = data.find(tlr)
+                if idx < 0:
+                    return None
+                data = data[:idx]
+        return data
+
+    @staticmethod
+    def _resolve_path(data, path: str):
+        for part in path.split("."):
+            if data is None:
+                return None
+            if isinstance(data, dict):
+                data = data.get(part)
+            elif isinstance(data, (list, tuple)):
+                try:
+                    data = data[int(part)]
+                except (ValueError, IndexError):
+                    return None
+            else:
+                return None
+        return data
+
+
+def _hex_to_bytes(s: str) -> bytes:
+    s = s.replace(" ", "")
+    if not s:
+        return b""
+    if len(s) % 2 != 0:
+        s = "0" + s
+    try:
+        return bytes.fromhex(s)
+    except ValueError:
+        return b""
+
+
+class GaugeMeter(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._value=0; self._min=0; self._max=100; self._title="仪表"; self._unit=""
+        self.setMinimumSize(80, 80)
+        qconfig.themeChangedFinished.connect(self.update)
+    def set_value(self, v): self._value=max(self._min,min(self._max,v)); self.update()
+    def set_range(self, lo, hi): self._min=lo; self._max=hi; self.update()
+    def set_title(self, t): self._title=t; self.update()
+    def set_unit(self, u): self._unit=u; self.update()
+    def paintEvent(self, event):
+        p = QPainter(self); p.setRenderHint(QPainter.Antialiasing)
+        from PyQt5.QtCore import QRectF
+        side = min(self.width(), self.height())-10; cx=self.width()/2; cy=self.height()/2; r=side/2
+        arc = QRectF(cx-r, cy-r, side, side)
+        from PyQt5.QtGui import QPen
+        dark = isDarkTheme()
+        bg = QPen(QColor("#555555" if dark else "#dcdcdc"), max(6,side/12)); bg.setCapStyle(Qt.RoundCap)
+        p.setPen(bg); p.drawArc(arc, 225*16, -270*16)
+        ratio = (self._value-self._min)/(self._max-self._min) if self._max>self._min else 0
+        vp = QPen(QColor("#4cc2ff" if dark else "#0078d4"), max(6,side/12)); vp.setCapStyle(Qt.RoundCap)
+        p.setPen(vp); p.drawArc(arc, 225*16, int(-270*ratio*16))
+        p.setPen(QColor("#f3f3f3" if dark else "#1e1e1e")); fs=max(10,int(side/6))
+        p.setFont(QFont(self.font().family(),fs,QFont.Bold))
+        p.drawText(self.rect(), Qt.AlignCenter, f"{self._value:.1f}")
+        p.setFont(QFont(self.font().family(), max(8, int(fs * 0.6))))
+        p.setPen(QColor("#b3b3b3" if dark else "#606060"))
+        p.drawText(self.rect().adjusted(0, int(fs * 1.5), 0, 0),
+                   Qt.AlignHCenter | Qt.AlignTop, self._unit)
+        p.setFont(QFont(self.font().family(), max(8, int(fs * 0.5))))
+        p.drawText(self.rect().adjusted(0, 0, 0, -int(fs * 1.5)),
+                   Qt.AlignHCenter | Qt.AlignBottom, self._title)
+        p.end()
+
+# coding: utf-8
+"""Composite card widgets: SerialConfigCard, DataSendCard, DataRecvCard, LogBox, ProgressRing."""
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QColor, QPainter, QFont
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QSizePolicy, QFrame, QTextEdit,
+)
+from qfluentwidgets import (
+    CardWidget, StrongBodyLabel, BodyLabel, CaptionLabel,
+    PushButton, PrimaryPushButton, ComboBox, LineEdit, SpinBox,
+    ProgressRing, FluentIcon as FIF, ToolButton,
+    CheckBox, TextEdit, isDarkTheme, qconfig,
+)
+
+from serial_handler import _list_all_ports
+
+class SerialConfigCard(CardWidget):
+    """Serial port configuration card with three display modes:
+    完整 (full), 简洁 (simple: port+baud+buttons), 单行 (single-line toolbar).
+    Buttons are wired to SerialManager so the card works in preview mode."""
+
+    _BAUDS = ["9600", "19200", "38400", "57600", "115200",
+              "230400", "460800", "921600"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._display_mode = "完整"
+        self._connected = False
+        self._handler = None
+
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(16, 12, 16, 12)
+        self._root.setSpacing(10)
+
+        # ---- title row ----
+        self._title_w = self._make_row()
+        tl = self._title_w.layout()
+        self._title = StrongBodyLabel("串口配置")
+        self._status = CaptionLabel("未连接")
+        self._status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
+        tl.addWidget(self._title); tl.addStretch(); tl.addWidget(self._status)
+        self._root.addWidget(self._title_w)
+
+        LW = 48
+
+        # ---- port row ----
+        self._port_w = self._make_row()
+        pl = self._port_w.layout()
+        self._port_label = BodyLabel("端口"); self._port_label.setFixedWidth(LW)
+        self._port_combo = ComboBox(); self._port_combo.setMinimumWidth(120)
+        self._port_combo.setPlaceholderText("选择串口")
+        self._search_btn = ToolButton(FIF.SEARCH)
+        self._search_btn.setToolTip("搜索串口")
+        self._search_btn.clicked.connect(self.refresh_ports)
+        pl.addWidget(self._port_label); pl.addWidget(self._port_combo, 1)
+        pl.addWidget(self._search_btn)
+        self._root.addWidget(self._port_w)
+
+        # ---- baud row ----
+        self._baud_w = self._make_row()
+        bl = self._baud_w.layout()
+        self._baud_label = BodyLabel("波特率"); self._baud_label.setFixedWidth(LW)
+        self._baud_combo = ComboBox()
+        self._baud_combo.addItems(self._BAUDS); self._baud_combo.setCurrentIndex(4)
+        bl.addWidget(self._baud_label); bl.addWidget(self._baud_combo, 1)
+        self._root.addWidget(self._baud_w)
+
+        # ---- params row (databits / parity / stopbits) ----
+        self._params_w = self._make_row(spacing=6)
+        pal = self._params_w.layout()
+        first = True
+        for lbl_text, cb_items, attr, idx in [
+            ("数据位", ["5", "6", "7", "8"], "_databits_combo", 3),
+            ("校验",   ["None", "Even", "Odd", "Mark", "Space"], "_parity_combo", 0),
+            ("停止位", ["1", "1.5", "2"], "_stopbits_combo", 0),
+        ]:
+            lbl = CaptionLabel(lbl_text)
+            if first:
+                lbl.setFixedWidth(LW)
+                first = False
+            cb = ComboBox(); cb.addItems(cb_items); cb.setCurrentIndex(idx)
+            setattr(self, attr, cb)
+            pal.addWidget(lbl); pal.addWidget(cb, 1)
+        self._root.addWidget(self._params_w)
+
+        # ---- flow row ----
+        self._flow_w = self._make_row()
+        fl = self._flow_w.layout()
+        self._flow_label = BodyLabel("流控"); self._flow_label.setFixedWidth(LW)
+        self._flow_combo = ComboBox()
+        self._flow_combo.addItems(["无", "RTS/CTS", "XON/XOFF", "DTR/DSR"])
+        fl.addWidget(self._flow_label); fl.addWidget(self._flow_combo, 1)
+        self._root.addWidget(self._flow_w)
+
+        self._parser_w = self._make_row()
+        self._parser_w.layout().addWidget(BodyLabel("解析模式"))
+        self._parser_combo = ComboBox()
+        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus"])
+        self._parser_w.layout().addWidget(self._parser_combo, 1)
+        self._root.addWidget(self._parser_w)
+
+        # ---- button row ----
+        self._btn_w = self._make_row()
+        btl = self._btn_w.layout()
+        self._connect_btn = PrimaryPushButton(FIF.CONNECT, "连接")
+        self._disconnect_btn = PushButton(FIF.CLOSE, "断开")
+        self._disconnect_btn.setEnabled(False)
+        self._connect_btn.clicked.connect(self._on_connect)
+        self._disconnect_btn.clicked.connect(self._on_disconnect)
+        btl.addWidget(self._connect_btn, 1); btl.addWidget(self._disconnect_btn, 1)
+        self._root.addWidget(self._btn_w)
+
+        # ---- single-line row (hidden by default) ----
+        self._sl_w = QWidget()
+        sl = QHBoxLayout(self._sl_w)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.setSpacing(6)
+
+        H = 33
+        self._sl_port = ComboBox(); self._sl_port.setPlaceholderText("串口")
+        self._sl_port.setMinimumWidth(90); self._sl_port.setFixedHeight(H)
+        self._sl_baud = ComboBox(); self._sl_baud.addItems(self._BAUDS)
+        self._sl_baud.setCurrentIndex(4)
+        self._sl_baud.setFixedWidth(90); self._sl_baud.setFixedHeight(H)
+        self._sl_search = ToolButton(FIF.SEARCH)
+        self._sl_search.clicked.connect(self.refresh_ports)
+        self._sl_search.setFixedSize(H, H)
+        self._sl_conn = PrimaryPushButton("连接")
+        self._sl_conn.setFixedSize(56, H)
+        self._sl_disconn = PushButton("断开")
+        self._sl_disconn.setFixedSize(56, H)
+        self._sl_disconn.setEnabled(False)
+        self._sl_conn.clicked.connect(self._on_connect)
+        self._sl_disconn.clicked.connect(self._on_disconnect)
+        self._sl_status = CaptionLabel("未连接")
+        self._sl_status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
+        self._sl_status.setAlignment(Qt.AlignCenter)
+        self._sl_status.setFixedHeight(H)
+
+        for w, stretch in [(self._sl_port, 2), (self._sl_baud, 0),
+                           (self._sl_search, 0), (self._sl_conn, 0),
+                           (self._sl_disconn, 0), (self._sl_status, 0)]:
+            sl.addWidget(w, stretch, Qt.AlignVCenter)
+
+        self._sl_w.setFixedHeight(H)
+        self._root.addWidget(self._sl_w)
+        self._sl_w.hide()
+
+        self._root.addStretch(1)
+
+        self.refresh_ports()
+        qconfig.themeChangedFinished.connect(self.update)
+
+    def set_serial_handler(self, handler):
+        if handler is self._handler:
+            return
+        if self._handler is not None:
+            self._handler.connected.disconnect(self._on_serial_connected)
+            self._handler.disconnected.disconnect(self._on_serial_disconnected)
+            self._handler.error.disconnect(self._on_serial_error)
+        self._handler = handler
+        if handler is not None:
+            handler.connected.connect(self._on_serial_connected)
+            handler.disconnected.connect(self._on_serial_disconnected)
+            handler.error.connect(self._on_serial_error)
+            self.set_connected(handler.is_connected)
+
+    @staticmethod
+    def _make_row(spacing=8):
+        w = QWidget()
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(spacing)
+        return w
+
+    # ---- compact paint ----
+
+    def _content_height(self):
+        m = self._root.contentsMargins()
+        h = m.top() + m.bottom()
+        for i in range(self._root.count()):
+            w = self._root.itemAt(i).widget()
+            if w and not w.isHidden():
+                h += w.sizeHint().height() + self._root.spacing()
+        return max(h, 30)
+
+    def paintEvent(self, event):
+        if self._display_mode == "完整":
+            super().paintEvent(event)
+            return
+        ch = self._content_height()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        if isDarkTheme():
+            painter.setBrush(QColor(44, 44, 44))
+            painter.setPen(QColor(55, 55, 55))
+        else:
+            painter.setBrush(QColor(255, 255, 255, 230))
+            painter.setPen(QColor(220, 220, 220))
+        painter.drawRoundedRect(0, 0, self.width(), ch, 6, 6)
+        painter.end()
+
+    # ---- mode switching ----
+
+    def set_display_mode(self, mode: str):
+        self._display_mode = mode
+        is_sl = mode == "单行"
+        compact = mode != "完整"
+        self.setAttribute(Qt.WA_TranslucentBackground, compact)
+        self.setAutoFillBackground(not compact)
+        self._title_w.setVisible(not is_sl)
+        self._port_w.setVisible(not is_sl)
+        self._baud_w.setVisible(not is_sl)
+        self._params_w.setVisible(mode == "完整")
+        self._flow_w.setVisible(mode == "完整")
+        self._parser_w.setVisible(mode == "完整")
+        self._btn_w.setVisible(not is_sl)
+        self._sl_w.setVisible(is_sl)
+        if is_sl:
+            self._root.setContentsMargins(8, 6, 8, 6)
+            self._root.setSpacing(0)
+            self._sync_to_sl()
+        else:
+            self._root.setContentsMargins(16, 12, 16, 12)
+            self._root.setSpacing(10)
+            self._sync_from_sl()
+        self.update()
+        self.adjustSize()
+        self.updateGeometry()
+
+    def _sync_to_sl(self):
+        self._sl_port.clear()
+        for i in range(self._port_combo.count()):
+            self._sl_port.addItem(self._port_combo.itemText(i), self._port_combo.itemData(i))
+        self._sl_port.setCurrentIndex(self._port_combo.currentIndex())
+        self._sl_baud.setCurrentIndex(self._baud_combo.currentIndex())
+        self._sl_conn.setEnabled(self._connect_btn.isEnabled())
+        self._sl_disconn.setEnabled(self._disconnect_btn.isEnabled())
+        self._sl_status.setText(self._status.text())
+        self._sl_status.setTextColor(self._status.lightColor, self._status.darkColor)
+
+    def _sync_from_sl(self):
+        idx = self._sl_port.currentIndex()
+        if 0 <= idx < self._port_combo.count():
+            self._port_combo.setCurrentIndex(idx)
+        self._baud_combo.setCurrentIndex(self._sl_baud.currentIndex())
+
+    # ---- connect / disconnect ----
+
+    def _on_connect(self):
+        port = self.port
+        baud = self.baudrate
+        if not port:
+            return
+
+        flow_map = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}
+        parity_map = {"None": "N", "Even": "E", "Odd": "O", "Mark": "M", "Space": "S"}
+
+        for btn in (self._connect_btn, self._sl_conn):
+            btn.setEnabled(False)
+        self._set_status("连接中...", "#FF9800")
+
+        if self._handler is None:
+            return
+        ok = self._handler.connect(
+            port, baud,
+            databits=int(self._databits_combo.currentText()),
+            parity=parity_map.get(self._parity_combo.currentText(), "N"),
+            stopbits=float(self._stopbits_combo.currentText()),
+            flowcontrol=flow_map.get(self._flow_combo.currentText(), "none"),
+            parser_type=None if self._parser_combo.currentText() == "项目设置" else self._parser_combo.currentText(),
+        )
+        if not ok:
+            for btn in (self._connect_btn, self._sl_conn):
+                btn.setEnabled(True)
+            self._set_status("连接失败", "#F44336")
+
+    def _on_disconnect(self):
+        if self._handler is not None:
+            self._handler.disconnect()
+
+    def _on_serial_connected(self, port_name: str):
+        self.set_connected(True)
+
+    def _on_serial_disconnected(self):
+        self.set_connected(False)
+
+    def _on_serial_error(self, msg: str):
+        self._set_status("错误", "#F44336")
+        self._status.setToolTip(msg)
+        self._sl_status.setToolTip(msg)
+
+    def _set_status(self, text: str, color: str):
+        colors = {
+            "#888": ("#606060", "#b0b0b0"),
+            "#4CAF50": ("#237b27", "#81c784"),
+            "#F44336": ("#c62828", "#ff8a80"),
+            "#FF9800": ("#8a4b00", "#ffb74d"),
+        }
+        light, dark = colors.get(color, (color, color))
+        for label in (self._status, self._sl_status):
+            label.setText(text)
+            label.setTextColor(QColor(light), QColor(dark))
+
+    # ---- ports / state ----
+
+    def refresh_ports(self):
+        ports = _list_all_ports()
+        for combo in (self._port_combo, self._sl_port):
+            combo.clear()
+            for p in ports:
+                combo.addItem(f"{p['port']}  {p['description']}")
+            if combo.count() == 0:
+                combo.addItem("无可用串口")
+
+    def set_connected(self, connected: bool):
+        self._connected = connected
+        editable = not connected
+        for btn in (self._connect_btn, self._sl_conn):
+            btn.setEnabled(editable)
+        for btn in (self._disconnect_btn, self._sl_disconn):
+            btn.setEnabled(connected)
+        for w in (self._port_combo, self._sl_port, self._baud_combo, self._sl_baud,
+                  self._search_btn, self._sl_search,
+                  self._databits_combo, self._parity_combo,
+                  self._stopbits_combo, self._flow_combo, self._parser_combo):
+            w.setEnabled(editable)
+        if connected:
+            self._set_status("● 已连接", "#4CAF50")
+        else:
+            self._set_status("未连接", "#888")
+
+    # ---- property setters ----
+
+    def set_default_parser(self, value):
+        self._parser_combo.setCurrentText(value)
+
+    def set_title(self, t): self._title.setText(t)
+
+    def set_default_baud(self, baud: str):
+        for cb in (self._baud_combo, self._sl_baud):
+            idx = cb.findText(baud)
+            if idx >= 0: cb.setCurrentIndex(idx)
+
+    def set_default_databits(self, v: str):
+        idx = self._databits_combo.findText(v)
+        if idx >= 0: self._databits_combo.setCurrentIndex(idx)
+
+    def set_default_parity(self, v: str):
+        idx = self._parity_combo.findText(v)
+        if idx >= 0: self._parity_combo.setCurrentIndex(idx)
+
+    def set_default_stopbits(self, v: str):
+        idx = self._stopbits_combo.findText(v)
+        if idx >= 0: self._stopbits_combo.setCurrentIndex(idx)
+
+    def set_default_flow(self, v: str):
+        idx = self._flow_combo.findText(v)
+        if idx >= 0: self._flow_combo.setCurrentIndex(idx)
+
+    @property
+    def port(self):
+        c = self._sl_port if self._display_mode == "单行" else self._port_combo
+        text = c.currentText()
+        if not text or text == "无可用串口":
+            return ""
+        return text.split()[0]
+
+    @property
+    def baudrate(self):
+        c = self._sl_baud if self._display_mode == "单行" else self._baud_combo
+        return int(c.currentText())
+
+
+from datetime import datetime as _dt
+
+class DataRecvCard(CardWidget):
+    """Data receive card for generated code."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        root = QVBoxLayout(self); root.setContentsMargins(12,10,12,10); root.setSpacing(6)
+        hdr = QHBoxLayout()
+        self._title_lbl = StrongBodyLabel("数据接收"); hdr.addWidget(self._title_lbl)
+        hdr.addStretch()
+        self._counter = CaptionLabel("0 条")
+        self._counter.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
+        hdr.addWidget(self._counter)
+        root.addLayout(hdr)
+        opt = QHBoxLayout(); opt.setSpacing(8)
+        self._hex_cb = CheckBox("HEX显示"); opt.addWidget(self._hex_cb)
+        self._scroll_cb = CheckBox("自动滚动"); self._scroll_cb.setChecked(True); opt.addWidget(self._scroll_cb)
+        opt.addStretch()
+        self._clear_btn = PushButton("清空"); self._clear_btn.setFixedWidth(60)
+        self._clear_btn.clicked.connect(self._clear); opt.addWidget(self._clear_btn)
+        root.addLayout(opt)
+        self._text = TextEdit(); self._text.setReadOnly(True)
+        terminal_style = (
+            "QTextEdit { font-family:Menlo,Consolas,'Courier New',monospace;font-size:12px;"
+            "background:#1e1e2e;color:#cdd6f4;border-radius:4px;padding:4px; }")
+        setCustomStyleSheet(self._text, terminal_style, terminal_style)
+        root.addWidget(self._text, 1)
+        self._count = 0; self._max_lines = 1000; self._handler = None
+    def set_serial_handler(self, h):
+        self._handler = h
+        if h:
+            h.rawReceived.connect(self._on_raw)
+            h.dataSent.connect(self._on_sent)
+            h.connected.connect(lambda p: self._sys(f"已连接: {p}"))
+            h.disconnected.connect(lambda: self._sys("已断开"))
+    def _on_raw(self, data):
+        ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
+        if self._hex_cb.isChecked():
+            txt = " ".join(f"{b:02X}" for b in data)
+        else:
+            txt = data.decode("utf-8", errors="replace").rstrip("\r\n")
+            if not txt: return
+        self._text.append(f'<span style="color:#9399b2">[{ts}]</span> '
+                          f'<span style="color:#a6e3a1">&lt;&lt; {txt}</span>')
+        self._count += 1; self._counter.setText(f"{self._count} 条")
+        self._trim(); self._do_scroll()
+    def _on_sent(self, data):
+        ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
+        if self._hex_cb.isChecked():
+            txt = " ".join(f"{b:02X}" for b in data)
+        else:
+            txt = data.decode("utf-8", errors="replace").rstrip("\r\n")
+            if not txt: return
+        self._text.append(f'<span style="color:#9399b2">[{ts}]</span> '
+                          f'<span style="color:#f9e2af">&gt;&gt; {txt}</span>')
+        self._trim(); self._do_scroll()
+    def _sys(self, msg):
+        ts = _dt.now().strftime("%H:%M:%S")
+        self._text.append(f'<span style="color:#74c7ec">[{ts}] --- {msg} ---</span>')
+    def _do_scroll(self):
+        if self._scroll_cb.isChecked():
+            sb = self._text.verticalScrollBar(); sb.setValue(sb.maximum())
+    def _clear(self):
+        self._text.clear(); self._count = 0; self._counter.setText("0 条")
+    def _trim(self):
+        doc = self._text.document()
+        while doc.blockCount() > self._max_lines:
+            c = self._text.textCursor(); c.movePosition(c.Start)
+            c.select(c.BlockUnderCursor); c.removeSelectedText(); c.deleteChar()
+    def set_title(self, t): self._title_lbl.setText(t)
+
+
+class MainUI(FluentWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('串口采集 Demo')
+        self.resize(1180, 840)
+
+        self._page = QWidget()
+        self._page.setObjectName("mainPage")
+        self._page.setFixedSize(1080, 740)
+
+        self.widgets = {}
+        self._theme_containers = []
+        self._create_widgets()
+
+        scroll = QScrollArea()
+        scroll.setWidget(self._page)
+        scroll.setWidgetResizable(False)
+        scroll.setAlignment(Qt.AlignCenter)
+        scroll.setObjectName("scrollPage")
+        scroll.setStyleSheet("QScrollArea#scrollPage { background: transparent; border: none; }")
+
+        self.addSubInterface(scroll, FIF.HOME, "主界面")
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
+
+
+
+    def apply_theme(self):
+        dark = isDarkTheme()
+        background = "#2b2b2b" if dark else "#ffffff"
+        border = "#606060" if dark else "#c8c8c8"
+        foreground = "#f3f3f3" if dark else "#202020"
+        self._page.setStyleSheet(
+            f"QWidget#mainPage {{ background: {background}; "
+            f"border: 1px solid {'#444' if dark else '#ddd'}; }}")
+        for widget, kind in self._theme_containers:
+            if kind == "layout":
+                line = "rgba(255,255,255,0.08)" if dark else "rgba(0,0,0,0.06)"
+                fill = "rgba(255,255,255,0.03)" if dark else "rgba(0,0,0,0.02)"
+                widget.setStyleSheet(
+                    f"QFrame#layoutContainer {{ border: 2px dashed {line}; "
+                    f"background: {fill}; border-radius: 6px; }}")
+            elif kind == "group":
+                widget.setStyleSheet(
+                    f"QGroupBox#groupContainer {{ color: {foreground}; "
+                    f"border: 1px solid {border}; border-radius: 6px; margin-top: 10px; }}"
+                    "QGroupBox#groupContainer::title { subcontrol-origin: margin; "
+                    "subcontrol-position: top left; left: 10px; padding: 0 4px; }")
+            elif kind == "tabs":
+                fill = "#292929" if dark else "#ededed"
+                selected = "#3c3c3c" if dark else "#ffffff"
+                widget.setStyleSheet(
+                    f"QTabWidget#tabContainer::pane {{ border: 1px solid {border}; border-radius: 4px; }}"
+                    "QTabWidget#tabContainer > QTabBar::tab {"
+                    f"color: {foreground}; background: {fill}; "
+                    "padding: 6px 12px; margin-right: 2px; "
+                    "border-top-left-radius: 4px; border-top-right-radius: 4px; }"
+                    "QTabWidget#tabContainer > QTabBar::tab:selected {"
+                    f"background: {selected}; }}")
+        self._page.update()
+
+    def _create_widgets(self):
+
+        self.widgets['title'] = BodyLabel('串口采集 Demo', self._page); _font = self.widgets['title'].font(); _font.setPointSize(22); _font.setBold(True); self.widgets['title'].setFont(_font); self.widgets['title'].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.widgets['title'].setGeometry(24, 12, 850, 36)
+        self.widgets['title'].show()
+
+        self.widgets['help'] = BodyLabel('连接设备查看温度与压力，可控制设备运行、保存曲线或发送自定义命令。', self._page); _font = self.widgets['help'].font(); _font.setPointSize(13); _font.setBold(False); self.widgets['help'].setFont(_font); self.widgets['help'].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.widgets['help'].setGeometry(24, 50, 1020, 28)
+        self.widgets['help'].show()
+
+        self.widgets['serial'] = SerialConfigCard(self._page); self.widgets['serial'].set_title('串口配置'); self.widgets['serial'].set_display_mode('单行'); self.widgets['serial'].set_default_baud('115200'); self.widgets['serial'].set_default_databits('8'); self.widgets['serial'].set_default_parity('None'); self.widgets['serial'].set_default_stopbits('1'); self.widgets['serial'].set_default_flow('无'); self.widgets['serial'].set_default_parser('项目设置')
+        self.widgets['serial'].setGeometry(24, 90, 1032, 48)
+        self.widgets['serial'].show()
+
+        self.widgets['temperature'] = NumericDisplay(self._page); self.widgets['temperature'].set_title('温度'); self.widgets['temperature'].set_unit('°C'); self.widgets['temperature'].set_value('0.00'); self.widgets['temperature'].set_font_size(34)
+        self.widgets['temperature'].setGeometry(24, 155, 240, 120)
+        self.widgets['temperature'].show()
+
+        self.widgets['pressure'] = NumericDisplay(self._page); self.widgets['pressure'].set_title('压力'); self.widgets['pressure'].set_unit('kPa'); self.widgets['pressure'].set_value('0.00'); self.widgets['pressure'].set_font_size(34)
+        self.widgets['pressure'].setGeometry(282, 155, 240, 120)
+        self.widgets['pressure'].show()
+
+        self.widgets['gauge'] = GaugeMeter(self._page); self.widgets['gauge'].set_range(0, 100); self.widgets['gauge'].set_title('压力指示'); self.widgets['gauge'].set_unit('kPa'); self.widgets['gauge'].set_value(0)
+        self.widgets['gauge'].setGeometry(530, 145, 150, 140)
+        self.widgets['gauge'].show()
+
+        self.widgets['running'] = LEDIndicator(self._page); self.widgets['running'].set_color('green'); self.widgets['running'].set_label('设备运行'); self.widgets['running'].set_on(False)
+        self.widgets['running'].setGeometry(730, 154, 220, 40)
+        self.widgets['running'].show()
+
+        self.widgets['start'] = PushButton('启动设备', self._page)
+        self.widgets['start'].setGeometry(712, 217, 150, 40)
+        self.widgets['start'].show()
+        self.widgets['start'].clicked.connect(lambda: self._send_text_command('START', '\r\n'))
+
+        self.widgets['stop'] = PushButton('停止设备', self._page)
+        self.widgets['stop'].setGeometry(886, 217, 150, 40)
+        self.widgets['stop'].show()
+        self.widgets['stop'].clicked.connect(lambda: self._send_text_command('STOP', '\r\n'))
+
+        self.widgets['chart'] = RealtimeLineChart(self._page); self.widgets['chart'].configure('[{"name": "温度", "parseMode": "键值匹配", "key": "temperature", "jsonPath": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1}, {"name": "压力", "parseMode": "键值匹配", "key": "pressure", "jsonPath": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1}]', 200); self.widgets['chart'].set_title('实时采样')
+        self.widgets['chart'].setGeometry(24, 300, 642, 365)
+        self.widgets['chart'].show()
+
+        self.widgets['receive'] = DataRecvCard(self._page)
+        self.widgets['receive'].setGeometry(688, 300, 368, 365)
+        self.widgets['receive'].show()
+
+        self.widgets['command'] = LineEdit(self._page); self.widgets['command'].setPlaceholderText('输入 READ、START 或 STOP，按回车发送')
+        self.widgets['command'].setGeometry(24, 690, 440, 36)
+        self.widgets['command'].show()
+        self.widgets['command'].returnPressed.connect(lambda: self._send_text_command(self.widgets['command'].text().strip(), '\r\n'))
+
+        self.widgets['protocol_hint'] = BodyLabel('默认 115200 / 8N1 · 每行 JSON 或键值文本', self._page); _font = self.widgets['protocol_hint'].font(); _font.setPointSize(12); _font.setBold(False); self.widgets['protocol_hint'].setFont(_font); self.widgets['protocol_hint'].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.widgets['protocol_hint'].setGeometry(490, 690, 566, 36)
+        self.widgets['protocol_hint'].show()
+
+
+    def _send_text_command(self, cmd, suffix="\r\n"):
+        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+            self._serial_handler.send_text(cmd + suffix)
+
+    def _send_hex_command(self, cmd, header="", tail=""):
+        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+            hex_str = cmd.replace(" ", "")
+            if len(hex_str) % 2 != 0:
+                hex_str = "0" + hex_str
+            try:
+                payload = bytes.fromhex(hex_str)
+                h = bytes.fromhex(header.replace(" ", "")) if header else b""
+                t = bytes.fromhex(tail.replace(" ", "")) if tail else b""
+                self._serial_handler.send(h + payload + t)
+            except ValueError:
+                pass
+
+    def _send_modbus(self, slave, func, address, value=1):
+        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+            crc = 0xFFFF
+            pdu = bytes([slave, func])
+            pdu += address.to_bytes(2, "big")
+            pdu += value.to_bytes(2, "big")
+            for b in pdu:
+                crc ^= b
+                for _ in range(8):
+                    crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
+            pdu += crc.to_bytes(2, "little")
+            self._serial_handler.send(pdu)
+
+    def _send_packed_value(self, value, fmt, cast=int, tpl="{value}", header="", tail=""):
+        import struct
+        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+            try:
+                packed = struct.pack(fmt, cast(value))
+                hex_str = tpl.replace("{value}", packed.hex()).replace(" ", "")
+                payload = bytes.fromhex(hex_str)
+                h = bytes.fromhex(header.replace(" ", "")) if header else b""
+                t = bytes.fromhex(tail.replace(" ", "")) if tail else b""
+                self._serial_handler.send(h + payload + t)
+            except (struct.error, ValueError):
+                pass

@@ -5,7 +5,7 @@ from PyQt5.QtGui import QPainter, QColor, QFont, QPixmap
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
-from qfluentwidgets import ProgressBar, BodyLabel
+from qfluentwidgets import ProgressBar, BodyLabel, isDarkTheme, qconfig
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
@@ -32,6 +32,7 @@ class LEDIndicator(QWidget):
         self._on = True
         self._label_text = ""
         self.setMinimumSize(20, 20)
+        qconfig.themeChangedFinished.connect(self.update)
 
     def set_color(self, name: str):
         self._color_name = name
@@ -51,7 +52,7 @@ class LEDIndicator(QWidget):
 
         color = self.COLOR_MAP.get(self._color_name, QColor(76, 175, 80))
         if not self._on:
-            color = QColor(200, 200, 200)
+            color = QColor("#777777" if isDarkTheme() else "#c8c8c8")
 
         size = min(self.height(), 30)
         x = 4
@@ -67,7 +68,7 @@ class LEDIndicator(QWidget):
         painter.drawEllipse(x, y, size, size)
 
         if self._label_text:
-            painter.setPen(QColor(60, 60, 60))
+            painter.setPen(QColor("#f3f3f3" if isDarkTheme() else "#3c3c3c"))
             painter.setFont(QFont(self.font().family(), 10))
             text_x = x + size + 8
             painter.drawText(text_x, 0, self.width() - text_x, self.height(),
@@ -85,22 +86,25 @@ class NumericDisplay(QWidget):
         layout.setSpacing(0)
 
         self._title_label = QLabel("标题")
-        self._title_label.setStyleSheet("color: #888; font-size: 11px;")
         self._title_label.setAlignment(Qt.AlignCenter)
 
         self._value_label = QLabel("0.00")
-        self._value_label.setStyleSheet(
-            "font-size: 28px; font-weight: bold; color: #0078d4;"
-        )
         self._value_label.setAlignment(Qt.AlignCenter)
 
         self._unit_label = QLabel("")
-        self._unit_label.setStyleSheet("color: #888; font-size: 12px;")
         self._unit_label.setAlignment(Qt.AlignCenter)
 
         layout.addWidget(self._title_label)
         layout.addWidget(self._value_label)
         layout.addWidget(self._unit_label)
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
+
+    def apply_theme(self):
+        secondary = "#b3b3b3" if isDarkTheme() else "#606060"
+        self._title_label.setStyleSheet(f"color: {secondary}; font-size: 11px;")
+        self._unit_label.setStyleSheet(f"color: {secondary}; font-size: 12px;")
+        self._update_value_style()
 
     def set_title(self, text: str):
         self._title_label.setText(text)
@@ -134,12 +138,23 @@ class ImageDisplay(QWidget):
         super().__init__(parent)
         self._label = QLabel(self)
         self._label.setAlignment(Qt.AlignCenter)
-        self._label.setStyleSheet("background: #f5f5f5; border: 1px dashed #ccc;")
         self._label.setText("图片")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._label)
         self._path = ""
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
+
+    def apply_theme(self):
+        dark = isDarkTheme()
+        background = "#292929" if dark else "#f5f5f5"
+        foreground = "#f3f3f3" if dark else "#3c3c3c"
+        border = "#606060" if dark else "#c8c8c8"
+        self._label.setStyleSheet(
+            f"background: {background}; color: {foreground}; "
+            f"border: 1px dashed {border};"
+        )
 
     def set_image_path(self, path: str):
         self._path = path

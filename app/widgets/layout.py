@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGridLayout,
     QGroupBox, QTabWidget, QLabel, QSizePolicy, QFrame,
 )
-from qfluentwidgets import isDarkTheme, CardWidget
+from qfluentwidgets import isDarkTheme, CardWidget, qconfig
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
@@ -21,12 +21,13 @@ class HBoxContainer(QFrame):
         self._layout.setContentsMargins(4, 4, 4, 4)
         self._layout.setSpacing(8)
         self._title = "水平布局"
-        self._apply_style()
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
 
     def set_title(self, t): self._title = t; self.update()
     def set_spacing(self, s): self._layout.setSpacing(s)
 
-    def _apply_style(self):
+    def apply_theme(self):
         dark = isDarkTheme()
         border = "rgba(255,255,255,0.08)" if dark else "rgba(0,0,0,0.06)"
         bg = "rgba(255,255,255,0.03)" if dark else "rgba(0,0,0,0.02)"
@@ -39,7 +40,7 @@ class HBoxContainer(QFrame):
         super().paintEvent(event)
         if self._title:
             p = QPainter(self)
-            p.setPen(QColor(150, 150, 150))
+            p.setPen(QColor("#b3b3b3" if isDarkTheme() else "#606060"))
             p.setFont(QFont(self.font().family(), 8))
             p.drawText(6, 14, self._title)
             p.end()
@@ -54,12 +55,13 @@ class VBoxContainer(QFrame):
         self._layout.setContentsMargins(4, 4, 4, 4)
         self._layout.setSpacing(8)
         self._title = "垂直布局"
-        self._apply_style()
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
 
     def set_title(self, t): self._title = t; self.update()
     def set_spacing(self, s): self._layout.setSpacing(s)
 
-    def _apply_style(self):
+    def apply_theme(self):
         dark = isDarkTheme()
         border = "rgba(255,255,255,0.08)" if dark else "rgba(0,0,0,0.06)"
         bg = "rgba(255,255,255,0.03)" if dark else "rgba(0,0,0,0.02)"
@@ -72,7 +74,7 @@ class VBoxContainer(QFrame):
         super().paintEvent(event)
         if self._title:
             p = QPainter(self)
-            p.setPen(QColor(150, 150, 150))
+            p.setPen(QColor("#b3b3b3" if isDarkTheme() else "#606060"))
             p.setFont(QFont(self.font().family(), 8))
             p.drawText(6, 14, self._title)
             p.end()
@@ -86,13 +88,14 @@ class FlexContainer(QFrame):
         self._title = "弹性布局"
         self._spacing = 8
         self._direction = "row"
-        self._apply_style()
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
 
     def set_title(self, t): self._title = t; self.update()
     def set_spacing(self, s): self._spacing = s
     def set_direction(self, d): self._direction = d
 
-    def _apply_style(self):
+    def apply_theme(self):
         dark = isDarkTheme()
         border = "rgba(255,255,255,0.08)" if dark else "rgba(0,0,0,0.06)"
         bg = "rgba(255,255,255,0.03)" if dark else "rgba(0,0,0,0.02)"
@@ -104,7 +107,7 @@ class FlexContainer(QFrame):
     def paintEvent(self, event):
         super().paintEvent(event)
         p = QPainter(self)
-        p.setPen(QColor(150, 150, 150))
+        p.setPen(QColor("#b3b3b3" if isDarkTheme() else "#606060"))
         p.setFont(QFont(self.font().family(), 8))
         p.drawText(6, 14, self._title)
         p.end()
@@ -118,8 +121,21 @@ class GroupBoxContainer(QGroupBox):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(8, 20, 8, 8)
         self._layout.setSpacing(6)
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
 
     def set_title(self, t): self.setTitle(t)
+
+    def apply_theme(self):
+        foreground = "#f3f3f3" if isDarkTheme() else "#202020"
+        border = "#606060" if isDarkTheme() else "#c8c8c8"
+        self.setStyleSheet(
+            "GroupBoxContainer {"
+            f"color: {foreground}; border: 1px solid {border}; "
+            "border-radius: 6px; margin-top: 10px; }"
+            "GroupBoxContainer::title { subcontrol-origin: margin; "
+            "subcontrol-position: top left; left: 10px; padding: 0 4px; }"
+        )
 
 
 class TabContainer(QTabWidget):
@@ -129,6 +145,25 @@ class TabContainer(QTabWidget):
         super().__init__(parent)
         self._tab_names = ["标签1", "标签2"]
         self._rebuild_tabs()
+        self.apply_theme()
+        qconfig.themeChangedFinished.connect(self.apply_theme)
+
+    def apply_theme(self):
+        dark = isDarkTheme()
+        foreground = "#f3f3f3" if dark else "#202020"
+        border = "#606060" if dark else "#c8c8c8"
+        tab = "#292929" if dark else "#ededed"
+        selected = "#3c3c3c" if dark else "#ffffff"
+        self.setStyleSheet(
+            "TabContainer::pane {"
+            f"border: 1px solid {border}; border-radius: 4px; }}"
+            "TabContainer > QTabBar::tab {"
+            f"color: {foreground}; background: {tab}; "
+            "padding: 6px 12px; margin-right: 2px; "
+            "border-top-left-radius: 4px; border-top-right-radius: 4px; }"
+            "TabContainer > QTabBar::tab:selected {"
+            f"background: {selected}; }}"
+        )
 
     def set_tab_names(self, names_text: str):
         self._tab_names = [n.strip() for n in names_text.split("\n") if n.strip()]
@@ -171,6 +206,8 @@ class CardContainer(CardWidget):
         super().__init__(parent)
         self._title = ""
         self._radius = 8
+        self.setBorderRadius(self._radius)
+        qconfig.themeChangedFinished.connect(self.update)
 
     def set_title(self, t):
         self._title = t
@@ -178,13 +215,15 @@ class CardContainer(CardWidget):
 
     def set_radius(self, r):
         self._radius = max(0, r)
-        self.setStyleSheet(f"CardContainer {{ border-radius: {self._radius}px; }}")
+        # CardWidget paints its own rounded background; a QSS border radius
+        # neither changes that painter nor survives Fluent's stylesheet refresh.
+        self.setBorderRadius(self._radius)
 
     def paintEvent(self, event):
         super().paintEvent(event)
         if self._title:
             p = QPainter(self)
-            p.setPen(QColor(120, 120, 120))
+            p.setPen(QColor("#b3b3b3" if isDarkTheme() else "#606060"))
             p.setFont(QFont(self.font().family(), 9))
             p.drawText(12, 18, self._title)
             p.end()

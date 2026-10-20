@@ -7,15 +7,18 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from PyQt5.QtCore import QEventLoop, QTimer
+from PyQt5.QtCore import QEvent, QEventLoop, QTimer
 from PyQt5.QtWidgets import QApplication
+from qfluentwidgets import Theme, qconfig, setTheme
 from app.core.code_generator import generate_project
 from app.core.project import ProjectData
+from app.core.theme_runtime import ThemeController
 from app.core.widget_registry import registry
 from app.view.main_window import MainWindow
 from app.view.preview_interface import NuitkaPackDialog
 
 app = QApplication([])
+theme_controller = ThemeController(app, qconfig.get(qconfig.themeMode))
 window = MainWindow()
 app.processEvents()
 assert not window.windowIcon().isNull()
@@ -52,6 +55,10 @@ window.preview_interface.set_project_data(project)
 window.preview_interface._start_preview()
 app.processEvents()
 (ROOT / "build").mkdir(exist_ok=True)
+for theme in (Theme.DARK, Theme.LIGHT):
+    setTheme(theme, save=False)
+    app.processEvents()
+    assert not window.grab().isNull()
 window.grab().save(str(ROOT / "build" / "macos-smoke.png"))
 window.preview_interface._stop_preview()
 
@@ -63,8 +70,11 @@ with tempfile.TemporaryDirectory() as folder:
 import runpy
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication
+from qfluentwidgets import Theme, setTheme
 original_exec = QApplication.exec
 def smoke_exec(self):
+    QTimer.singleShot(100, lambda: setTheme(Theme.DARK, save=False))
+    QTimer.singleShot(350, lambda: setTheme(Theme.LIGHT, save=False))
     QTimer.singleShot(700, self.quit)
     return original_exec()
 QApplication.exec = smoke_exec
@@ -73,4 +83,7 @@ runpy.run_path('main.py', run_name='__main__')
 
 QTimer.singleShot(300, app.quit)
 app.exec()
+window.deleteLater()
+theme_controller.deleteLater()
+app.sendPostedEvents(None, QEvent.DeferredDelete)
 print(f"NATIVE_GUI_EXPORT_OK: {len(project.widgets)} widget types, Python {sys.version.split()[0]}")

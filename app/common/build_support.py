@@ -29,6 +29,15 @@ def build_nuitka_command(project_dir, python_cmd, app_name, version="1.0.0",
         if resource.is_file():
             args.append(f"--include-data-files={resource}={name}")
 
+    assets = project / "assets"
+    if assets.is_dir():
+        args.append(f"--include-data-dir={assets}=assets")
+
+    if (project / "app" / "core" / "serial_runtime.py").is_file():
+        from app.common.runtime_sources import bundle_runtime_sources
+        bundle = bundle_runtime_sources(project)
+        args.append(f"--include-data-files={bundle}=runtime_sources.json")
+
     if platform == "win32":
         args += [
             "--windows-console-mode=disable",

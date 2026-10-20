@@ -1,12 +1,18 @@
 # coding: utf-8
 """Project serialization: save/load .uidp files (JSON format)."""
 import json
+import copy
+import math
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from app.designer.canvas import DesignScene
 from app.designer.canvas_item import CanvasItem
 from app.common.signal_bus import signalBus
+from app.core.widget_registry import registry
+from PyQt5.QtCore import QSignalBlocker
 
 PROJECT_VERSION = "1.0"
 
@@ -46,6 +52,7 @@ class ProjectData:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProjectData":
+        cls.validate(data)
         proj = cls()
         proj.version = data.get("version", PROJECT_VERSION)
         proj.app_name = data.get("appName", "上位机")
@@ -54,8 +61,65 @@ class ProjectData:
         proj.canvas_height = canvas.get("height", 800)
         proj.grid_size = canvas.get("gridSize", 10)
         proj.widgets = data.get("widgets", [])
-        proj.serial = data.get("serial", proj.serial)
+        proj.serial.update(data.get("serial", {}))
         return proj
+
+    @staticmethod
+    def validate(data):
+        """Reject invalid documents before touching the current scene."""
+        if not isinstance(data, dict):
+            raise ValueError("项目根节点必须是对象")
+        if data.get("version", PROJECT_VERSION) != PROJECT_VERSION:
+            raise ValueError("不支持的项目版本")
+        if not isinstance(data.get("appName", ""), str):
+            raise ValueError("应用名称必须是文本")
+        canvas = data.get("canvas", {})
+        if not isinstance(canvas, dict):
+            raise ValueError("画布配置必须是对象")
+        for name, default, limit in (("width", 1200, 9999), ("height", 800, 9999),
+                                     ("gridSize", 10, 1000)):
+            value = canvas.get(name, default)
+            if type(value) is not int or not 1 <= value <= limit:
+                raise ValueError(f"无效画布参数: {name}")
+        serial = data.get("serial", {})
+        if not isinstance(serial, dict):
+            raise ValueError("串口配置必须是对象")
+        from app.core.protocol_parser import create_parser
+        create_parser(serial.get("parser", "line"), serial.get("parserConfig"))
+        ids = set()
+
+        def walk(items, depth=0):
+            if not isinstance(items, list) or depth > 64:
+                raise ValueError("无效控件树")
+            for item in items:
+                if not isinstance(item, dict) or not isinstance(item.get("type"), str):
+                    raise ValueError("控件缺少有效类型")
+                if not registry.get(item["type"]):
+                    raise ValueError(f"未知控件类型: {item['type']}")
+                wid = item.get("id")
+                if wid is not None:
+                    if not isinstance(wid, str) or not wid or wid in ids:
+                        raise ValueError("控件 ID 无效或重复")
+                    ids.add(wid)
+                if not isinstance(item.get("properties", {}), dict):
+                    raise ValueError("控件属性必须是对象")
+                if item.get("binding") is not None and not isinstance(item["binding"], dict):
+                    raise ValueError("控件绑定必须是对象")
+                geo = item.get("geometry", {})
+                if not isinstance(geo, dict):
+                    raise ValueError("控件位置必须是对象")
+                for key, value in geo.items():
+                    if key in ("x", "y", "w", "h"):
+                        if type(value) not in (int, float) or not math.isfinite(value):
+                            raise ValueError("控件位置必须是有限数值")
+                        if key in ("w", "h") and value <= 0:
+                            raise ValueError("控件尺寸必须大于零")
+                tab = item.get("tabIndex", 0)
+                if type(tab) is not int or tab < 0:
+                    raise ValueError("无效选项卡索引")
+                walk(item.get("children", []), depth + 1)
+
+        walk(data.get("widgets", []))
 
 
 class ProjectManager:
@@ -83,18 +147,32 @@ class ProjectManager:
 
     def save_from_scene(self, scene: DesignScene, path: str, app_name: str = None):
         """Serialize current scene to .uidp file."""
+        candidate = copy.deepcopy(self._current)
         if app_name is not None:
-            self._current.app_name = app_name
-        self._current.canvas_width = int(scene.sceneRect().width())
-        self._current.canvas_height = int(scene.sceneRect().height())
-        self._current.grid_size = scene.grid_size
-        self._current.widgets = [
+            candidate.app_name = app_name
+        candidate.canvas_width = int(scene.sceneRect().width())
+        candidate.canvas_height = int(scene.sceneRect().height())
+        candidate.grid_size = scene.grid_size
+        candidate.widgets = [
             item.to_dict() for item in scene.top_level_canvas_items()
         ]
-        self._current.file_path = path
-
-        data = self._current.to_dict()
-        Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        candidate.file_path = path
+        payload = json.dumps(candidate.to_dict(), indent=2, ensure_ascii=False)
+        target = Path(path)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                             dir=target.parent, prefix=f".{target.name}.",
+                                             suffix=".tmp", delete=False) as output:
+                temporary = Path(output.name)
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, target)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        self._current = candidate
         self._dirty = False
         signalBus.projectSaved.emit(path)
 
@@ -102,18 +180,31 @@ class ProjectManager:
         """Load a .uidp file and populate the scene."""
         text = Path(path).read_text(encoding="utf-8")
         data = json.loads(text)
-        self._current = ProjectData.from_dict(data)
-        self._current.file_path = path
-
-        scene.clear_all()
-        scene.set_canvas_size(self._current.canvas_width, self._current.canvas_height)
-        scene.set_grid_size(self._current.grid_size)
-
-        for wd in self._current.widgets:
-            item = CanvasItem.from_dict(wd)
-            scene.add_canvas_item(item)
-
+        candidate = ProjectData.from_dict(data)
+        candidate.file_path = path
+        # Construct every widget before removing any existing item. Block global
+        # edit notifications while building/applying the replacement.
+        with QSignalBlocker(signalBus), QSignalBlocker(scene):
+            staged = [CanvasItem.from_dict(wd) for wd in candidate.widgets]
+            old_items = scene.top_level_canvas_items()
+            old_rect, old_grid = scene.sceneRect(), scene.grid_size
+            try:
+                scene.clear_all()
+                scene.set_canvas_size(candidate.canvas_width, candidate.canvas_height)
+                scene.set_grid_size(candidate.grid_size)
+                for item in staged:
+                    scene.add_canvas_item(item)
+            except Exception:
+                scene.clear_all()
+                scene.set_canvas_size(old_rect.width(), old_rect.height())
+                scene.set_grid_size(old_grid)
+                for item in old_items:
+                    scene.add_canvas_item(item)
+                raise
+        self._current = candidate
         self._dirty = False
+        scene.clearSelection()
+        signalBus.widgetDeselected.emit()
         signalBus.projectLoaded.emit(path)
 
     def export_scene_data(self, scene: DesignScene, app_name: str = None) -> ProjectData:
