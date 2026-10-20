@@ -14,6 +14,8 @@ from qfluentwidgets import (
 from app.common.config import cfg, APP_NAME, isWin11
 from app.common.signal_bus import signalBus
 from app.core.project import ProjectManager
+from app.core.qt_window_lifetime import TitleBarLifecycleMixin
+from app.core.signal_lifetime import SignalConnections
 from app.view.designer_interface import DesignerInterface
 from app.view.preview_interface import PreviewInterface
 from app.view.setting_interface import SettingInterface
@@ -26,7 +28,7 @@ from app.widgets.comm import register_comm_widgets
 from app.widgets.composite import register_composite_widgets
 
 
-class MainWindow(FluentWindow):
+class MainWindow(TitleBarLifecycleMixin, FluentWindow):
 
     def __init__(self):
         super().__init__()
@@ -53,9 +55,13 @@ class MainWindow(FluentWindow):
         self.setting_interface = SettingInterface(self)
 
     def _connect_signals(self):
-        signalBus.micaEnableChanged.connect(self.setMicaEffectEnabled)
-        signalBus.canvasChanged.connect(self._on_canvas_changed)
-        qconfig.themeChangedFinished.connect(self._on_theme_changed)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(
+            signalBus.micaEnableChanged, self.setMicaEffectEnabled)
+        self._external_connections.connect(
+            signalBus.canvasChanged, self._on_canvas_changed)
+        self._external_connections.connect(
+            qconfig.themeChangedFinished, self._on_theme_changed)
         self.stackedWidget.currentChanged.connect(self._on_page_changed)
         self.preview_interface.projectDataRequested.connect(self._sync_preview)
 
@@ -257,4 +263,5 @@ class MainWindow(FluentWindow):
             event.ignore()
             return
         self.preview_interface._stop_preview()
+        self.setting_interface.shutdown_update_check()
         super().closeEvent(event)

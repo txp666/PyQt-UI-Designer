@@ -4,7 +4,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QObject, Qt
 
 from app.core import protocol_parser as protocol
 from app.core import serial_runtime
@@ -179,8 +179,9 @@ class RawBindingTests(unittest.TestCase):
             exec(_gen_data_binding(bindings), namespace)
         first, second = Mock(), Mock()
         handler = serial_runtime.SerialHandler()
-        binding = namespace["DataBinding"](SimpleNamespace(
-            widgets={"first": first, "second": second}), handler)
+        ui = QObject()
+        ui.widgets = {"first": first, "second": second}
+        binding = namespace["DataBinding"](ui, handler)
         handler.rawReceived.emit(bytes.fromhex("bb66000766bb"))
         second.setText.assert_called_once_with("7")
         first.setText.assert_not_called()

@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QWidget
 from qfluentwidgets import isDarkTheme, qconfig
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
+from app.core.signal_lifetime import SignalConnections
 from app.core.chart_runtime import (
     RealtimeLineChart as RuntimeChart, build_cfgs_from_props, _CURVE_FIELD_MAP,
     _DEFAULT_CURVE_CFG,
@@ -18,21 +19,15 @@ class RealtimeLineChart(RuntimeChart):
             return
         self._listening = True
         from app.common.signal_bus import signalBus
-        signalBus.serialDataReceived.connect(self._on_parsed_data)
-        signalBus.serialRawReceived.connect(self._on_raw_data)
-        signalBus.serialDisconnected.connect(self.reset_stream)
+        self._serial_connections.connect(signalBus.serialDataReceived, self._on_parsed_data)
+        self._serial_connections.connect(signalBus.serialRawReceived, self._on_raw_data)
+        self._serial_connections.connect(signalBus.serialDisconnected, self.reset_stream)
 
     def stop_listening(self):
         if not self._listening:
             return
         self._listening = False
-        from app.common.signal_bus import signalBus
-        try:
-            signalBus.serialDataReceived.disconnect(self._on_parsed_data)
-            signalBus.serialRawReceived.disconnect(self._on_raw_data)
-            signalBus.serialDisconnected.disconnect(self.reset_stream)
-        except TypeError:
-            pass
+        self._serial_connections.clear()
         self.reset_stream()
 
 
@@ -51,7 +46,8 @@ class GaugeMeter(QWidget):
         self._title = "仪表"
         self._unit = ""
         self.setMinimumSize(80, 80)
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_value(self, v: float):
         self._value = max(self._min_val, min(self._max_val, v))

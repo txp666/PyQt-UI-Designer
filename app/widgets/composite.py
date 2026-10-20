@@ -16,6 +16,7 @@ from qfluentwidgets import (
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
+from app.core.signal_lifetime import SignalConnections
 
 try:
     import serial.tools.list_ports
@@ -186,10 +187,11 @@ class DataRecvCard(CardWidget):
         self._max_lines = 1000
 
         from app.common.signal_bus import signalBus
-        signalBus.serialRawReceived.connect(self._on_raw_recv)
-        signalBus.serialDataSent.connect(self._on_sent)
-        signalBus.serialConnected.connect(self._on_connected)
-        signalBus.serialDisconnected.connect(self._on_disconnected)
+        self._serial_connections = SignalConnections(self)
+        self._serial_connections.connect(signalBus.serialRawReceived, self._on_raw_recv)
+        self._serial_connections.connect(signalBus.serialDataSent, self._on_sent)
+        self._serial_connections.connect(signalBus.serialConnected, self._on_connected)
+        self._serial_connections.connect(signalBus.serialDisconnected, self._on_disconnected)
 
     def _on_connected(self, port):
         self._append_sys(f"已连接: {port}")
@@ -286,10 +288,11 @@ class LogDisplayBox(QFrame):
         self._max_lines = 500
 
         from app.common.signal_bus import signalBus
-        signalBus.serialConnected.connect(self._on_connected)
-        signalBus.serialDisconnected.connect(self._on_disconnected)
-        signalBus.serialError.connect(self._on_serial_error)
-        signalBus.serialDataReceived.connect(self._on_parsed_data)
+        self._serial_connections = SignalConnections(self)
+        self._serial_connections.connect(signalBus.serialConnected, self._on_connected)
+        self._serial_connections.connect(signalBus.serialDisconnected, self._on_disconnected)
+        self._serial_connections.connect(signalBus.serialError, self._on_serial_error)
+        self._serial_connections.connect(signalBus.serialDataReceived, self._on_parsed_data)
 
     def _on_connected(self, port):
         self.append_log(f"串口已连接: {port}", "ok")
@@ -449,8 +452,9 @@ class ModbusConfigCard(CardWidget):
         self._polling = False
 
         from app.common.signal_bus import signalBus
-        signalBus.serialConnected.connect(self._on_connected)
-        signalBus.serialDisconnected.connect(self._on_disconnected)
+        self._serial_connections = SignalConnections(self)
+        self._serial_connections.connect(signalBus.serialConnected, self._on_connected)
+        self._serial_connections.connect(signalBus.serialDisconnected, self._on_disconnected)
 
     def _on_connected(self, port):
         self._status.setText(f"已连接: {port}")

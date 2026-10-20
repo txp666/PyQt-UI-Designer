@@ -14,6 +14,7 @@ from qfluentwidgets import (
 )
 
 from .serial_runtime import _list_all_ports
+from .signal_lifetime import SignalConnections
 
 class SerialConfigCard(CardWidget):
     """Serial port configuration card with three display modes:
@@ -29,6 +30,8 @@ class SerialConfigCard(CardWidget):
         self._display_mode = "完整"
         self._connected = False
         self._handler = None
+        self._serial_connections = SignalConnections(self)
+        self._theme_connections = SignalConnections(self)
 
         self._root = QVBoxLayout(self)
         self._root.setContentsMargins(16, 12, 16, 12)
@@ -151,20 +154,17 @@ class SerialConfigCard(CardWidget):
         self._root.addStretch(1)
 
         self.refresh_ports()
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_serial_handler(self, handler):
         if handler is self._handler:
             return
-        if self._handler is not None:
-            self._handler.connected.disconnect(self._on_serial_connected)
-            self._handler.disconnected.disconnect(self._on_serial_disconnected)
-            self._handler.error.disconnect(self._on_serial_error)
+        self._serial_connections.clear()
         self._handler = handler
         if handler is not None:
-            handler.connected.connect(self._on_serial_connected)
-            handler.disconnected.connect(self._on_serial_disconnected)
-            handler.error.connect(self._on_serial_error)
+            self._serial_connections.connect(handler.connected, self._on_serial_connected)
+            self._serial_connections.connect(handler.disconnected, self._on_serial_disconnected)
+            self._serial_connections.connect(handler.error, self._on_serial_error)
             self.set_connected(handler.is_connected)
 
     @staticmethod

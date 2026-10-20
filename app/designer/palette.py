@@ -12,6 +12,7 @@ from qfluentwidgets import (
 )
 
 from app.core.widget_registry import registry
+from app.core.signal_lifetime import SignalConnections
 from app.widgets.base import WidgetCategory, WidgetMeta
 from app.designer.canvas import MIME_WIDGET_TYPE
 
@@ -51,7 +52,9 @@ class _DraggableListWidget(QListWidget):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(
+            qconfig.themeChangedFinished, self.apply_theme)
 
     def apply_theme(self):
         foreground = "#f3f3f3" if isDarkTheme() else "#202020"
@@ -174,7 +177,9 @@ class WidgetPalette(QWidget):
 
         self._scroll.setWidget(self._container)
         outer.addWidget(self._scroll)
-        qconfig.themeChangedFinished.connect(self.refresh_icons)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(
+            qconfig.themeChangedFinished, self.refresh_icons)
 
     def populate(self):
         self._cards = []

@@ -16,6 +16,7 @@ from qfluentwidgets import (
 from qfluentwidgets import FluentIcon as FIF
 
 from app.common.signal_bus import signalBus
+from app.core.signal_lifetime import SignalConnections
 from app.core.widget_registry import registry
 from app.widgets.base import PropType, PropDef, WidgetMeta
 from app.designer.canvas_item import CanvasItem
@@ -85,19 +86,24 @@ class PropertyEditor(ScrollArea):
         self._empty_label.setAlignment(Qt.AlignCenter)
         self._layout.addWidget(self._empty_label)
 
-        signalBus.widgetSelected.connect(self._on_widget_selected)
-        signalBus.widgetDeselected.connect(self._on_deselected)
-        signalBus.projectSaved.connect(self._sync_saved_image_path)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(
+            signalBus.widgetSelected, self._on_widget_selected)
+        self._external_connections.connect(
+            signalBus.widgetDeselected, self._on_deselected)
+        self._external_connections.connect(
+            signalBus.projectSaved, self._sync_saved_image_path)
+        self._scene_connections = SignalConnections(self)
 
         self.setStyleSheet(
             "QScrollArea, #propEditorContainer { background: transparent; border: none; }"
         )
 
     def set_scene(self, scene):
-        if hasattr(self, "_scene"):
-            self._scene.aboutToSerialize.disconnect(self.commit_pending_edits)
+        self._scene_connections.clear()
         self._scene = scene
-        scene.aboutToSerialize.connect(self.commit_pending_edits)
+        self._scene_connections.connect(
+            scene.aboutToSerialize, self.commit_pending_edits)
 
     def _on_widget_selected(self, widget_id: str):
         if not hasattr(self, "_scene"):

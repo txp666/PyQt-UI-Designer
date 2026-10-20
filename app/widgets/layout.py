@@ -10,6 +10,7 @@ from qfluentwidgets import isDarkTheme, CardWidget, qconfig
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
+from app.core.signal_lifetime import SignalConnections
 
 
 def tab_names(names_text: str) -> list:
@@ -31,7 +32,8 @@ class HBoxContainer(QFrame):
         self._layout.setSpacing(8)
         self._title = "水平布局"
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     def set_title(self, t): self._title = t; self.update()
     def set_spacing(self, s): self._layout.setSpacing(s)
@@ -65,7 +67,8 @@ class VBoxContainer(QFrame):
         self._layout.setSpacing(8)
         self._title = "垂直布局"
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     def set_title(self, t): self._title = t; self.update()
     def set_spacing(self, s): self._layout.setSpacing(s)
@@ -98,7 +101,8 @@ class FlexContainer(QFrame):
         self._spacing = 8
         self._direction = "row"
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     def set_title(self, t): self._title = t; self.update()
     def set_spacing(self, s): self._spacing = s
@@ -131,7 +135,8 @@ class GroupBoxContainer(QGroupBox):
         self._layout.setContentsMargins(8, 20, 8, 8)
         self._layout.setSpacing(6)
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     def set_title(self, t): self.setTitle(t)
 
@@ -155,7 +160,8 @@ class TabContainer(QTabWidget):
         self._tab_names = ["标签1", "标签2"]
         self._rebuild_tabs()
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     def apply_theme(self):
         dark = isDarkTheme()
@@ -233,7 +239,8 @@ class CardContainer(CardWidget):
         self._title = ""
         self._radius = 8
         self.setBorderRadius(self._radius)
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_title(self, t):
         self._title = t

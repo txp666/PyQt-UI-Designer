@@ -9,6 +9,10 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentTranslator
 
+from app.common.dist_smoke import DistributionSmokeTest
+
+smoke_test = DistributionSmokeTest.from_arguments(sys.argv)
+
 from app.common.config import cfg
 
 if cfg.get(cfg.dpiScale) != "Auto":
@@ -48,10 +52,15 @@ if _icon_path.exists():
     w.setWindowIcon(_icon)
 
 w.show()
+if smoke_test is not None:
+    smoke_test.start(app, w)
 exit_code = app.exec()
 # Dispose the widget tree while QApplication still exists. Letting SIP tear
 # down these native objects during interpreter finalization is order-dependent.
+w.setting_interface.shutdown_update_check()
 w.deleteLater()
 theme_controller.deleteLater()
 app.sendPostedEvents(None, QEvent.DeferredDelete)
+if smoke_test is not None:
+    exit_code = smoke_test.finish(exit_code)
 sys.exit(exit_code)

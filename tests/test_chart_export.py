@@ -250,12 +250,11 @@ class StandaloneExportTests(unittest.TestCase):
                 compile(source.read_text(encoding="utf-8"), str(source), "exec")
             code = """
 from unittest.mock import patch, Mock
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QWidget
 app = QApplication([])
 import serial_handler as runtime
 from ui import RealtimeLineChart, SerialConfigCard, NumericDisplay
 from data_binding import DataBinding
-from types import SimpleNamespace
 handler = runtime.SerialHandler()
 chart = RealtimeLineChart()
 chart.configure([{"parseMode": "Modbus", "regIndex": 0}])
@@ -268,7 +267,8 @@ card.set_default_flow("RTS/CTS")
 card.set_default_parser("modbus")
 card._port_combo.clear()
 card._port_combo.addItem("TEST fake device")
-ui = SimpleNamespace(widgets={"chart": chart, "value": value, "serial": card})
+ui = QWidget()
+ui.widgets = {"chart": chart, "value": value, "serial": card}
 binding = DataBinding(ui, handler)
 with patch.object(runtime.serial, "Serial") as port, patch.object(runtime, "SerialReaderThread"):
     card._on_connect()

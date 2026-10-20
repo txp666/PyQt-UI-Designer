@@ -9,6 +9,7 @@ from qfluentwidgets import TableWidget
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
+from app.core.signal_lifetime import SignalConnections
 
 
 class DataTableWidget(QWidget):
@@ -33,7 +34,8 @@ class DataTableWidget(QWidget):
         self._max_rows = 500
 
         from app.common.signal_bus import signalBus
-        signalBus.serialDataReceived.connect(self._on_parsed_data)
+        self._serial_connections = SignalConnections(self)
+        self._serial_connections.connect(signalBus.serialDataReceived, self._on_parsed_data)
 
     def _on_parsed_data(self, data: dict):
         self.update_kv_data(data)

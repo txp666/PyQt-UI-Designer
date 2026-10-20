@@ -15,6 +15,7 @@ from qfluentwidgets import (
 from app.common.config import cfg, APP_VERSION, isWin11
 from app.common.signal_bus import signalBus
 from app.common.update_checker import UpdateCheckThread, RELEASE_URL
+from app.core.signal_lifetime import SignalConnections
 
 
 class SettingInterface(ScrollArea):
@@ -114,6 +115,7 @@ class SettingInterface(ScrollArea):
         self._layout.addWidget(self.aboutGroup)
 
         self._update_thread = None
+        self._update_connections = SignalConnections(self)
 
     def _on_theme_changed(self, ci):
         setTheme(cfg.get(ci))
@@ -121,11 +123,30 @@ class SettingInterface(ScrollArea):
     def _check_update(self):
         if self._update_thread and self._update_thread.isRunning():
             return
+        if self._update_thread is not None:
+            self._finish_update_check(self._update_thread)
         self.aboutCard.button.setEnabled(False)
         self.aboutCard.button.setText("检查中...")
-        self._update_thread = UpdateCheckThread(APP_VERSION, self)
-        self._update_thread.result.connect(self._on_update_result)
-        self._update_thread.start()
+        thread = self._update_thread = UpdateCheckThread(APP_VERSION, self)
+        self._update_connections.connect(thread.result, self._on_update_result)
+        self._update_connections.connect(
+            thread.finished, lambda: self._finish_update_check(thread))
+        thread.start()
+
+    def _finish_update_check(self, thread):
+        if self._update_thread is thread:
+            self._update_thread = None
+            self._update_connections.clear()
+            thread.deleteLater()
+
+    def shutdown_update_check(self):
+        """Finish blocking network I/O before deleting its parent widget."""
+        self._update_connections.clear()
+        thread, self._update_thread = self._update_thread, None
+        if thread is not None:
+            thread.requestInterruption()
+            thread.wait()
+            thread.deleteLater()
 
     def _on_update_result(self, has_new, latest, current, url, changelog, error):
         self.aboutCard.button.setEnabled(True)

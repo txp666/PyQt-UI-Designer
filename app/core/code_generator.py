@@ -34,7 +34,9 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None):
             "PyQt-Fluent-Widgets>=1.5.5\npyserial>=3.5\npyqtgraph>=0.13.3\n"
         ),
         "main.py": _gen_main(theme_mode),
-        "theme_support.py": runtime_source("theme_runtime.py"),
+        "theme_support.py": (runtime_source("signal_lifetime.py") + "\n"
+                             + runtime_source("theme_runtime.py").replace(
+                                 "from .signal_lifetime import SignalConnections", "")),
         "ui.py": _gen_ui(widgets, project.canvas_width, project.canvas_height,
                         project.app_name),
         "serial_handler.py": _gen_serial_handler(project.serial),
@@ -197,6 +199,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         '',
     ]
 
+    lines.append(runtime_source("signal_lifetime.py"))
+    lines.append(runtime_source("qt_window_lifetime.py"))
     lines.append(runtime_source("command_runtime.py").replace(
         "from .protocol_parser import build_modbus_frame",
         "from serial_handler import build_modbus_frame",
@@ -244,7 +248,7 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
 
     # MainUI class
     lines.append(f'''
-class MainUI(FluentWindow):
+class MainUI(TitleBarLifecycleMixin, FluentWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle({app_name!r})
@@ -267,7 +271,9 @@ class MainUI(FluentWindow):
 
         self.addSubInterface(scroll, FIF.HOME, "主界面")
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(
+            qconfig.themeChangedFinished, self.apply_theme)
 
 ''')
     lines.append('''
@@ -788,6 +794,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         lines.append('from serial_handler import RawFrameBuffer')
     lines.append('')
     lines.append(runtime_source("binding_values.py"))
+    lines.append(runtime_source("signal_lifetime.py"))
 
     lines += [
         '',
@@ -827,6 +834,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         '    def __init__(self, ui, serial_handler):',
         '        self.ui = ui',
         '        self.serial = serial_handler',
+        '        self._connections = SignalConnections(ui)',
         '        ui._serial_handler = serial_handler',
         '        for w in ui.widgets.values():',
         '            if hasattr(w, "set_serial_handler"):',
@@ -835,9 +843,10 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
     if has_chart:
         lines += [
             '            if isinstance(w, RealtimeLineChart):',
-            '                serial_handler.dataReceived.connect(w.on_parsed)',
-            '                serial_handler.rawReceived.connect(w.on_raw)',
-            '                serial_handler.disconnected.connect(w.reset_stream)',
+            '                w._serial_connections.clear()',
+            '                w._serial_connections.connect(serial_handler.dataReceived, w.on_parsed)',
+            '                w._serial_connections.connect(serial_handler.rawReceived, w.on_raw)',
+            '                w._serial_connections.connect(serial_handler.disconnected, w.reset_stream)',
         ]
 
     if has_hex:
@@ -850,10 +859,10 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
                 lines.append(f'        self._raw_frames[{binding["widget_id"]!r}] = '
                              f'RawFrameBuffer({header!r}, {footer!r})')
     if has_parsed:
-        lines.append('        self.serial.dataReceived.connect(self._on_data)')
+        lines.append('        self._connections.connect(self.serial.dataReceived, self._on_data)')
     if has_hex:
-        lines.append('        self.serial.rawReceived.connect(self._on_raw)')
-        lines.append('        self.serial.disconnected.connect(self._reset_stream)')
+        lines.append('        self._connections.connect(self.serial.rawReceived, self._on_raw)')
+        lines.append('        self._connections.connect(self.serial.disconnected, self._reset_stream)')
     lines.append('')
 
     # -- _on_data for 键值匹配 / JSON路径 --
@@ -1051,7 +1060,8 @@ class LEDIndicator(QWidget):
         self._on = True
         self._label_text = ""
         self.setMinimumSize(20, 20)
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
     def set_color(self, name): self._color_name = name; self.update()
     def set_on(self, on): self._on = on; self.update()
     def set_label(self, text): self._label_text = text; self.update()
@@ -1085,7 +1095,8 @@ class NumericDisplay(QWidget):
         self._unit = QLabel(""); self._unit.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._title); layout.addWidget(self._value); layout.addWidget(self._unit)
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
     def apply_theme(self):
         secondary = "#b3b3b3" if isDarkTheme() else "#606060"
         self._title.setStyleSheet(f"color:{secondary};font-size:11px;")
@@ -1111,9 +1122,11 @@ def _realtime_chart_class() -> str:
     runtime = runtime_source("chart_runtime.py").replace(
         "from .chart_history import ChartHistory", "").replace(
         "from .binding_values import binding_register", "").replace(
+        "from .signal_lifetime import SignalConnections", "").replace(
         "from .protocol_parser import RawFrameBuffer",
         "from serial_handler import RawFrameBuffer")
-    return (runtime_source("binding_values.py") + "\n"
+    return (runtime_source("signal_lifetime.py") + "\n"
+            + runtime_source("binding_values.py") + "\n"
             + runtime_source("chart_history.py") + "\n" + runtime)
 
 
@@ -1124,7 +1137,8 @@ class GaugeMeter(QWidget):
         super().__init__(parent)
         self._value=0; self._min=0; self._max=100; self._title="仪表"; self._unit=""
         self.setMinimumSize(80, 80)
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
     def set_value(self, v): self._value=max(self._min,min(self._max,v)); self.update()
     def set_range(self, lo, hi): self._min=lo; self._max=max(lo,hi); self.set_value(self._value)
     def set_title(self, t): self._title=t; self.update()
@@ -1183,7 +1197,8 @@ class TitledLayoutContainer(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._title = ""
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
     def set_title(self, title):
         self._title = title
         self.update()
@@ -1200,7 +1215,8 @@ class TitledCardContainer(CardWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._title = ""
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
     def set_title(self, title):
         self._title = title
         self.update()
@@ -1220,6 +1236,7 @@ def _data_table_class() -> str:
 class DataTableWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._serial_connections = SignalConnections(self)
         layout = QVBoxLayout(self); layout.setContentsMargins(2,2,2,2)
         self._table = TableWidget(); self._table.setColumnCount(2)
         self._table.setHorizontalHeaderLabels(["字段","值"])
@@ -1229,7 +1246,8 @@ class DataTableWidget(QWidget):
         layout.addWidget(self._table)
         self._max_rows = 500
     def set_serial_handler(self, handler):
-        handler.dataReceived.connect(self.update_kv_data)
+        self._serial_connections.clear()
+        self._serial_connections.connect(handler.dataReceived, self.update_kv_data)
     def set_columns(self, columns):
         self._columns = list(columns) or ["字段", "值"]
         self._table.setColumnCount(len(self._columns))
@@ -1270,7 +1288,8 @@ class ImageDisplay(QWidget):
         lo = QVBoxLayout(self); lo.setContentsMargins(0,0,0,0); lo.addWidget(self._label)
         self._path = ""
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
     def apply_theme(self):
         dark = isDarkTheme()
         background = "#292929" if dark else "#f5f5f5"
@@ -1324,19 +1343,16 @@ class LogDisplayBox(QWidget):
         lo.addWidget(self._text)
         self._max_lines = 500
         self._handler = None
+        self._serial_connections = SignalConnections(self)
     def set_serial_handler(self, handler):
         if handler is self._handler: return
-        if self._handler is not None:
-            self._handler.connected.disconnect(self._on_connected)
-            self._handler.disconnected.disconnect(self._on_disconnected)
-            self._handler.error.disconnect(self._on_serial_error)
-            self._handler.dataReceived.disconnect(self._on_parsed_data)
+        self._serial_connections.clear()
         self._handler = handler
         if handler is not None:
-            handler.connected.connect(self._on_connected)
-            handler.disconnected.connect(self._on_disconnected)
-            handler.error.connect(self._on_serial_error)
-            handler.dataReceived.connect(self._on_parsed_data)
+            self._serial_connections.connect(handler.connected, self._on_connected)
+            self._serial_connections.connect(handler.disconnected, self._on_disconnected)
+            self._serial_connections.connect(handler.error, self._on_serial_error)
+            self._serial_connections.connect(handler.dataReceived, self._on_parsed_data)
     def _on_connected(self, port):
         self.append_log(f"串口已连接: {port}", "ok")
     def _on_disconnected(self):
@@ -1367,7 +1383,8 @@ class LogDisplayBox(QWidget):
 
 def _serial_config_card_class() -> str:
     return runtime_source("serial_card.py").replace(
-        "from .serial_runtime import _list_all_ports", "from serial_handler import _list_all_ports")
+        "from .serial_runtime import _list_all_ports", "from serial_handler import _list_all_ports"
+    ).replace("from .signal_lifetime import SignalConnections", "")
 
 
 def _data_send_card_class() -> str:
@@ -1445,19 +1462,16 @@ class DataRecvCard(CardWidget):
         setCustomStyleSheet(self._text, terminal_style, terminal_style)
         root.addWidget(self._text, 1)
         self._count = 0; self._max_lines = 1000; self._handler = None
+        self._serial_connections = SignalConnections(self)
     def set_serial_handler(self, h):
         if h is self._handler: return
-        if self._handler is not None:
-            self._handler.rawReceived.disconnect(self._on_raw)
-            self._handler.dataSent.disconnect(self._on_sent)
-            self._handler.connected.disconnect(self._on_connected)
-            self._handler.disconnected.disconnect(self._on_disconnected)
+        self._serial_connections.clear()
         self._handler = h
         if h is not None:
-            h.rawReceived.connect(self._on_raw)
-            h.dataSent.connect(self._on_sent)
-            h.connected.connect(self._on_connected)
-            h.disconnected.connect(self._on_disconnected)
+            self._serial_connections.connect(h.rawReceived, self._on_raw)
+            self._serial_connections.connect(h.dataSent, self._on_sent)
+            self._serial_connections.connect(h.connected, self._on_connected)
+            self._serial_connections.connect(h.disconnected, self._on_disconnected)
     def _on_connected(self, port): self._sys(f"已连接: {port}")
     def _on_disconnected(self): self._sys("已断开")
     def _on_raw(self, data):
@@ -1521,6 +1535,7 @@ class ModbusConfigCard(CardWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._poll_timer = QTimer(self); self._poll_timer.timeout.connect(self._do_send)
         self._polling = False; self._handler = None
+        self._serial_connections = SignalConnections(self)
         root = QVBoxLayout(self); root.setContentsMargins(16,12,16,12); root.setSpacing(8)
         LW = 56
         hdr = QHBoxLayout()
@@ -1555,14 +1570,12 @@ class ModbusConfigCard(CardWidget):
         self._val_lbl.setText("写入值" if fc in (5,6) else "数量")
     def set_serial_handler(self, h):
         if h is self._handler: return
-        if self._handler is not None:
-            self._handler.connected.disconnect(self._on_connected)
-            self._handler.disconnected.disconnect(self._on_disconnected)
+        self._serial_connections.clear()
         self._stop_poll()
         self._handler = h
         if h is not None:
-            h.connected.connect(self._on_connected)
-            h.disconnected.connect(self._on_disconnected)
+            self._serial_connections.connect(h.connected, self._on_connected)
+            self._serial_connections.connect(h.disconnected, self._on_disconnected)
     def _on_connected(self, port): self._status.setText(f"已连接: {port}")
     def _on_disconnected(self):
         self._stop_poll()

@@ -4,6 +4,7 @@ import darkdetect
 from PyQt5.QtCore import QObject, QTimer
 from PyQt5.QtGui import QColor, QPalette
 from qfluentwidgets import Theme, isDarkTheme, qconfig, setTheme, themeColor
+from .signal_lifetime import SignalConnections
 
 
 class ThemeController(QObject):
@@ -15,8 +16,9 @@ class ThemeController(QObject):
         self._timer = QTimer(self)
         self._timer.setInterval(2000)
         self._timer.timeout.connect(self._check_system_theme)
-        qconfig.themeChangedFinished.connect(self._apply_palette)
-        app.aboutToQuit.connect(self._timer.stop)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(qconfig.themeChangedFinished, self._apply_palette)
+        self._external_connections.connect(app.aboutToQuit, self._timer.stop)
         mode = mode if isinstance(mode, Theme) else Theme(mode)
         # setTheme alone skips resolving Auto when the saved mode is unchanged.
         qconfig.theme = mode

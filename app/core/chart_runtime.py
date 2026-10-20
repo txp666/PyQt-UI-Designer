@@ -18,6 +18,7 @@ from qfluentwidgets import (
 from .chart_history import ChartHistory
 from .protocol_parser import RawFrameBuffer
 from .binding_values import binding_register
+from .signal_lifetime import SignalConnections
 
 try:
     import pyqtgraph as pg
@@ -116,6 +117,8 @@ class RealtimeLineChart(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._serial_connections = SignalConnections(self)
+        self._external_connections = SignalConnections(self)
         self._root = QVBoxLayout(self)
         self._root.setContentsMargins(0, 0, 0, 0)
         self._root.setSpacing(2)
@@ -149,8 +152,10 @@ class RealtimeLineChart(QWidget):
                 pen=pg.mkPen(color=(255, 0, 0, 180), width=1, style=Qt.DashLine))
             self._cursor_line.setVisible(False)
             self._plot.addItem(self._cursor_line)
-            self._cursor_line.sigPositionChanged.connect(self._on_cursor_moved)
-            self._plot.scene().sigMouseClicked.connect(self._on_plot_clicked)
+            self._external_connections.connect(
+                self._cursor_line.sigPositionChanged, self._on_cursor_moved)
+            self._external_connections.connect(
+                self._plot.scene().sigMouseClicked, self._on_plot_clicked)
         else:
             self._missing_label = BodyLabel("需要安装 pyqtgraph")
             self._missing_label.setAlignment(Qt.AlignCenter)
@@ -202,7 +207,7 @@ class RealtimeLineChart(QWidget):
         self._root.addLayout(self._cb_row)
 
         self._rebuild_curves()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._external_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     # -- public configuration -------------------------------------------------
 
@@ -386,7 +391,7 @@ class RealtimeLineChart(QWidget):
             self._cursor_line.blockSignals(False)
         self._update_table_at_cursor(x)
 
-    def _on_cursor_moved(self):
+    def _on_cursor_moved(self, *_):
         if not self._cursor_line:
             return
         self._cursor_mode = True

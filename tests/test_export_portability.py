@@ -163,14 +163,16 @@ print("RELOCATED_IMAGES_OK")
                 compile(source.read_text(encoding="utf-8"), str(source), "exec")
             code = f"KEYS = {keys!r}\n" + r'''
 import sys
-from types import SimpleNamespace
 from unittest.mock import Mock
 sys.path.insert(0, sys.argv[1])
 from serial_handler import SerialHandler
 from data_binding import DataBinding
+from PyQt5.QtCore import QObject
 handler = SerialHandler()
 widgets = {f"label_{index}": Mock() for index in range(len(KEYS))}
-binding = DataBinding(SimpleNamespace(widgets=widgets), handler)
+ui = QObject()
+ui.widgets = widgets
+binding = DataBinding(ui, handler)
 handler.dataReceived.emit({key: index + 10 for index, key in enumerate(KEYS)})
 for index, widget in enumerate(widgets.values()):
     widget.setText.assert_called_once_with(str(index + 10))

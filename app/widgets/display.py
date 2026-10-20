@@ -10,6 +10,7 @@ from qfluentwidgets import ProgressBar, BodyLabel, isDarkTheme, qconfig
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
+from app.core.signal_lifetime import SignalConnections
 
 
 def resolved_image_properties(properties, base_dir=None):
@@ -44,7 +45,8 @@ class LEDIndicator(QWidget):
         self._on = True
         self._label_text = ""
         self.setMinimumSize(20, 20)
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_color(self, name: str):
         self._color_name = name
@@ -110,7 +112,8 @@ class NumericDisplay(QWidget):
         layout.addWidget(self._value_label)
         layout.addWidget(self._unit_label)
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     def apply_theme(self):
         secondary = "#b3b3b3" if isDarkTheme() else "#606060"
@@ -156,7 +159,8 @@ class ImageDisplay(QWidget):
         layout.addWidget(self._label)
         self._path = ""
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     def apply_theme(self):
         dark = isDarkTheme()

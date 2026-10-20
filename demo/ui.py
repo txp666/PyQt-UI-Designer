@@ -42,6 +42,101 @@ except ImportError:
     HAS_PYQTGRAPH = False
 
 
+"""Explicit Qt signal lifetimes, including compiled Python callables."""
+
+
+class SignalConnections:
+    """Disconnect external signals when their owning QObject is destroyed.
+
+    PyQt cannot always infer the QObject receiver of a compiled bound method.
+    Relays therefore have an explicit lifetime and release their callback before
+    disconnecting, so already queued deliveries also become harmless.
+    """
+
+    def __init__(self, owner):
+        self._connections = []
+        owner.destroyed.connect(self.clear)
+
+    def connect(self, signal, slot, *args, **kwargs):
+        callback = [slot]
+
+        def relay(*values):
+            current = callback[0]
+            if current is not None:
+                current(*values)
+
+        connection = signal.connect(relay, *args, **kwargs)
+        self._connections.append((signal, connection, callback))
+        return connection
+
+    def clear(self, *_):
+        connections, self._connections = self._connections, []
+        for _signal, _connection, callback in connections:
+            callback[0] = None
+        for signal, connection, _callback in connections:
+            try:
+                signal.disconnect(connection)
+            except (TypeError, RuntimeError):
+                # The sender or its connection may already have been destroyed.
+                pass
+
+"""Explicit lifetimes for Fluent's external window and configuration signals."""
+from functools import update_wrapper
+
+
+def _bridge_fluent_slot(cls, name, argument_count):
+    original = getattr(cls, name)
+    if getattr(original, "_designer_signal_lifetimes", False):
+        return
+
+    # PyQt recognizes genuine Python bound methods as QObject receivers, but
+    # not Nuitka's compiled_method objects. Runtime-created functions keep this
+    # distinction in a compiled app. Exact arity also preserves Qt's argument
+    # truncation (themeChanged supplies a Theme to a zero-argument handler).
+    parameters = ", value" if argument_count else ""
+    values = "value" if argument_count else ""
+    namespace = {}
+    exec(
+        f"def {name}(self{parameters}):\n"
+        f"    return _original.__get__(self, type(self))({values})\n",
+        {"_original": original}, namespace,
+    )
+    bridge = namespace[name]
+    update_wrapper(bridge, original)
+    bridge._designer_signal_lifetimes = True
+    setattr(cls, name, bridge)
+
+
+def install_fluent_signal_lifetimes():
+    """Give Fluent's long-lived signals QObject-aware slots before creation."""
+    from qfluentwidgets import (
+        OptionsSettingCard, SwitchSettingCard, RangeSettingCard,
+        ColorSettingCard, ComboBoxSettingCard,
+    )
+    from qfluentwidgets.common.animation import BackgroundAnimationWidget
+    from qfluentwidgets.window.fluent_window import FluentWidget, FluentTitleBar
+
+    _bridge_fluent_slot(BackgroundAnimationWidget, "_updateBackgroundColor", 0)
+    _bridge_fluent_slot(FluentWidget, "_onThemeChangedFinished", 0)
+    _bridge_fluent_slot(FluentTitleBar, "setTitle", 1)
+    _bridge_fluent_slot(FluentTitleBar, "setIcon", 1)
+    for cls in (OptionsSettingCard, SwitchSettingCard, RangeSettingCard,
+                ColorSettingCard, ComboBoxSettingCard):
+        _bridge_fluent_slot(cls, "setValue", 1)
+
+
+class TitleBarLifecycleMixin:
+    """Install QObject-aware slots before Fluent creates its widget tree.
+
+    FluentWindow replaces its initial FluentWidgetTitleBar during construction.
+    Both title bars must connect the Python bridge from the start: retrieving a
+    fresh compiled bound method later cannot reliably disconnect the first one.
+    """
+
+    def __init__(self, *args, **kwargs):
+        install_fluent_signal_lifetimes()
+        super().__init__(*args, **kwargs)
+
 """Command encoders shared by preview and standalone applications."""
 import math
 import struct
@@ -167,7 +262,8 @@ class LEDIndicator(QWidget):
         self._on = True
         self._label_text = ""
         self.setMinimumSize(20, 20)
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
     def set_color(self, name): self._color_name = name; self.update()
     def set_on(self, on): self._on = on; self.update()
     def set_label(self, text): self._label_text = text; self.update()
@@ -198,7 +294,8 @@ class NumericDisplay(QWidget):
         self._unit = QLabel(""); self._unit.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._title); layout.addWidget(self._value); layout.addWidget(self._unit)
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
     def apply_theme(self):
         secondary = "#b3b3b3" if isDarkTheme() else "#606060"
         self._title.setStyleSheet(f"color:{secondary};font-size:11px;")
@@ -217,6 +314,44 @@ class NumericDisplay(QWidget):
         color = getattr(self, "_val_color", "#0078d4")
         size = getattr(self, "_val_font_size", 28)
         self._value.setStyleSheet(f"font-size:{size}px;font-weight:bold;color:{color};")
+
+"""Explicit Qt signal lifetimes, including compiled Python callables."""
+
+
+class SignalConnections:
+    """Disconnect external signals when their owning QObject is destroyed.
+
+    PyQt cannot always infer the QObject receiver of a compiled bound method.
+    Relays therefore have an explicit lifetime and release their callback before
+    disconnecting, so already queued deliveries also become harmless.
+    """
+
+    def __init__(self, owner):
+        self._connections = []
+        owner.destroyed.connect(self.clear)
+
+    def connect(self, signal, slot, *args, **kwargs):
+        callback = [slot]
+
+        def relay(*values):
+            current = callback[0]
+            if current is not None:
+                current(*values)
+
+        connection = signal.connect(relay, *args, **kwargs)
+        self._connections.append((signal, connection, callback))
+        return connection
+
+    def clear(self, *_):
+        connections, self._connections = self._connections, []
+        for _signal, _connection, callback in connections:
+            callback[0] = None
+        for signal, connection, _callback in connections:
+            try:
+                signal.disconnect(connection)
+            except (TypeError, RuntimeError):
+                # The sender or its connection may already have been destroyed.
+                pass
 
 """Conversions shared by live bindings and standalone exported applications."""
 import math
@@ -349,6 +484,7 @@ from qfluentwidgets import (
 from serial_handler import RawFrameBuffer
 
 
+
 try:
     import pyqtgraph as pg
     HAS_PYQTGRAPH = True
@@ -446,6 +582,8 @@ class RealtimeLineChart(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._serial_connections = SignalConnections(self)
+        self._external_connections = SignalConnections(self)
         self._root = QVBoxLayout(self)
         self._root.setContentsMargins(0, 0, 0, 0)
         self._root.setSpacing(2)
@@ -479,8 +617,10 @@ class RealtimeLineChart(QWidget):
                 pen=pg.mkPen(color=(255, 0, 0, 180), width=1, style=Qt.DashLine))
             self._cursor_line.setVisible(False)
             self._plot.addItem(self._cursor_line)
-            self._cursor_line.sigPositionChanged.connect(self._on_cursor_moved)
-            self._plot.scene().sigMouseClicked.connect(self._on_plot_clicked)
+            self._external_connections.connect(
+                self._cursor_line.sigPositionChanged, self._on_cursor_moved)
+            self._external_connections.connect(
+                self._plot.scene().sigMouseClicked, self._on_plot_clicked)
         else:
             self._missing_label = BodyLabel("需要安装 pyqtgraph")
             self._missing_label.setAlignment(Qt.AlignCenter)
@@ -532,7 +672,7 @@ class RealtimeLineChart(QWidget):
         self._root.addLayout(self._cb_row)
 
         self._rebuild_curves()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._external_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
     # -- public configuration -------------------------------------------------
 
@@ -716,7 +856,7 @@ class RealtimeLineChart(QWidget):
             self._cursor_line.blockSignals(False)
         self._update_table_at_cursor(x)
 
-    def _on_cursor_moved(self):
+    def _on_cursor_moved(self, *_):
         if not self._cursor_line:
             return
         self._cursor_mode = True
@@ -1021,6 +1161,7 @@ def _hex_to_bytes(s: str) -> bytes:
 class DataTableWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._serial_connections = SignalConnections(self)
         layout = QVBoxLayout(self); layout.setContentsMargins(2,2,2,2)
         self._table = TableWidget(); self._table.setColumnCount(2)
         self._table.setHorizontalHeaderLabels(["字段","值"])
@@ -1030,7 +1171,8 @@ class DataTableWidget(QWidget):
         layout.addWidget(self._table)
         self._max_rows = 500
     def set_serial_handler(self, handler):
-        handler.dataReceived.connect(self.update_kv_data)
+        self._serial_connections.clear()
+        self._serial_connections.connect(handler.dataReceived, self.update_kv_data)
     def set_columns(self, columns):
         self._columns = list(columns) or ["字段", "值"]
         self._table.setColumnCount(len(self._columns))
@@ -1088,19 +1230,16 @@ class LogDisplayBox(QWidget):
         lo.addWidget(self._text)
         self._max_lines = 500
         self._handler = None
+        self._serial_connections = SignalConnections(self)
     def set_serial_handler(self, handler):
         if handler is self._handler: return
-        if self._handler is not None:
-            self._handler.connected.disconnect(self._on_connected)
-            self._handler.disconnected.disconnect(self._on_disconnected)
-            self._handler.error.disconnect(self._on_serial_error)
-            self._handler.dataReceived.disconnect(self._on_parsed_data)
+        self._serial_connections.clear()
         self._handler = handler
         if handler is not None:
-            handler.connected.connect(self._on_connected)
-            handler.disconnected.connect(self._on_disconnected)
-            handler.error.connect(self._on_serial_error)
-            handler.dataReceived.connect(self._on_parsed_data)
+            self._serial_connections.connect(handler.connected, self._on_connected)
+            self._serial_connections.connect(handler.disconnected, self._on_disconnected)
+            self._serial_connections.connect(handler.error, self._on_serial_error)
+            self._serial_connections.connect(handler.dataReceived, self._on_parsed_data)
     def _on_connected(self, port):
         self.append_log(f"串口已连接: {port}", "ok")
     def _on_disconnected(self):
@@ -1144,6 +1283,7 @@ from qfluentwidgets import (
 
 from serial_handler import _list_all_ports
 
+
 class SerialConfigCard(CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port+baud+buttons), 单行 (single-line toolbar).
@@ -1158,6 +1298,8 @@ class SerialConfigCard(CardWidget):
         self._display_mode = "完整"
         self._connected = False
         self._handler = None
+        self._serial_connections = SignalConnections(self)
+        self._theme_connections = SignalConnections(self)
 
         self._root = QVBoxLayout(self)
         self._root.setContentsMargins(16, 12, 16, 12)
@@ -1280,20 +1422,17 @@ class SerialConfigCard(CardWidget):
         self._root.addStretch(1)
 
         self.refresh_ports()
-        qconfig.themeChangedFinished.connect(self.update)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_serial_handler(self, handler):
         if handler is self._handler:
             return
-        if self._handler is not None:
-            self._handler.connected.disconnect(self._on_serial_connected)
-            self._handler.disconnected.disconnect(self._on_serial_disconnected)
-            self._handler.error.disconnect(self._on_serial_error)
+        self._serial_connections.clear()
         self._handler = handler
         if handler is not None:
-            handler.connected.connect(self._on_serial_connected)
-            handler.disconnected.connect(self._on_serial_disconnected)
-            handler.error.connect(self._on_serial_error)
+            self._serial_connections.connect(handler.connected, self._on_serial_connected)
+            self._serial_connections.connect(handler.disconnected, self._on_serial_disconnected)
+            self._serial_connections.connect(handler.error, self._on_serial_error)
             self.set_connected(handler.is_connected)
 
     @staticmethod
@@ -1534,19 +1673,16 @@ class DataRecvCard(CardWidget):
         setCustomStyleSheet(self._text, terminal_style, terminal_style)
         root.addWidget(self._text, 1)
         self._count = 0; self._max_lines = 1000; self._handler = None
+        self._serial_connections = SignalConnections(self)
     def set_serial_handler(self, h):
         if h is self._handler: return
-        if self._handler is not None:
-            self._handler.rawReceived.disconnect(self._on_raw)
-            self._handler.dataSent.disconnect(self._on_sent)
-            self._handler.connected.disconnect(self._on_connected)
-            self._handler.disconnected.disconnect(self._on_disconnected)
+        self._serial_connections.clear()
         self._handler = h
         if h is not None:
-            h.rawReceived.connect(self._on_raw)
-            h.dataSent.connect(self._on_sent)
-            h.connected.connect(self._on_connected)
-            h.disconnected.connect(self._on_disconnected)
+            self._serial_connections.connect(h.rawReceived, self._on_raw)
+            self._serial_connections.connect(h.dataSent, self._on_sent)
+            self._serial_connections.connect(h.connected, self._on_connected)
+            self._serial_connections.connect(h.disconnected, self._on_disconnected)
     def _on_connected(self, port): self._sys(f"已连接: {port}")
     def _on_disconnected(self): self._sys("已断开")
     def _on_raw(self, data):
@@ -1590,7 +1726,7 @@ class DataRecvCard(CardWidget):
         self._trim()
 
 
-class MainUI(FluentWindow):
+class MainUI(TitleBarLifecycleMixin, FluentWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('串口采集 Demo')
@@ -1613,7 +1749,9 @@ class MainUI(FluentWindow):
 
         self.addSubInterface(scroll, FIF.HOME, "主界面")
         self.apply_theme()
-        qconfig.themeChangedFinished.connect(self.apply_theme)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(
+            qconfig.themeChangedFinished, self.apply_theme)
 
 
 

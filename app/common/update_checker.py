@@ -32,6 +32,8 @@ class UpdateCheckThread(QThread):
         self._current = current_version
 
     def run(self):
+        if self.isInterruptionRequested():
+            return
         try:
             req = Request(API_URL, headers={"Accept": "application/vnd.github.v3+json"})
             with urlopen(req, timeout=15) as resp:
@@ -45,14 +47,18 @@ class UpdateCheckThread(QThread):
             current = _parse_version(self._current)
             has_new = latest > current
 
-            self.result.emit(has_new, tag, self._current, html_url, body, "")
+            self._emit_result(has_new, tag, self._current, html_url, body, "")
         except HTTPError as e:
             if e.code == 404:
-                self.result.emit(False, "", self._current, "", "", "")
+                self._emit_result(False, "", self._current, "", "", "")
             else:
-                self.result.emit(False, "", self._current, "", "",
-                                 f"服务器错误: HTTP {e.code}")
+                self._emit_result(False, "", self._current, "", "",
+                                  f"服务器错误: HTTP {e.code}")
         except URLError as e:
-            self.result.emit(False, "", self._current, "", "", f"网络错误: {e.reason}")
+            self._emit_result(False, "", self._current, "", "", f"网络错误: {e.reason}")
         except Exception as e:
-            self.result.emit(False, "", self._current, "", "", f"检查失败: {e}")
+            self._emit_result(False, "", self._current, "", "", f"检查失败: {e}")
+
+    def _emit_result(self, *values):
+        if not self.isInterruptionRequested():
+            self.result.emit(*values)

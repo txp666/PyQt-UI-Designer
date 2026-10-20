@@ -14,6 +14,7 @@ from qfluentwidgets import isDarkTheme
 from app.common.config import cfg
 from app.common.signal_bus import signalBus
 from app.core.widget_registry import registry
+from app.core.signal_lifetime import SignalConnections
 from app.designer.canvas_item import CanvasItem
 
 MIME_WIDGET_TYPE = "application/x-widget-type"
@@ -184,7 +185,9 @@ class DesignView(QGraphicsView):
         self._zoom = 1.0
         self._apply_view_style()
 
-        self.scene().selectionChanged.connect(self._on_selection_changed)
+        self._scene_connections = SignalConnections(self)
+        self._scene_connections.connect(
+            self.scene().selectionChanged, self._on_selection_changed)
 
     def _apply_view_style(self):
         dark = isDarkTheme()

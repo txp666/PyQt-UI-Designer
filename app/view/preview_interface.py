@@ -24,6 +24,7 @@ from app.common.build_support import archive_build, build_environment, build_nui
 from app.widgets.basic import create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
+from app.core.signal_lifetime import SignalConnections
 from app.core.command_runtime import (
     command_hex_frame, command_packed_frame, command_modbus_frame,
 )
@@ -685,7 +686,9 @@ class PreviewInterface(QWidget):
         self._project_data = None
         self._running = False
         self._init_ui()
-        signalBus.showNotification.connect(self._show_notification)
+        self._external_connections = SignalConnections(self)
+        self._external_connections.connect(
+            signalBus.showNotification, self._show_notification)
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
