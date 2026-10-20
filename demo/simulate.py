@@ -22,16 +22,18 @@ class SimulatedPort:
         self._running = True
         self._temperature = 25.0
         self._pressure = 50.0
+        self._setpoint = 50
 
     def _enqueue_sample(self):
         if self._running:
             self._sample += 1
             self._temperature = round(25 + 3 * math.sin(self._sample / 15), 2)
-            self._pressure = round(50 + 18 * math.sin(self._sample / 10), 2)
+            self._pressure = round(self._setpoint + 18 * math.sin(self._sample / 10), 2)
         self._buffer.extend((json.dumps({
             "temperature": self._temperature,
             "pressure": self._pressure,
             "running": int(self._running),
+            "setpoint": self._setpoint,
         }) + "\n").encode("utf-8"))
         self._next_sample = time.monotonic() + 0.2
 
@@ -62,8 +64,14 @@ class SimulatedPort:
                 elif command == b"STOP":
                     self._running = False
                 elif command != b"READ":
-                    self._buffer.extend(b'{"error":"Use START, STOP or READ"}\n')
-                    continue
+                    try:
+                        value = float(command)
+                        if not 20 <= value <= 80 or not value.is_integer():
+                            raise ValueError
+                    except ValueError:
+                        self._buffer.extend(b'{"error":"Use START, STOP, READ or an integer from 20 to 80"}\n')
+                        continue
+                    self._setpoint = int(value)
                 self._enqueue_sample()
             return len(data)
 

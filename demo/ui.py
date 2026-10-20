@@ -602,7 +602,16 @@ class RealtimeLineChart(QWidget):
                 self._mode_label.setText(f"保存失败: {error}")
 
     def load_data(self, path):
+        """Replace samples for existing channels without changing live parsing.
+
+        Identical channel lists retain their order (including duplicate names).
+        Unique names may be reordered in a file. Other channel changes are
+        rejected instead of silently associating samples with another parser.
+        An empty, unconfigured default chart can adopt the file's channels.
+        """
         histories = []
+        adopt_channels = (self._cfgs == [_DEFAULT_CURVE_CFG]
+                          and not any(history.count for history in self._data))
         try:
             with open(path, "r", encoding="utf-8") as source:
                 if str(path).lower().endswith(".json"):
@@ -610,7 +619,8 @@ class RealtimeLineChart(QWidget):
                     obj = json.load(source)
                     if not isinstance(obj, dict):
                         raise ValueError("曲线 JSON 必须是对象")
-                    names = list(obj)[:8]
+                    names = list(obj)
+                    channel_order = self._history_channel_order(names, adopt_channels)
                     for name in names:
                         history = ChartHistory(self.HISTORY_LIMIT)
                         histories.append(history)
@@ -619,14 +629,13 @@ class RealtimeLineChart(QWidget):
                                 history.append(float(value))
                 else:
                     rows = csv.reader(source)
-                    names = next(rows, [])[:8]
+                    names = next(rows, [])
+                    channel_order = self._history_channel_order(names, adopt_channels)
                     histories = [ChartHistory(self.HISTORY_LIMIT) for _ in names]
                     for row in rows:
                         for index, history in enumerate(histories):
                             if index < len(row) and row[index].strip():
                                 history.append(float(row[index]))
-            if not names:
-                raise ValueError("曲线文件没有通道")
         except Exception:
             for history in histories:
                 history.close()
@@ -634,10 +643,26 @@ class RealtimeLineChart(QWidget):
         self._refresh_timer.stop()
         for history in self._data:
             history.close()
-        self._data[:] = histories
-        self._cfgs = [{**_DEFAULT_CURVE_CFG, "name": name} for name in names]
-        self._rebuild_curves()
+        self._data[:] = [histories[index] for index in channel_order]
+        if adopt_channels:
+            self._cfgs = [{**_DEFAULT_CURVE_CFG, "name": name} for name in names]
+            self._rebuild_curves()
         self._refresh_all()
+
+    def _history_channel_order(self, names, adopt_channels=False):
+        expected = [cfg.get("name", f"曲线{i+1}") for i, cfg in enumerate(self._cfgs)]
+        if not names:
+            raise ValueError("曲线文件没有通道")
+        if len(names) > 8:
+            raise ValueError("曲线文件最多支持 8 个通道")
+        if adopt_channels:
+            return list(range(len(names)))
+        if names == expected:
+            return list(range(len(expected)))
+        if (len(names) == len(expected) and len(set(names)) == len(names)
+                and set(names) == set(expected)):
+            return [names.index(name) for name in expected]
+        raise ValueError("曲线文件通道名称或数量与当前配置不一致，请加载对应通道的历史文件")
 
     def _load_data(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -792,39 +817,20 @@ def _hex_to_bytes(s: str) -> bytes:
         return b""
 
 
-class GaugeMeter(QWidget):
+class ProgressRingDisplay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._value=0; self._min=0; self._max=100; self._title="仪表"; self._unit=""
-        self.setMinimumSize(80, 80)
-        qconfig.themeChangedFinished.connect(self.update)
-    def set_value(self, v): self._value=max(self._min,min(self._max,v)); self.update()
-    def set_range(self, lo, hi): self._min=lo; self._max=hi; self.update()
-    def set_title(self, t): self._title=t; self.update()
-    def set_unit(self, u): self._unit=u; self.update()
-    def paintEvent(self, event):
-        p = QPainter(self); p.setRenderHint(QPainter.Antialiasing)
-        from PyQt5.QtCore import QRectF
-        side = min(self.width(), self.height())-10; cx=self.width()/2; cy=self.height()/2; r=side/2
-        arc = QRectF(cx-r, cy-r, side, side)
-        from PyQt5.QtGui import QPen
-        dark = isDarkTheme()
-        bg = QPen(QColor("#555555" if dark else "#dcdcdc"), max(6,side/12)); bg.setCapStyle(Qt.RoundCap)
-        p.setPen(bg); p.drawArc(arc, 225*16, -270*16)
-        ratio = (self._value-self._min)/(self._max-self._min) if self._max>self._min else 0
-        vp = QPen(QColor("#4cc2ff" if dark else "#0078d4"), max(6,side/12)); vp.setCapStyle(Qt.RoundCap)
-        p.setPen(vp); p.drawArc(arc, 225*16, int(-270*ratio*16))
-        p.setPen(QColor("#f3f3f3" if dark else "#1e1e1e")); fs=max(10,int(side/6))
-        p.setFont(QFont(self.font().family(),fs,QFont.Bold))
-        p.drawText(self.rect(), Qt.AlignCenter, f"{self._value:.1f}")
-        p.setFont(QFont(self.font().family(), max(8, int(fs * 0.6))))
-        p.setPen(QColor("#b3b3b3" if dark else "#606060"))
-        p.drawText(self.rect().adjusted(0, int(fs * 1.5), 0, 0),
-                   Qt.AlignHCenter | Qt.AlignTop, self._unit)
-        p.setFont(QFont(self.font().family(), max(8, int(fs * 0.5))))
-        p.drawText(self.rect().adjusted(0, 0, 0, -int(fs * 1.5)),
-                   Qt.AlignHCenter | Qt.AlignBottom, self._title)
-        p.end()
+        lo = QVBoxLayout(self); lo.setContentsMargins(8,8,8,8)
+        lo.setAlignment(Qt.AlignCenter); lo.setSpacing(4)
+        self._ring = ProgressRing(); self._ring.setRange(0,100); self._ring.setValue(0)
+        self._ring.setFixedSize(80,80)
+        self._lbl = BodyLabel("进度"); self._lbl.setAlignment(Qt.AlignCenter)
+        self._val = BodyLabel("0%"); self._val.setAlignment(Qt.AlignCenter)
+        lo.addWidget(self._ring, 0, Qt.AlignCenter)
+        lo.addWidget(self._val); lo.addWidget(self._lbl)
+    def set_label(self, t): self._lbl.setText(t)
+    def set_value(self, v): self._ring.setValue(int(v)); self._val.setText(f"{int(v)}%")
+    def set_maximum(self, m): self._ring.setRange(0, int(m))
 
 # coding: utf-8
 """Composite card widgets: SerialConfigCard, DataSendCard, DataRecvCard, LogBox, ProgressRing."""
@@ -1358,9 +1364,9 @@ class MainUI(FluentWindow):
         self.widgets['pressure'].setGeometry(282, 155, 240, 120)
         self.widgets['pressure'].show()
 
-        self.widgets['gauge'] = GaugeMeter(self._page); self.widgets['gauge'].set_range(0, 100); self.widgets['gauge'].set_title('压力指示'); self.widgets['gauge'].set_unit('kPa'); self.widgets['gauge'].set_value(0)
-        self.widgets['gauge'].setGeometry(530, 145, 150, 140)
-        self.widgets['gauge'].show()
+        self.widgets['pressure_ring'] = ProgressRingDisplay(self._page); self.widgets['pressure_ring'].set_label('压力满量程'); self.widgets['pressure_ring'].set_maximum(100); self.widgets['pressure_ring'].set_value(0)
+        self.widgets['pressure_ring'].setGeometry(530, 145, 160, 140)
+        self.widgets['pressure_ring'].show()
 
         self.widgets['running'] = LEDIndicator(self._page); self.widgets['running'].set_color('green'); self.widgets['running'].set_label('设备运行'); self.widgets['running'].set_on(False)
         self.widgets['running'].setGeometry(730, 154, 220, 40)
@@ -1369,29 +1375,48 @@ class MainUI(FluentWindow):
         self.widgets['start'] = PushButton('启动设备', self._page)
         self.widgets['start'].setGeometry(712, 217, 150, 40)
         self.widgets['start'].show()
-        self.widgets['start'].clicked.connect(lambda: self._send_text_command('START', '\r\n'))
+        self.widgets['start'].clicked.connect(lambda: self._send_text_command(str('START'), '\r\n'))
 
         self.widgets['stop'] = PushButton('停止设备', self._page)
         self.widgets['stop'].setGeometry(886, 217, 150, 40)
         self.widgets['stop'].show()
-        self.widgets['stop'].clicked.connect(lambda: self._send_text_command('STOP', '\r\n'))
+        self.widgets['stop'].clicked.connect(lambda: self._send_text_command(str('STOP'), '\r\n'))
 
         self.widgets['chart'] = RealtimeLineChart(self._page); self.widgets['chart'].configure('[{"name": "温度", "parseMode": "键值匹配", "key": "temperature", "jsonPath": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1}, {"name": "压力", "parseMode": "键值匹配", "key": "pressure", "jsonPath": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1}]', 200); self.widgets['chart'].set_title('实时采样')
-        self.widgets['chart'].setGeometry(24, 300, 642, 365)
+        self.widgets['chart'].setGeometry(24, 355, 642, 310)
         self.widgets['chart'].show()
 
         self.widgets['receive'] = DataRecvCard(self._page)
-        self.widgets['receive'].setGeometry(688, 300, 368, 365)
+        self.widgets['receive'].setGeometry(688, 355, 368, 310)
         self.widgets['receive'].show()
 
         self.widgets['command'] = LineEdit(self._page); self.widgets['command'].setPlaceholderText('输入 READ、START 或 STOP，按回车发送')
         self.widgets['command'].setGeometry(24, 690, 440, 36)
         self.widgets['command'].show()
-        self.widgets['command'].returnPressed.connect(lambda: self._send_text_command(self.widgets['command'].text().strip(), '\r\n'))
+        self.widgets['command'].returnPressed.connect(lambda: self._send_text_command(str(self.widgets['command'].text().strip()), '\r\n'))
 
         self.widgets['protocol_hint'] = BodyLabel('默认 115200 / 8N1 · 每行 JSON 或键值文本', self._page); _font = self.widgets['protocol_hint'].font(); _font.setPointSize(12); _font.setBold(False); self.widgets['protocol_hint'].setFont(_font); self.widgets['protocol_hint'].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.widgets['protocol_hint'].setGeometry(490, 690, 566, 36)
         self.widgets['protocol_hint'].show()
+
+        self.widgets['setpoint_label'] = BodyLabel('压力中心', self._page); _font = self.widgets['setpoint_label'].font(); _font.setPointSize(13); _font.setBold(False); self.widgets['setpoint_label'].setFont(_font); self.widgets['setpoint_label'].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.widgets['setpoint_label'].setGeometry(24, 295, 110, 36)
+        self.widgets['setpoint_label'].show()
+
+        self.widgets['setpoint_slider'] = Slider(Qt.Horizontal, self._page); self.widgets['setpoint_slider'].setRange(20, 80); self.widgets['setpoint_slider'].setValue(50)
+        self.widgets['setpoint_slider'].setGeometry(140, 295, 300, 36)
+        self.widgets['setpoint_slider'].show()
+        self.widgets['setpoint_slider'].valueChanged.connect(lambda v: self._send_text_command(str(v), '\r\n'))
+
+        self.widgets['setpoint_spin'] = SpinBox(self._page); self.widgets['setpoint_spin'].setRange(20, 80); self.widgets['setpoint_spin'].setValue(50); self.widgets['setpoint_spin'].setSuffix(' kPa')
+        self.widgets['setpoint_spin'].setGeometry(460, 295, 160, 36)
+        self.widgets['setpoint_spin'].show()
+        self.widgets['setpoint_spin'].valueChanged.connect(lambda v: self._send_text_command(str(v), '\r\n'))
+
+        _tw = QWidget(self._page); _tl = QHBoxLayout(_tw); _tl.setContentsMargins(0,0,0,0); _sw = SwitchButton(); _sw.setChecked(False); _tl.addWidget(BodyLabel('设备运行')); _tl.addStretch(); _tl.addWidget(_sw); _tw._switch = _sw; self.widgets['run_switch'] = _tw
+        self.widgets['run_switch'].setGeometry(710, 295, 325, 36)
+        self.widgets['run_switch'].show()
+        self.widgets['run_switch']._switch.checkedChanged.connect(lambda c: self._send_text_command(str('START'), '\r\n') if c else self._send_text_command(str('STOP'), '\r\n'))
 
 
     def _send_text_command(self, cmd, suffix="\r\n"):

@@ -445,7 +445,7 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
             return (f"self._send_packed_value({val_expr}, "
                     f"{repr(bo + fmt)}, {cast}, {tpl_repr}, {repr(fh)}, {repr(ft)})")
         if tpl == "{value}":
-            raw_expr = val_expr
+            raw_expr = f"str({val_expr})"
         else:
             raw_expr = f"{tpl_repr}.replace('{{value}}', str({val_expr}))"
         if mode == "HEX":
@@ -474,20 +474,21 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
                 f"lambda: {_tpl_send(repr(cmd))})")
 
     elif wtype == "ToggleSwitch":
+        switch_ref = f"{w_ref}._switch"
         on_cmd = props.get("onCommand", "").strip()
         off_cmd = props.get("offCommand", "").strip()
         if mode == "Modbus":
             slave = int(props.get("mbSlave", 1))
             addr = int(props.get("mbAddress", 0))
             result.append(
-                f"        {w_ref}.checkedChanged.connect("
+                f"        {switch_ref}.checkedChanged.connect("
                 f"lambda c: self._send_modbus({slave}, 5, {addr}, "
                 f"0xFF00 if c else 0x0000))")
         elif on_cmd or off_cmd:
             result.append(
-                f"        {w_ref}.checkedChanged.connect("
-                f"lambda c: {_tpl_send(repr(on_cmd))} "
-                f"if c else {_tpl_send(repr(off_cmd))})")
+                f"        {switch_ref}.checkedChanged.connect("
+                f"lambda c: {_tpl_send(repr(on_cmd)) if on_cmd else 'None'} "
+                f"if c else {_tpl_send(repr(off_cmd)) if off_cmd else 'None'})")
 
     elif wtype == "LineEdit" and (props.get("sendOnEnter") or mode == "Modbus"):
         if mode == "Modbus":
@@ -547,7 +548,7 @@ def _gen_notify_connection(wid: str, wtype: str, props: dict) -> list:
     if wtype == "PushButton":
         result.append(f"        {w_ref}.clicked.connect({cb})")
     elif wtype == "ToggleSwitch":
-        result.append(f"        {w_ref}.checkedChanged.connect({cb})")
+        result.append(f"        {w_ref}._switch.checkedChanged.connect({cb})")
     return result
 
 
@@ -587,8 +588,12 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                 f"self.widgets['{wid}'].setRange({props.get('minimum', 0)}, {props.get('maximum', 100)}); "
                 f"self.widgets['{wid}'].setValue({props.get('value', 50)})")
     if wtype == "SpinBox":
-        return (f"self.widgets['{wid}'] = SpinBox({pv}); "
-                f"self.widgets['{wid}'].setRange({props.get('minimum', 0)}, {props.get('maximum', 100)})")
+        code = (f"self.widgets['{wid}'] = SpinBox({pv}); "
+                f"self.widgets['{wid}'].setRange({props.get('minimum', 0)}, {props.get('maximum', 100)}); "
+                f"self.widgets['{wid}'].setValue({props.get('value', 0)})")
+        if props.get("suffix"):
+            code += f"; self.widgets['{wid}'].setSuffix({(' ' + props['suffix'])!r})"
+        return code
     if wtype == "LEDIndicator":
         return (f"self.widgets['{wid}'] = LEDIndicator({pv}); "
                 f"self.widgets['{wid}'].set_color({repr(props.get('color', 'green'))}); "
@@ -750,6 +755,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         '# coding: utf-8',
         '"""Auto-generated data binding."""',
         'import struct',
+        'from PyQt5.QtCore import QSignalBlocker',
     ]
     if has_chart:
         lines.append('from ui import RealtimeLineChart')
@@ -973,14 +979,21 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
         lines.append(f"{indent}    else:")
         lines.append(f"{indent}        try: w.set_on(float(_sv) == float({repr(on_val)}))")
         lines.append(f"{indent}        except (ValueError, TypeError): w.set_on(bool(_sv))")
-    elif wtype in ("ProgressBar", "ProgressRingDisplay"):
+    elif wtype == "ProgressBar":
         lines.append(f"{indent}    w.setValue(int(value))")
+    elif wtype == "ProgressRingDisplay":
+        lines.append(f"{indent}    w.set_value(int(value))")
     elif wtype == "GaugeMeter":
         lines.append(f"{indent}    w.set_value(float(value))")
     elif wtype in ("Slider", "SpinBox"):
-        lines.append(f"{indent}    w.setValue(int(value))")
+        lines.append(f"{indent}    with QSignalBlocker(w):")
+        lines.append(f"{indent}        w.setValue(int(value))")
+        if wtype == "Slider":
+            lines.append(f"{indent}    # Fluent normally moves its handle in the blocked valueChanged signal.")
+            lines.append(f"{indent}    w._adjustHandlePos()")
     elif wtype == "ToggleSwitch":
-        lines.append(f"{indent}    w.setChecked(bool(value))")
+        lines.append(f"{indent}    with QSignalBlocker(w._switch):")
+        lines.append(f"{indent}        w._switch.setChecked(bool(value))")
     else:
         lines.append(f"{indent}    if hasattr(w, 'setText'): w.setText(str(value))")
     lines.append("")

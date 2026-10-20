@@ -69,12 +69,20 @@ def exercise_application():
 
     def assert_latest_sample():
         sample = samples[-1]
-        assert set(sample) >= {"temperature", "pressure", "running"}
+        assert set(sample) >= {"temperature", "pressure", "running", "setpoint"}
         assert abs(float(widgets["temperature"]._value.text()) -
                    sample["temperature"]) < 0.011
         assert abs(float(widgets["pressure"]._value.text()) -
                    sample["pressure"]) < 0.011
         assert widgets["running"]._on == bool(sample["running"])
+        assert widgets["run_switch"]._switch.isChecked() == bool(sample["running"])
+        assert widgets["setpoint_slider"].value() == sample["setpoint"]
+        slider = widgets["setpoint_slider"]
+        expected_x = int((sample["setpoint"] - slider.minimum()) /
+                         (slider.maximum() - slider.minimum()) * slider.grooveLength)
+        assert slider.handle.x() == expected_x
+        assert widgets["setpoint_spin"].value() == sample["setpoint"]
+        assert widgets["pressure_ring"]._ring.value() == int(sample["pressure"])
         assert len(chart._data) == 2
         assert chart._data[0][-1] == sample["temperature"]
         assert chart._data[1][-1] == sample["pressure"]
@@ -96,6 +104,7 @@ def exercise_application():
                 state["phase"] = "receiving"
             elif phase == "receiving" and len(samples) >= 3:
                 assert_latest_sample()
+                assert not sent, "Device updates must not echo commands"
                 assert len(received) >= 3
                 assert samples[-1]["running"] == 1
                 assert samples[0]["temperature"] != samples[-1]["temperature"]
@@ -121,6 +130,31 @@ def exercise_application():
                 assert_latest_sample()
                 if (samples[-1]["temperature"], samples[-1]["pressure"]) == state["stopped_values"]:
                     return
+                assert sent == [b"STOP\r\n", b"START\r\n"], sent
+                widgets["setpoint_slider"].setValue(60)
+                assert sent[-1] == b"60\r\n", sent
+                state["phase"] = "slider"
+            elif phase == "slider" and samples[-1]["setpoint"] == 60:
+                assert_latest_sample()
+                assert len(sent) == 3, sent
+                widgets["setpoint_spin"].setValue(40)
+                assert sent[-1] == b"40\r\n", sent
+                state["phase"] = "spin"
+            elif phase == "spin" and samples[-1]["setpoint"] == 40:
+                assert_latest_sample()
+                assert len(sent) == 4, sent
+                widgets["run_switch"]._switch.setChecked(False)
+                assert sent[-1] == b"STOP\r\n", sent
+                state["phase"] = "switch_off"
+            elif phase == "switch_off" and samples[-1]["running"] == 0:
+                assert_latest_sample()
+                assert len(sent) == 5, sent
+                widgets["run_switch"]._switch.setChecked(True)
+                assert sent[-1] == b"START\r\n", sent
+                state["phase"] = "switch_on"
+            elif phase == "switch_on" and samples[-1]["running"] == 1:
+                assert_latest_sample()
+                assert len(sent) == 6, sent
                 state["read_count"] = len(samples)
                 widgets["command"].setText("READ")
                 QTest.keyClick(widgets["command"], Qt.Key_Return)
@@ -128,6 +162,7 @@ def exercise_application():
                 state["phase"] = "reading"
             elif phase == "reading" and len(samples) > state["read_count"]:
                 assert_latest_sample()
+                assert len(sent) == 7, sent
                 assert "READ" in receive._text.toPlainText()
                 old_thread = serial._thread
                 state["old_port"] = serial._port

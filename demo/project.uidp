@@ -104,19 +104,17 @@
       }
     },
     {
-      "id": "gauge",
-      "type": "GaugeMeter",
+      "id": "pressure_ring",
+      "type": "ProgressRingDisplay",
       "geometry": {
         "x": 530,
         "y": 145,
-        "w": 150,
+        "w": 160,
         "h": 140
       },
       "properties": {
-        "title": "压力指示",
-        "unit": "kPa",
+        "label": "压力满量程",
         "value": 0,
-        "minimum": 0,
         "maximum": 100
       },
       "binding": {
@@ -212,9 +210,9 @@
       "type": "RealtimeChart",
       "geometry": {
         "x": 24,
-        "y": 300,
+        "y": 355,
         "w": 642,
-        "h": 365
+        "h": 310
       },
       "properties": {
         "title": "实时采样",
@@ -246,9 +244,9 @@
       "type": "DataRecvCard",
       "geometry": {
         "x": 688,
-        "y": 300,
+        "y": 355,
         "w": 368,
-        "h": 365
+        "h": 310
       },
       "properties": {
         "title": "数据接收",
@@ -296,6 +294,118 @@
         "bold": false,
         "alignment": "Left",
         "displayFormat": "自动"
+      }
+    },
+    {
+      "id": "setpoint_label",
+      "type": "Label",
+      "geometry": {
+        "x": 24,
+        "y": 295,
+        "w": 110,
+        "h": 36
+      },
+      "properties": {
+        "text": "压力中心",
+        "fontSize": 13,
+        "bold": false,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      }
+    },
+    {
+      "id": "setpoint_slider",
+      "type": "Slider",
+      "geometry": {
+        "x": 140,
+        "y": 295,
+        "w": 300,
+        "h": 36
+      },
+      "properties": {
+        "minimum": 20,
+        "maximum": 80,
+        "value": 50,
+        "sendOnChange": true,
+        "commandMode": "文本",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "commandNewline": "\\r\\n",
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "setpoint"
+      }
+    },
+    {
+      "id": "setpoint_spin",
+      "type": "SpinBox",
+      "geometry": {
+        "x": 460,
+        "y": 295,
+        "w": 160,
+        "h": 36
+      },
+      "properties": {
+        "minimum": 20,
+        "maximum": 80,
+        "value": 50,
+        "suffix": "kPa",
+        "sendOnChange": true,
+        "commandMode": "文本",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "commandNewline": "\\r\\n",
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "setpoint"
+      }
+    },
+    {
+      "id": "run_switch",
+      "type": "ToggleSwitch",
+      "geometry": {
+        "x": 710,
+        "y": 295,
+        "w": 325,
+        "h": 36
+      },
+      "properties": {
+        "label": "设备运行",
+        "checked": false,
+        "commandMode": "文本",
+        "onCommand": "START",
+        "offCommand": "STOP",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbAddress": 0,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "开关已切换",
+        "notifyType": "信息",
+        "notifyDuration": 3000
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "running"
       }
     }
   ],

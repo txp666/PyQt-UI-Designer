@@ -118,6 +118,101 @@ class ChartTests(unittest.TestCase):
             chart.on_raw(bytes.fromhex("0355aa"))
             self.assertEqual(chart._data[0].count, 2)
 
+    def test_history_load_preserves_all_live_parsers_and_matches_reordered_names(self):
+        cfgs = [
+            {"name": "温度", "parseMode": "键值匹配", "key": "custom_temperature"},
+            {"name": "压力", "parseMode": "JSON路径", "jsonPath": "sensors.1.value"},
+            {"name": "计数", "parseMode": "Modbus", "regIndex": 2,
+             "mbDataType": "uint32", "mbRegOrder": "小端(CD AB)",
+             "mbFcFilter": 3, "mbSlaveFilter": 7},
+            {"name": "电压", "parseMode": "HEX字节提取", "byteOffset": 1,
+             "dataType": "uint16", "byteOrder": "小端(LE)",
+             "frameHeader": "AA55", "frameTail": "55AA"},
+        ]
+        recorded = {"温度": [1, 2], "压力": [3, 4], "计数": [5, 6], "电压": [7, 8]}
+        for cls in self.chart_classes:
+            for extension in ("csv", "json"):
+                with self.subTest(runtime=cls.__module__, format=extension):
+                    chart = self.make_chart(cls)
+                    chart.configure(cfgs)
+                    chart._checkboxes[1].setChecked(False)
+                    chart.append_value(0, 999)
+                    chart.on_raw(bytes.fromhex("aa5501"))
+                    with tempfile.TemporaryDirectory() as folder:
+                        path = Path(folder) / f"history.{extension}"
+                        reordered = dict(reversed(list(recorded.items())))
+                        if extension == "json":
+                            path.write_text(json.dumps(reordered), encoding="utf-8")
+                        else:
+                            with path.open("w", encoding="utf-8", newline="") as output:
+                                writer = csv.writer(output)
+                                writer.writerow(reordered)
+                                writer.writerows(zip(*reordered.values()))
+                        chart.load_data(path)
+                    self.assertEqual(chart._cfgs, cfgs)
+                    self.assertFalse(chart._checkboxes[1].isChecked())
+                    self.assertEqual([list(h.values()) for h in chart._data],
+                                     list(recorded.values()))
+                    chart.on_parsed({"custom_temperature": 12,
+                                     "sensors": [{}, {"value": 13}],
+                                     "fc": 3, "slave": 7,
+                                     "reg2": 0x5678, "reg3": 0x1234})
+                    chart.on_raw(bytes.fromhex("020355aa"))
+                    self.assertEqual([list(h.values()) for h in chart._data],
+                                     [[1, 2, 12], [3, 4, 13],
+                                      [5, 6, 0x12345678], [7, 8, 770]])
+                    # Modbus filters must also survive history import.
+                    chart.on_parsed({"fc": 4, "slave": 7, "reg2": 1, "reg3": 0})
+                    self.assertEqual(chart._data[2].count, 3)
+
+    def test_history_channel_mismatch_preserves_config_and_samples(self):
+        for cls in self.chart_classes:
+            chart = self.make_chart(cls)
+            chart.configure([{"name": "温度", "key": "temp"},
+                             {"name": "压力", "key": "pressure"}])
+            chart.on_parsed({"temp": 42, "pressure": 7})
+            for header in (["温度"], ["温度", "压力", "多余"],
+                           ["改名", "压力"], ["温度", "温度"], list("123456789")):
+                with self.subTest(runtime=cls.__module__, channels=header):
+                    with tempfile.TemporaryDirectory() as folder:
+                        path = Path(folder) / "mismatched.csv"
+                        with path.open("w", encoding="utf-8", newline="") as output:
+                            csv.writer(output).writerows([header, [1] * len(header)])
+                        with self.assertRaises(ValueError):
+                            chart.load_data(path)
+                    self.assertEqual([list(h.values()) for h in chart._data], [[42], [7]])
+                    self.assertEqual(chart._cfgs,
+                                     [{"name": "温度", "key": "temp"},
+                                      {"name": "压力", "key": "pressure"}])
+            chart.on_parsed({"temp": 43, "pressure": 8})
+            self.assertEqual([list(h.values()) for h in chart._data], [[42, 43], [7, 8]])
+
+    def test_empty_default_chart_can_import_arbitrary_history_channels(self):
+        for cls in self.chart_classes:
+            chart = cls()
+            self.addCleanup(lambda chart=chart: sip.delete(chart)
+                            if not sip.isdeleted(chart) else None)
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "history.json"
+                path.write_text(json.dumps({"温度": [1, 2], "压力": [3]}), encoding="utf-8")
+                chart.load_data(path)
+            self.assertEqual([cfg["name"] for cfg in chart._cfgs], ["温度", "压力"])
+            self.assertEqual([list(h.values()) for h in chart._data], [[1, 2], [3]])
+            chart.on_parsed({"温度": 4, "压力": 5})
+            self.assertEqual([list(h.values()) for h in chart._data], [[1, 2, 4], [3, 5]])
+
+    def test_identical_duplicate_channel_names_keep_original_column_order(self):
+        for cls in self.chart_classes:
+            chart = self.make_chart(cls)
+            chart.configure([{"name": "温度", "key": "first"},
+                             {"name": "温度", "key": "second"}])
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "history.csv"
+                path.write_text("温度,温度\n1,2\n", encoding="utf-8")
+                chart.load_data(path)
+            chart.on_parsed({"first": 3, "second": 4})
+            self.assertEqual([list(h.values()) for h in chart._data], [[1, 3], [2, 4]])
+
 
 class StandaloneExportTests(unittest.TestCase):
     def test_nested_chart_and_serial_card_work_without_designer_imports(self):

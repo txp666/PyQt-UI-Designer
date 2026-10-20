@@ -144,7 +144,8 @@ class PropertyEditor(ScrollArea):
             ("宽度", rect.width(), "geo_w"), ("高度", rect.height(), "geo_h"),
         ]:
             spin = SpinBox()
-            spin.setRange(0, 9999)
+            minimum = {"geo_w": meta.min_width, "geo_h": meta.min_height}.get(attr, 0)
+            spin.setRange(minimum, 9999)
             spin.setValue(int(val))
             spin.valueChanged.connect(lambda v, a=attr: self._on_geo_changed(a, v))
             self._editors[attr] = spin
@@ -519,6 +520,7 @@ class PropertyEditor(ScrollArea):
         item = self._current_item
         pos = item.pos()
         rect = item.rect()
+        meta = registry.get(item.type_name)
 
         if attr == "geo_x":
             item.setPos(value, pos.y())
@@ -526,9 +528,11 @@ class PropertyEditor(ScrollArea):
             item.setPos(pos.x(), value)
         elif attr == "geo_w":
             from PyQt5.QtCore import QRectF
+            value = max(meta.min_width if meta else 1, value)
             item.set_rect(QRectF(0, 0, value, rect.height()))
         elif attr == "geo_h":
             from PyQt5.QtCore import QRectF
+            value = max(meta.min_height if meta else 1, value)
             item.set_rect(QRectF(0, 0, rect.width(), value))
 
         signalBus.canvasChanged.emit()

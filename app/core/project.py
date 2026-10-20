@@ -157,7 +157,9 @@ class ProjectManager:
             item.to_dict() for item in scene.top_level_canvas_items()
         ]
         candidate.file_path = path
-        payload = json.dumps(candidate.to_dict(), indent=2, ensure_ascii=False)
+        document = candidate.to_dict()
+        ProjectData.validate(document)
+        payload = json.dumps(document, indent=2, ensure_ascii=False, allow_nan=False)
         target = Path(path)
         temporary = None
         try:

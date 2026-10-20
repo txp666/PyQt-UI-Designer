@@ -441,7 +441,16 @@ class RealtimeLineChart(QWidget):
                 self._mode_label.setText(f"保存失败: {error}")
 
     def load_data(self, path):
+        """Replace samples for existing channels without changing live parsing.
+
+        Identical channel lists retain their order (including duplicate names).
+        Unique names may be reordered in a file. Other channel changes are
+        rejected instead of silently associating samples with another parser.
+        An empty, unconfigured default chart can adopt the file's channels.
+        """
         histories = []
+        adopt_channels = (self._cfgs == [_DEFAULT_CURVE_CFG]
+                          and not any(history.count for history in self._data))
         try:
             with open(path, "r", encoding="utf-8") as source:
                 if str(path).lower().endswith(".json"):
@@ -449,7 +458,8 @@ class RealtimeLineChart(QWidget):
                     obj = json.load(source)
                     if not isinstance(obj, dict):
                         raise ValueError("曲线 JSON 必须是对象")
-                    names = list(obj)[:8]
+                    names = list(obj)
+                    channel_order = self._history_channel_order(names, adopt_channels)
                     for name in names:
                         history = ChartHistory(self.HISTORY_LIMIT)
                         histories.append(history)
@@ -458,14 +468,13 @@ class RealtimeLineChart(QWidget):
                                 history.append(float(value))
                 else:
                     rows = csv.reader(source)
-                    names = next(rows, [])[:8]
+                    names = next(rows, [])
+                    channel_order = self._history_channel_order(names, adopt_channels)
                     histories = [ChartHistory(self.HISTORY_LIMIT) for _ in names]
                     for row in rows:
                         for index, history in enumerate(histories):
                             if index < len(row) and row[index].strip():
                                 history.append(float(row[index]))
-            if not names:
-                raise ValueError("曲线文件没有通道")
         except Exception:
             for history in histories:
                 history.close()
@@ -473,10 +482,26 @@ class RealtimeLineChart(QWidget):
         self._refresh_timer.stop()
         for history in self._data:
             history.close()
-        self._data[:] = histories
-        self._cfgs = [{**_DEFAULT_CURVE_CFG, "name": name} for name in names]
-        self._rebuild_curves()
+        self._data[:] = [histories[index] for index in channel_order]
+        if adopt_channels:
+            self._cfgs = [{**_DEFAULT_CURVE_CFG, "name": name} for name in names]
+            self._rebuild_curves()
         self._refresh_all()
+
+    def _history_channel_order(self, names, adopt_channels=False):
+        expected = [cfg.get("name", f"曲线{i+1}") for i, cfg in enumerate(self._cfgs)]
+        if not names:
+            raise ValueError("曲线文件没有通道")
+        if len(names) > 8:
+            raise ValueError("曲线文件最多支持 8 个通道")
+        if adopt_channels:
+            return list(range(len(names)))
+        if names == expected:
+            return list(range(len(expected)))
+        if (len(names) == len(expected) and len(set(names)) == len(names)
+                and set(names) == set(expected)):
+            return [names.index(name) for name in expected]
+        raise ValueError("曲线文件通道名称或数量与当前配置不一致，请加载对应通道的历史文件")
 
     def _load_data(self):
         path, _ = QFileDialog.getOpenFileName(

@@ -10,7 +10,7 @@ Supports four parse modes:
 import struct
 from typing import Dict, Any, Optional, List
 
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, QSignalBlocker
 
 from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
@@ -330,6 +330,9 @@ class DataBindingEngine(QObject):
             "ProgressBar": "value",
             "ProgressRingDisplay": "value",
             "GaugeMeter": "value",
+            "ToggleSwitch": "checked",
+            "Slider": "value",
+            "SpinBox": "value",
         }
         return mapping.get(type_name, "text")
 
@@ -367,6 +370,25 @@ class DataBindingEngine(QObject):
 
     def _apply_to_widget(self, widget, binding: BindingEntry, value):
         prop = binding.prop_name
+
+        # Device feedback updates the display without sending the value back
+        # as another user command (or showing a user-action notification).
+        if binding.type_name == "ToggleSwitch" and prop == "checked":
+            with QSignalBlocker(widget._switch):
+                widget._switch.setChecked(bool(value))
+            return
+        if binding.type_name in ("Slider", "SpinBox") and prop == "value":
+            try:
+                value = int(value)
+            except (TypeError, ValueError, OverflowError):
+                return
+            with QSignalBlocker(widget):
+                widget.setValue(value)
+            if binding.type_name == "Slider":
+                # Fluent's separate handle normally moves in valueChanged,
+                # which is blocked to prevent a device-to-command feedback loop.
+                widget._adjustHandlePos()
+            return
 
         if prop == "__append__":
             if hasattr(widget, "append_value"):

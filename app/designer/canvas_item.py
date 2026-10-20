@@ -138,41 +138,51 @@ class CanvasItem(QGraphicsRectItem):
     def is_container(self) -> bool:
         return self.type_name in LAYOUT_TYPES
 
-    def add_child(self, child: 'CanvasItem'):
-        """Adopt *child* into this layout container."""
+    def add_child(self, child: 'CanvasItem', *, tab_index: Optional[int] = None,
+                  local_pos: Optional[QPointF] = None, relayout: bool = True):
+        """Adopt a scene item, or restore an explicitly supplied local position.
+
+        Assign the destination page before laying out children so an inactive
+        free-layout page is never resized by the current page's layout.
+        """
         if child._container_parent is self:
             return
+        position = (QPointF(local_pos) if local_pos is not None
+                    else self.mapFromScene(child.scenePos()))
         if child._container_parent:
             child._container_parent.remove_child(child)
 
         child._container_parent = self
         child.setParentItem(self)
+        child.setPos(position)
         if child not in self._container_children:
             self._container_children.append(child)
         if self.type_name == "TabWidget":
-            child.tab_index = self.properties.get("currentTab", 0)
+            child.tab_index = (self.properties.get("currentTab", 0)
+                               if tab_index is None else tab_index)
             mode = self.properties.get(
                 f"_tabLayout_{child.tab_index}", "自由")
             child.setFlag(QGraphicsItem.ItemIsMovable, mode == "自由")
         else:
             child.setFlag(QGraphicsItem.ItemIsMovable, False)
-        self.relayout_children()
+        if relayout:
+            self.relayout_children()
 
     def remove_child(self, child: 'CanvasItem'):
-        """Detach *child* from this container."""
+        """Detach *child*, preserving its position in the scene."""
+        scene_pos = child.scenePos()
         if child in self._container_children:
             self._container_children.remove(child)
         child._container_parent = None
         child.setParentItem(None)
+        child.setPos(scene_pos)
         child.setFlag(QGraphicsItem.ItemIsMovable, True)
         self.relayout_children()
 
     def detach_from_parent(self):
         """Remove this item from its parent container, keeping it in the scene."""
         if self._container_parent:
-            scene_pos = self.scenePos()
             self._container_parent.remove_child(self)
-            self.setPos(scene_pos)
 
     def relayout_children(self):
         """Reposition children according to this container's layout type."""
@@ -196,9 +206,7 @@ class CanvasItem(QGraphicsRectItem):
             avail_w = r.width() - 2 * pad
             for ch in self._container_children:
                 ch.setPos(pad, y)
-                cr = ch.rect()
-                if cr.width() != avail_w:
-                    ch.set_rect(QRectF(0, 0, avail_w, cr.height()))
+                ch._fit_layout_width(avail_w)
                 y += ch.rect().height() + spacing
 
         elif self.type_name == "FlexLayout":
@@ -271,9 +279,7 @@ class CanvasItem(QGraphicsRectItem):
                 y = tab_h
                 for ch in visible:
                     ch.setPos(pad, y)
-                    cr = ch.rect()
-                    if cr.width() != avail_w:
-                        ch.set_rect(QRectF(0, 0, avail_w, cr.height()))
+                    ch._fit_layout_width(avail_w)
                     y += ch.rect().height() + spacing
 
         elif self.type_name == "CardContainer":
@@ -292,10 +298,16 @@ class CanvasItem(QGraphicsRectItem):
                 avail_w = r.width() - 2 * pad
                 for ch in self._container_children:
                     ch.setPos(pad, y)
-                    cr = ch.rect()
-                    if cr.width() != avail_w:
-                        ch.set_rect(QRectF(0, 0, avail_w, cr.height()))
+                    ch._fit_layout_width(avail_w)
                     y += ch.rect().height() + spacing
+
+    def _fit_layout_width(self, available_width: float):
+        """Respect each child's minimum when a narrow parent manages its width."""
+        meta = registry.get(self.type_name)
+        width = max(meta.min_width if meta else MIN_SIZE, available_width)
+        r = self.rect()
+        if r.width() != width:
+            self.set_rect(QRectF(0, 0, width, r.height()))
 
     def collect_all_ids(self) -> List[str]:
         """Recursively collect this item's ID and all children's IDs."""
@@ -476,9 +488,7 @@ class CanvasItem(QGraphicsRectItem):
         item.tab_index = data.get("tabIndex", 0)
         for child_data in data.get("children", []):
             child = cls.from_dict(child_data)
-            saved_tab = child_data.get("tabIndex", 0)
-            item.add_child(child)
-            child.tab_index = saved_tab  # restore after add_child
-        if item.type_name == "TabWidget":
-            item.relayout_children()
+            item.add_child(child, tab_index=child.tab_index,
+                           local_pos=child.pos(), relayout=False)
+        item.relayout_children()
         return item

@@ -1,6 +1,7 @@
 # coding: utf-8
 """Auto-generated data binding."""
 import struct
+from PyQt5.QtCore import QSignalBlocker
 from ui import RealtimeLineChart
 
 
@@ -65,9 +66,9 @@ class DataBinding:
 
         if 'pressure' in data:
             value = data['pressure']
-            w = self.ui.widgets.get('gauge')
+            w = self.ui.widgets.get('pressure_ring')
             if w:
-                w.set_value(float(value))
+                w.set_value(int(value))
 
         if 'running' in data:
             value = data['running']
@@ -79,3 +80,26 @@ class DataBinding:
                 else:
                     try: w.set_on(float(_sv) == float('1'))
                     except (ValueError, TypeError): w.set_on(bool(_sv))
+
+        if 'setpoint' in data:
+            value = data['setpoint']
+            w = self.ui.widgets.get('setpoint_slider')
+            if w:
+                with QSignalBlocker(w):
+                    w.setValue(int(value))
+                # Fluent normally moves its handle in the blocked valueChanged signal.
+                w._adjustHandlePos()
+
+        if 'setpoint' in data:
+            value = data['setpoint']
+            w = self.ui.widgets.get('setpoint_spin')
+            if w:
+                with QSignalBlocker(w):
+                    w.setValue(int(value))
+
+        if 'running' in data:
+            value = data['running']
+            w = self.ui.widgets.get('run_switch')
+            if w:
+                with QSignalBlocker(w._switch):
+                    w._switch.setChecked(bool(value))

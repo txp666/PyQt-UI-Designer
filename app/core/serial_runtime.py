@@ -2,7 +2,7 @@
 """Serial runtime shared by the designer and standalone exports."""
 import sys
 from typing import List, Dict
-from PyQt5.QtCore import QThread, pyqtSignal, QObject
+from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QObject
 from .protocol_parser import BaseParser, create_parser
 
 try:
@@ -147,8 +147,8 @@ class SerialHandler(QObject):
         self._port = port_obj
         self._parser = parser
         self._thread = SerialReaderThread(port_obj, parser, self)
-        self._thread.rawReceived.connect(self.rawReceived)
-        self._thread.parsedReceived.connect(self.dataReceived)
+        self._thread.rawReceived.connect(self._on_raw)
+        self._thread.parsedReceived.connect(self._on_parsed)
         self._thread.errorOccurred.connect(self._on_error)
         self._thread.start()
         self.connected.emit(port)
@@ -183,6 +183,23 @@ class SerialHandler(QObject):
     def send_text(self, text, encoding="utf-8"):
         self.send(text.encode(encoding))
 
+    @pyqtSlot(bytes)
+    def _on_raw(self, data):
+        # Events already queued by a stopped reader can arrive after reconnect.
+        if self._thread is not None and self.sender() is self._thread:
+            self.rawReceived.emit(data)
+
+    @pyqtSlot(dict)
+    def _on_parsed(self, data):
+        if self._thread is not None and self.sender() is self._thread:
+            self.dataReceived.emit(data)
+
+    @pyqtSlot(str)
     def _on_error(self, message):
+        reader = self.sender()
+        if reader is not self._thread or reader is None:
+            return
         self.error.emit(message)
-        self.disconnect()
+        # An error observer may already have opened a replacement connection.
+        if self._thread is reader:
+            self.disconnect()
