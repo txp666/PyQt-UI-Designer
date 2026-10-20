@@ -66,6 +66,9 @@ class DataSendCard(CardWidget):
         self._input = LineEdit()
         self._input.setPlaceholderText("输入要发送的数据...")
         self._send_btn = PrimaryPushButton(FIF.SEND, "发送")
+        self._tip_timer = QTimer(self)
+        self._tip_timer.setSingleShot(True)
+        self._tip_timer.timeout.connect(self._restore_send_button)
         self._send_btn.clicked.connect(self._do_send)
         self._input.returnPressed.connect(self._do_send)
         input_row.addWidget(self._input, 1)
@@ -115,13 +118,13 @@ class DataSendCard(CardWidget):
 
     def _flash_tip(self, msg: str):
         """Briefly show a warning tip on the send button, then restore."""
-        original = self._send_btn.text()
         self._send_btn.setText(msg)
         self._send_btn.setEnabled(False)
-        QTimer.singleShot(1200, lambda: (
-            self._send_btn.setText(original),
-            self._send_btn.setEnabled(True),
-        ))
+        self._tip_timer.start(1200)
+
+    def _restore_send_button(self):
+        self._send_btn.setText("发送")
+        self._send_btn.setEnabled(True)
 
     def set_title(self, t): self._title.setText(t)
     def set_placeholder(self, t): self._input.setPlaceholderText(t)
@@ -185,10 +188,14 @@ class DataRecvCard(CardWidget):
         from app.common.signal_bus import signalBus
         signalBus.serialRawReceived.connect(self._on_raw_recv)
         signalBus.serialDataSent.connect(self._on_sent)
-        signalBus.serialConnected.connect(
-            lambda port: self._append_sys(f"已连接: {port}"))
-        signalBus.serialDisconnected.connect(
-            lambda: self._append_sys("已断开"))
+        signalBus.serialConnected.connect(self._on_connected)
+        signalBus.serialDisconnected.connect(self._on_disconnected)
+
+    def _on_connected(self, port):
+        self._append_sys(f"已连接: {port}")
+
+    def _on_disconnected(self):
+        self._append_sys("已断开")
 
     def _on_raw_recv(self, data: bytes):
         from datetime import datetime
@@ -279,13 +286,19 @@ class LogDisplayBox(QFrame):
         self._max_lines = 500
 
         from app.common.signal_bus import signalBus
-        signalBus.serialConnected.connect(
-            lambda port: self.append_log(f"串口已连接: {port}", "ok"))
-        signalBus.serialDisconnected.connect(
-            lambda: self.append_log("串口已断开", "warn"))
-        signalBus.serialError.connect(
-            lambda msg: self.append_log(f"错误: {msg}", "error"))
+        signalBus.serialConnected.connect(self._on_connected)
+        signalBus.serialDisconnected.connect(self._on_disconnected)
+        signalBus.serialError.connect(self._on_serial_error)
         signalBus.serialDataReceived.connect(self._on_parsed_data)
+
+    def _on_connected(self, port):
+        self.append_log(f"串口已连接: {port}", "ok")
+
+    def _on_disconnected(self):
+        self.append_log("串口已断开", "warn")
+
+    def _on_serial_error(self, message):
+        self.append_log(f"错误: {message}", "error")
 
     def _on_parsed_data(self, data: dict):
         parts = [f"{k}={v}" for k, v in data.items()]
@@ -436,10 +449,15 @@ class ModbusConfigCard(CardWidget):
         self._polling = False
 
         from app.common.signal_bus import signalBus
-        signalBus.serialConnected.connect(
-            lambda p: self._status.setText(f"已连接: {p}"))
-        signalBus.serialDisconnected.connect(
-            lambda: (self._stop_poll(), self._status.setText("未连接")))
+        signalBus.serialConnected.connect(self._on_connected)
+        signalBus.serialDisconnected.connect(self._on_disconnected)
+
+    def _on_connected(self, port):
+        self._status.setText(f"已连接: {port}")
+
+    def _on_disconnected(self):
+        self._stop_poll()
+        self._status.setText("未连接")
 
     def _on_fc_changed(self, text: str):
         fc = self._FC_MAP.get(text, 0x03)
@@ -471,8 +489,11 @@ class ModbusConfigCard(CardWidget):
             self._stop_poll()
             self._status.setText(str(exc))
             return
-        serialManager.send(frame)
-        self._status.setText(f"已发送: {frame.hex(' ').upper()}")
+        if serialManager.send(frame):
+            self._status.setText(f"已发送: {frame.hex(' ').upper()}")
+        else:
+            self._stop_poll()
+            self._status.setText("发送失败，请检查串口连接")
 
     def _toggle_poll(self):
         if self._polling:

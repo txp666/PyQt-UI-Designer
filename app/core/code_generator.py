@@ -211,6 +211,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         return types
     widget_types = _collect_types(widgets)
 
+    if "TabWidget" in widget_types:
+        lines.append(runtime_source("tab_geometry.py"))
     if "LEDIndicator" in widget_types:
         lines.append(_led_class())
     if "NumericDisplay" in widget_types:
@@ -362,7 +364,7 @@ class MainUI(FluentWindow):
     return "\n".join(lines)
 
 
-def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str):
+def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=None):
     """Recursively generate widget creation code, handling nested children."""
     for w in widgets:
         wid = w["id"]
@@ -374,7 +376,11 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str):
 
         create_code = _widget_create_code(wid, wtype, props, parent_var)
         lines.append(f"        {create_code}")
-        lines.append(f"        self.widgets[{wid!r}].setGeometry({x}, {y}, {width}, {height})")
+        if tab_var:
+            lines.append(f"        place_tab_child({tab_var}, self.widgets[{wid!r}], "
+                         f"{x}, {y}, {width}, {height})")
+        else:
+            lines.append(f"        self.widgets[{wid!r}].setGeometry({x}, {y}, {width}, {height})")
         lines.append(f"        self.widgets[{wid!r}].show()")
 
         cmd_lines = _gen_command_connection(wid, wtype, props)
@@ -397,7 +403,8 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str):
                     tabs[clamp_tab_index(c.get("tabIndex", 0), page_count)].append(c)
                 for ti, tab_children in sorted(tabs.items()):
                     page_var = f"self.widgets[{wid!r}].widget({ti})"
-                    _gen_widgets_recursive(tab_children, lines, page_var)
+                    _gen_widgets_recursive(tab_children, lines, page_var,
+                                           tab_var=f"self.widgets[{wid!r}]")
             else:
                 child_parent = f"self.widgets[{wid!r}]"
                 _gen_widgets_recursive(children, lines, child_parent)
@@ -538,6 +545,8 @@ def _gen_notify_connection(wid: str, wtype: str, props: dict) -> list:
 
 def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "self._page") -> str:
     """Return Python code line(s) to create a widget."""
+    from app.widgets.base import normalized_range_properties
+    props = normalized_range_properties(wtype, props)
     p = lambda k, d="": repr(props.get(k, d))
     pv = parent_var
 
@@ -970,7 +979,7 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
                 lines.append(f"        _payload = _payload[:_ti]")
             raw_var = "_payload"
         if dt == "ASCII":
-            lines.append(f"        if len({raw_var}) > {off}:")
+            lines.append(f"        if 0 <= {off} <= len({raw_var}):")
             lines.append(f"            value = {raw_var}[{off}:{raw_var}.find(0, {off}) if {raw_var}.find(0, {off}) >= 0 else len({raw_var})].decode('ascii', errors='replace')")
         else:
             fmt_info = {"uint8": ("B", 1), "int8": ("b", 1), "uint16": ("H", 2),
@@ -1117,7 +1126,7 @@ class GaugeMeter(QWidget):
         self.setMinimumSize(80, 80)
         qconfig.themeChangedFinished.connect(self.update)
     def set_value(self, v): self._value=max(self._min,min(self._max,v)); self.update()
-    def set_range(self, lo, hi): self._min=lo; self._max=hi; self.update()
+    def set_range(self, lo, hi): self._min=lo; self._max=max(lo,hi); self.set_value(self._value)
     def set_title(self, t): self._title=t; self.update()
     def set_unit(self, u): self._unit=u; self.update()
     def paintEvent(self, event):
@@ -1314,11 +1323,26 @@ class LogDisplayBox(QWidget):
         setCustomStyleSheet(self._text, terminal_style, terminal_style)
         lo.addWidget(self._text)
         self._max_lines = 500
+        self._handler = None
     def set_serial_handler(self, handler):
-        handler.connected.connect(lambda port: self.append_log(f"串口已连接: {port}", "ok"))
-        handler.disconnected.connect(lambda: self.append_log("串口已断开", "warn"))
-        handler.error.connect(lambda message: self.append_log(f"错误: {message}", "error"))
-        handler.dataReceived.connect(self._on_parsed_data)
+        if handler is self._handler: return
+        if self._handler is not None:
+            self._handler.connected.disconnect(self._on_connected)
+            self._handler.disconnected.disconnect(self._on_disconnected)
+            self._handler.error.disconnect(self._on_serial_error)
+            self._handler.dataReceived.disconnect(self._on_parsed_data)
+        self._handler = handler
+        if handler is not None:
+            handler.connected.connect(self._on_connected)
+            handler.disconnected.connect(self._on_disconnected)
+            handler.error.connect(self._on_serial_error)
+            handler.dataReceived.connect(self._on_parsed_data)
+    def _on_connected(self, port):
+        self.append_log(f"串口已连接: {port}", "ok")
+    def _on_disconnected(self):
+        self.append_log("串口已断开", "warn")
+    def _on_serial_error(self, message):
+        self.append_log(f"错误: {message}", "error")
     def _on_parsed_data(self, data):
         self.append_log(", ".join(f"{key}={value}" for key, value in data.items()))
     def append_log(self, msg, level="info"):
@@ -1422,12 +1446,20 @@ class DataRecvCard(CardWidget):
         root.addWidget(self._text, 1)
         self._count = 0; self._max_lines = 1000; self._handler = None
     def set_serial_handler(self, h):
+        if h is self._handler: return
+        if self._handler is not None:
+            self._handler.rawReceived.disconnect(self._on_raw)
+            self._handler.dataSent.disconnect(self._on_sent)
+            self._handler.connected.disconnect(self._on_connected)
+            self._handler.disconnected.disconnect(self._on_disconnected)
         self._handler = h
-        if h:
+        if h is not None:
             h.rawReceived.connect(self._on_raw)
             h.dataSent.connect(self._on_sent)
-            h.connected.connect(lambda p: self._sys(f"已连接: {p}"))
-            h.disconnected.connect(lambda: self._sys("已断开"))
+            h.connected.connect(self._on_connected)
+            h.disconnected.connect(self._on_disconnected)
+    def _on_connected(self, port): self._sys(f"已连接: {port}")
+    def _on_disconnected(self): self._sys("已断开")
     def _on_raw(self, data):
         ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
         if self._hex_cb.isChecked():
@@ -1522,10 +1554,19 @@ class ModbusConfigCard(CardWidget):
         fc = self._FC.get(t, 3)
         self._val_lbl.setText("写入值" if fc in (5,6) else "数量")
     def set_serial_handler(self, h):
+        if h is self._handler: return
+        if self._handler is not None:
+            self._handler.connected.disconnect(self._on_connected)
+            self._handler.disconnected.disconnect(self._on_disconnected)
+        self._stop_poll()
         self._handler = h
-        if h:
-            h.connected.connect(lambda p: self._status.setText(f"已连接: {p}"))
-            h.disconnected.connect(lambda: (self._stop_poll(), self._status.setText("未连接")))
+        if h is not None:
+            h.connected.connect(self._on_connected)
+            h.disconnected.connect(self._on_disconnected)
+    def _on_connected(self, port): self._status.setText(f"已连接: {port}")
+    def _on_disconnected(self):
+        self._stop_poll()
+        self._status.setText("未连接")
     def _iv(self, e, d=0):
         try: return int(e.text().strip())
         except: return d
@@ -1536,8 +1577,11 @@ class ModbusConfigCard(CardWidget):
             fc = self._FC.get(self._fc.currentText(), 3)
             frame = command_modbus_frame(
                 self._slave.text(), fc, self._addr.text(), self._val.text())
-            self._handler.send(frame)
-            self._status.setText(f"已发送: {frame.hex(' ').upper()}")
+            if self._handler.send(frame):
+                self._status.setText(f"已发送: {frame.hex(' ').upper()}")
+            else:
+                self._stop_poll()
+                self._status.setText("发送失败，请检查串口连接")
         except ValueError as exc:
             self._stop_poll()
             self._status.setText(str(exc))

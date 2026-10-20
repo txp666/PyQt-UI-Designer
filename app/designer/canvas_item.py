@@ -3,7 +3,7 @@
 import uuid
 from typing import Dict, Any, Optional, List
 
-from PyQt5.QtCore import Qt, QRectF, QPointF
+from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint
 from PyQt5.QtGui import QPen, QColor, QBrush, QPainter
 from PyQt5.QtWidgets import (
     QGraphicsItem, QGraphicsRectItem, QGraphicsProxyWidget,
@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 )
 
 from app.widgets.basic import create_widget, apply_property
+from app.widgets.base import normalized_range_properties
 from app.widgets.layout import clamp_tab_index, tab_names
 from app.core.widget_registry import registry
 
@@ -88,11 +89,12 @@ class CanvasItem(QGraphicsRectItem):
     """Wraps a designable widget on the canvas with selection handles."""
 
     def __init__(self, type_name: str, properties: Dict[str, Any],
-                 widget_id: str = None, parent=None):
+                 widget_id: str = None, parent=None, *, asset_base_dir=None):
         super().__init__(parent)
         self.widget_id = widget_id or f"{type_name}_{uuid.uuid4().hex[:6]}"
         self.type_name = type_name
-        self.properties = dict(properties)
+        self.properties = normalized_range_properties(type_name, properties)
+        self._asset_base_dir = asset_base_dir
         if type_name == "TabWidget":
             self.properties["currentTab"] = clamp_tab_index(
                 self.properties.get("currentTab", 0),
@@ -117,7 +119,11 @@ class CanvasItem(QGraphicsRectItem):
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
 
         self._proxy = QGraphicsProxyWidget(self)
-        self._inner_widget = create_widget(type_name, self.properties)
+        widget_properties = self.properties
+        if type_name == "ImageDisplay":
+            from app.widgets.display import resolved_image_properties
+            widget_properties = resolved_image_properties(self.properties, asset_base_dir)
+        self._inner_widget = create_widget(type_name, widget_properties)
         self._inner_widget.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self._proxy.setWidget(self._inner_widget)
         self._proxy.setPos(0, 0)
@@ -246,7 +252,8 @@ class CanvasItem(QGraphicsRectItem):
             current_tab = self.properties.get("currentTab", 0)
             mode = self.properties.get(f"_tabLayout_{current_tab}", "自由")
 
-            tab_h = 32
+            page = self._inner_widget.currentWidget()
+            tab_h = page.mapTo(self._inner_widget, QPoint()).y() if page else 32
             avail_w = r.width() - 2 * pad
 
             visible = []
@@ -341,6 +348,16 @@ class CanvasItem(QGraphicsRectItem):
 
     def set_scene_ref(self, scene):
         self._scene_ref = scene
+        if hasattr(scene, "_asset_base_dir"):
+            self.set_asset_base_dir(scene._asset_base_dir)
+
+    def set_asset_base_dir(self, base_dir):
+        self._asset_base_dir = base_dir
+        if self.type_name == "ImageDisplay":
+            from app.widgets.display import resolved_image_properties
+            props = resolved_image_properties(self.properties, base_dir)
+            apply_property(self._inner_widget, self.type_name, "imagePath",
+                           props.get("imagePath", ""))
 
     def set_grid_size(self, size: int):
         self._grid_size = size
@@ -379,6 +396,19 @@ class CanvasItem(QGraphicsRectItem):
         if self.type_name == "TabWidget" and name == "currentTab":
             value = clamp_tab_index(value, self._inner_widget.count())
         self.properties[name] = value
+        if self.type_name in ("Slider", "SpinBox", "GaugeMeter") and name in (
+                "minimum", "maximum", "value"):
+            self.properties = normalized_range_properties(
+                self.type_name, self.properties, changed=name)
+            if self.type_name == "GaugeMeter":
+                self._inner_widget.set_range(
+                    self.properties["minimum"], self.properties["maximum"])
+                self._inner_widget.set_value(self.properties["value"])
+            else:
+                self._inner_widget.setRange(
+                    self.properties["minimum"], self.properties["maximum"])
+                self._inner_widget.setValue(self.properties["value"])
+            return
         if self.type_name == "TabWidget" and name == "tabLayout":
             ct = self.properties.get("currentTab", 0)
             self.properties[f"_tabLayout_{ct}"] = value
@@ -397,7 +427,12 @@ class CanvasItem(QGraphicsRectItem):
         layout = self._inner_widget.layout()
         old_hint_h = layout.sizeHint().height() if layout else -1
 
-        apply_property(self._inner_widget, self.type_name, name, value)
+        applied_value = value
+        if self.type_name == "ImageDisplay" and name == "imagePath":
+            from app.widgets.display import resolved_image_properties
+            applied_value = resolved_image_properties(
+                self.properties, self._asset_base_dir).get("imagePath", "")
+        apply_property(self._inner_widget, self.type_name, name, applied_value)
         if self.type_name == "TabWidget" and name == "tabNames":
             count = self._inner_widget.count()
             current = clamp_tab_index(self.properties.get("currentTab", 0), count)
@@ -498,16 +533,17 @@ class CanvasItem(QGraphicsRectItem):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CanvasItem":
+    def from_dict(cls, data: dict, *, asset_base_dir=None) -> "CanvasItem":
         props = data.get("properties", {})
-        item = cls(data["type"], props, widget_id=data.get("id"))
+        item = cls(data["type"], props, widget_id=data.get("id"),
+                   asset_base_dir=asset_base_dir)
         geo = data.get("geometry", {})
         item.setPos(geo.get("x", 0), geo.get("y", 0))
         item.set_rect(QRectF(0, 0, geo.get("w", 120), geo.get("h", 40)))
         item.binding = data.get("binding")
         item.tab_index = data.get("tabIndex", 0)
         for child_data in data.get("children", []):
-            child = cls.from_dict(child_data)
+            child = cls.from_dict(child_data, asset_base_dir=asset_base_dir)
             item.add_child(child, tab_index=child.tab_index,
                            local_pos=child.pos(), relayout=False)
         item.relayout_children()

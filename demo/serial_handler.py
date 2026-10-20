@@ -468,8 +468,11 @@ class SerialHandler(QObject):
         flow = flowcontrol if flowcontrol is not None else cfg["flowControl"]
         flow = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}.get(flow, flow)
         try:
-            parser = create_parser(parser_type if parser_type is not None else cfg["parser"],
-                                   parser_config if parser_config is not None else cfg["parserConfig"])
+            selected_parser = parser_type if parser_type is not None else cfg["parser"]
+            selected_config = parser_config
+            if selected_config is None:
+                selected_config = cfg["parserConfig"] if selected_parser == cfg["parser"] else {}
+            parser = create_parser(selected_parser, selected_config)
             if self._thread or self._port:
                 self.disconnect()
             port_obj = serial.Serial(
@@ -511,15 +514,21 @@ class SerialHandler(QObject):
         self.disconnect()
 
     def send(self, data):
-        if self.is_connected:
-            try:
-                self._port.write(data)
-                self.dataSent.emit(data)
-            except Exception as exc:
-                self.error.emit(f"发送失败: {exc}")
+        """Return success only after the port accepts the entire payload."""
+        if not self.is_connected:
+            return False
+        try:
+            written = self._port.write(data)
+            if written != len(data):
+                raise OSError(f"串口仅写入 {written}/{len(data)} 字节")
+        except Exception as exc:
+            self.error.emit(f"发送失败: {exc}")
+            return False
+        self.dataSent.emit(data)
+        return True
 
     def send_text(self, text, encoding="utf-8"):
-        self.send(text.encode(encoding))
+        return self.send(text.encode(encoding))
 
     @pyqtSlot(bytes)
     def _on_raw(self, data):

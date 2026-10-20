@@ -1,9 +1,11 @@
 # coding: utf-8
 """Preview interface — build and run the designed UI in a live window."""
 from functools import partial
+from pathlib import Path
+from copy import deepcopy
 import sys
 
-from PyQt5.QtCore import Qt, QProcess, QTimer, QUrl
+from PyQt5.QtCore import Qt, QProcess, QTimer, QUrl, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
     QDialog, QFileDialog, QSizePolicy,
@@ -35,6 +37,7 @@ class PreviewCanvas(QWidget):
         self.setObjectName("previewCanvas")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._widgets = []
+        self._asset_base_dir = None
         self._update_style()
 
     def _update_style(self):
@@ -50,6 +53,8 @@ class PreviewCanvas(QWidget):
         serialManager.configure(project.serial)
         self._update_style()
         self.setFixedSize(project.canvas_width, project.canvas_height)
+        self._asset_base_dir = (Path(project.file_path).expanduser().resolve().parent
+                                if project.file_path else Path.cwd())
 
         for wd in project.widgets:
             self._create_widget_recursive(wd, self)
@@ -57,6 +62,9 @@ class PreviewCanvas(QWidget):
     def _create_widget_recursive(self, wd: dict, parent_widget: QWidget):
         type_name = wd["type"]
         props = wd.get("properties", {})
+        if type_name == "ImageDisplay":
+            from app.widgets.display import resolved_image_properties
+            props = resolved_image_properties(props, self._asset_base_dir)
         geo = wd.get("geometry", {})
 
         try:
@@ -70,10 +78,15 @@ class PreviewCanvas(QWidget):
 
             widget = create_widget(type_name, props, actual_parent)
             self._enable_interaction(widget)
-            widget.setGeometry(
+            geometry = (
                 int(geo.get("x", 0)), int(geo.get("y", 0)),
                 int(geo.get("w", 120)), int(geo.get("h", 40)),
             )
+            if isinstance(parent_widget, QTabWidget):
+                from app.core.tab_geometry import place_tab_child
+                place_tab_child(parent_widget, widget, *geometry)
+            else:
+                widget.setGeometry(*geometry)
             widget.show()
             self._widgets.append(widget)
 
@@ -102,7 +115,6 @@ class PreviewCanvas(QWidget):
             child.setAttribute(Qt.WA_TransparentForMouseEvents, False)
             if isinstance(child, (QAbstractSpinBox, QLineEdit, QAbstractButton, QTabBar)):
                 child.setFocusPolicy(Qt.StrongFocus)
-                child.setEnabled(True)
 
     _NEWLINE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
     _FC_MAP = {
@@ -661,6 +673,8 @@ class NuitkaPackDialog(QDialog):
 class PreviewInterface(QWidget):
     """Preview page with start/stop controls and the preview canvas."""
 
+    projectDataRequested = pyqtSignal()
+
     _NOTIFY_TYPE_MAP = {
         "成功": "success", "信息": "info", "警告": "warning", "错误": "error",
     }
@@ -714,7 +728,23 @@ class PreviewInterface(QWidget):
         self.on_theme_changed()
 
     def set_project_data(self, data: ProjectData):
-        self._project_data = data
+        # ProjectManager reuses and mutates its ProjectData during export/save.
+        # Keep the running design independent so same-object edits are detected.
+        if self._running and (
+            self._project_data is None
+            or self._project_data.to_dict() != data.to_dict()
+            or self._project_data.file_path != data.file_path
+        ):
+            self._stop_preview()
+            self._status_label.setText("设计已更改，请重新运行预览")
+        self._project_data = deepcopy(data)
+
+    def invalidate_project(self, message="已停止", disconnect=False):
+        """Retire a running design before its commands can target another project."""
+        if self._running or disconnect:
+            self._stop_preview()
+        self._project_data = None
+        self._status_label.setText(message)
 
     def _show_notification(self, title: str, content: str,
                            ntype: str, duration: int):
@@ -733,6 +763,7 @@ class PreviewInterface(QWidget):
         )
 
     def _start_preview(self):
+        self.projectDataRequested.emit()
         if not self._project_data or not self._project_data.widgets:
             InfoBar.warning(
                 "提示", "当前没有可预览的控件，请先在设计器中添加控件",
@@ -748,6 +779,7 @@ class PreviewInterface(QWidget):
         bindingEngine.load_bindings_from_project(self._project_data.widgets)
         bindingEngine.start()
 
+        self._preview_canvas.setEnabled(True)
         self._placeholder.hide()
         self._running = True
         self._run_btn.setEnabled(False)
@@ -759,6 +791,9 @@ class PreviewInterface(QWidget):
         bindingEngine.stop()
         bindingEngine.clear()
 
+        self._preview_canvas.setEnabled(False)
+        from app.core.serial_manager import serialManager
+        serialManager.disconnect()
         self._preview_canvas.clear()
         self._placeholder.show()
         self._running = False
@@ -768,6 +803,7 @@ class PreviewInterface(QWidget):
         signalBus.previewStopped.emit()
 
     def _on_pack(self):
+        self.projectDataRequested.emit()
         if not self._project_data or not self._project_data.widgets:
             InfoBar.warning(
                 "提示", "当前没有可打包的控件，请先在设计器中添加控件",

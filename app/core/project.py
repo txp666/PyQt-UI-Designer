@@ -157,6 +157,11 @@ class ProjectManager:
         candidate.widgets = [
             item.to_dict() for item in scene.top_level_canvas_items()
         ]
+        old_base = (Path(self._current.file_path).expanduser().resolve().parent
+                    if self._current.file_path else Path.cwd())
+        new_base = Path(path).expanduser().resolve().parent
+        if old_base != new_base:
+            self._rebase_image_paths(candidate.widgets, old_base, new_base)
         candidate.file_path = path
         document = candidate.to_dict()
         ProjectData.validate(document)
@@ -176,8 +181,39 @@ class ProjectManager:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
         self._current = candidate
+        scene._asset_base_dir = new_base
+        images = {}
+        def collect_images(items):
+            for item in items:
+                if item["type"] == "ImageDisplay":
+                    images[item["id"]] = item.get("properties", {}).get("imagePath", "")
+                collect_images(item.get("children", []))
+        collect_images(candidate.widgets)
+        def update_images(items):
+            for item in items:
+                if item.widget_id in images:
+                    item.properties["imagePath"] = images[item.widget_id]
+                item.set_asset_base_dir(new_base)
+                update_images(item._container_children)
+        update_images(scene.top_level_canvas_items())
         self._dirty = False
         signalBus.projectSaved.emit(path)
+
+    @staticmethod
+    def _rebase_image_paths(items, old_base, new_base):
+        for item in items:
+            props = item.get("properties", {})
+            path = props.get("imagePath", "")
+            if item["type"] == "ImageDisplay" and path:
+                source = Path(path).expanduser()
+                if not source.is_absolute():
+                    source = (old_base / source).resolve()
+                    try:
+                        props["imagePath"] = Path(os.path.relpath(source, new_base)).as_posix()
+                    except ValueError:
+                        # Windows paths on another drive cannot be made relative.
+                        props["imagePath"] = str(source)
+            ProjectManager._rebase_image_paths(item.get("children", []), old_base, new_base)
 
     def load_to_scene(self, scene: DesignScene, path: str):
         """Load a .uidp file and populate the scene."""
@@ -185,20 +221,25 @@ class ProjectManager:
         data = json.loads(text)
         candidate = ProjectData.from_dict(data)
         candidate.file_path = path
+        base_dir = Path(path).expanduser().resolve().parent
         # Construct every widget before removing any existing item. Block global
         # edit notifications while building/applying the replacement.
         with QSignalBlocker(signalBus), QSignalBlocker(scene):
-            staged = [CanvasItem.from_dict(wd) for wd in candidate.widgets]
+            staged = [CanvasItem.from_dict(wd, asset_base_dir=base_dir)
+                      for wd in candidate.widgets]
             old_items = scene.top_level_canvas_items()
             old_rect, old_grid = scene.sceneRect(), scene.grid_size
+            old_base = getattr(scene, "_asset_base_dir", None)
             try:
                 scene.clear_all()
+                scene._asset_base_dir = base_dir
                 scene.set_canvas_size(candidate.canvas_width, candidate.canvas_height)
                 scene.set_grid_size(candidate.grid_size)
                 for item in staged:
                     scene.add_canvas_item(item)
             except Exception:
                 scene.clear_all()
+                scene._asset_base_dir = old_base
                 scene.set_canvas_size(old_rect.width(), old_rect.height())
                 scene.set_grid_size(old_grid)
                 for item in old_items:

@@ -139,14 +139,15 @@ class DesignScene(QGraphicsScene):
         return [it for it in self.items() if isinstance(it, CanvasItem)]
 
     def top_level_canvas_items(self) -> List[CanvasItem]:
-        """Return only top-level CanvasItems (for serialization)."""
-        return [it for it in self.items()
+        """Serialize back to front, matching QWidget creation/stacking order."""
+        return [it for it in self.items(Qt.AscendingOrder)
                 if isinstance(it, CanvasItem) and it._container_parent is None]
 
     def item_changed(self, item: CanvasItem):
         signalBus.canvasChanged.emit()
 
     def clear_all(self):
+        self._asset_base_dir = None
         for it in self.top_level_canvas_items():
             self.removeItem(it)
         signalBus.canvasChanged.emit()

@@ -7,7 +7,9 @@ from qfluentwidgets import (
     SwitchButton, Slider, SpinBox,
 )
 
-from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
+from app.widgets.base import (
+    WidgetMeta, WidgetCategory, PropDef, PropType, normalized_range_properties,
+)
 from app.core.widget_registry import registry
 
 
@@ -253,6 +255,7 @@ _ALIGNMENT_MAP = {
 
 def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidget:
     """Create a real QWidget instance from type name and properties dict."""
+    props = normalized_range_properties(type_name, props)
     if type_name == "PushButton":
         w = PushButton(props.get("text", "按钮"), parent)
         w.setEnabled(props.get("enabled", True))
@@ -301,15 +304,13 @@ def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidge
 
     if type_name == "Slider":
         w = Slider(Qt.Horizontal, parent)
-        w.setMinimum(props.get("minimum", 0))
-        w.setMaximum(props.get("maximum", 100))
+        w.setRange(props["minimum"], props["maximum"])
         w.setValue(props.get("value", 50))
         return w
 
     if type_name == "SpinBox":
         w = SpinBox(parent)
-        w.setMinimum(props.get("minimum", 0))
-        w.setMaximum(props.get("maximum", 100))
+        w.setRange(props["minimum"], props["maximum"])
         w.setValue(props.get("value", 0))
         suffix = props.get("suffix", "")
         if suffix:

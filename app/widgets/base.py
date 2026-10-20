@@ -5,6 +5,22 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 
+def normalized_range_properties(type_name, properties, changed=None):
+    """Keep editable numeric endpoints and their initial value consistent."""
+    if type_name not in ("Slider", "SpinBox", "GaugeMeter"):
+        return dict(properties)
+    props = dict(properties)
+    lo, hi = props.get("minimum", 0), props.get("maximum", 100)
+    if lo > hi:
+        if changed == "maximum":
+            lo = hi
+        else:
+            hi = lo
+    value = props.get("value", 50 if type_name == "Slider" else 0)
+    props.update(minimum=lo, maximum=hi, value=max(lo, min(hi, value)))
+    return props
+
+
 class PropType(Enum):
     STRING = "string"
     INT = "int"

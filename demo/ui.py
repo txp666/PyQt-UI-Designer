@@ -94,6 +94,66 @@ def command_modbus_frame(slave, func, address, value):
     from serial_handler import build_modbus_frame
     return build_modbus_frame(slave, func, address, value, value)
 
+"""Preserve the designer's tab-relative coordinates in real Qt tab pages."""
+from PyQt5.QtCore import QObject, QEvent, QPoint, QRect, QTimer
+from PyQt5 import sip
+
+
+class TabChildGeometry(QObject):
+    def __init__(self, tabs):
+        super().__init__(tabs)
+        self.tabs = tabs
+        self._children = {}
+        self._pending = False
+        self._applying = False
+        tabs.installEventFilter(self)
+        tabs.currentChanged.connect(self.schedule)
+
+    def register(self, child, geometry):
+        self._children[child] = QRect(*geometry)
+        page = child.parentWidget()
+        page.installEventFilter(self)
+        page.parentWidget().installEventFilter(self)
+        self.apply()
+        self.schedule()
+
+    def eventFilter(self, watched, event):
+        if event.type() in (QEvent.Resize, QEvent.Move, QEvent.Show,
+                            QEvent.LayoutRequest, QEvent.StyleChange, QEvent.FontChange):
+            self.schedule()
+        return False
+
+    def schedule(self, *_):
+        if not self._pending and not self._applying:
+            self._pending = True
+            QTimer.singleShot(0, self.apply)
+
+    def apply(self):
+        self._pending = False
+        if sip.isdeleted(self.tabs) or self._applying:
+            return
+        self._applying = True
+        try:
+            for child, rect in list(self._children.items()):
+                if sip.isdeleted(child):
+                    del self._children[child]
+                    continue
+                page = child.parentWidget()
+                # The page may be laid out lazily on its first activation.
+                # Reapply after its move/show events, without changing saved coordinates.
+                origin = page.mapTo(self.tabs, QPoint())
+                child.setGeometry(rect.translated(-origin))
+        finally:
+            self._applying = False
+
+
+def place_tab_child(tabs, child, x, y, width, height):
+    controller = getattr(tabs, "_designer_child_geometry", None)
+    if controller is None:
+        controller = TabChildGeometry(tabs)
+        tabs._designer_child_geometry = controller
+    controller.register(child, (x, y, width, height))
+
 
 class LEDIndicator(QWidget):
     COLOR_MAP = {
@@ -1027,11 +1087,26 @@ class LogDisplayBox(QWidget):
         setCustomStyleSheet(self._text, terminal_style, terminal_style)
         lo.addWidget(self._text)
         self._max_lines = 500
+        self._handler = None
     def set_serial_handler(self, handler):
-        handler.connected.connect(lambda port: self.append_log(f"串口已连接: {port}", "ok"))
-        handler.disconnected.connect(lambda: self.append_log("串口已断开", "warn"))
-        handler.error.connect(lambda message: self.append_log(f"错误: {message}", "error"))
-        handler.dataReceived.connect(self._on_parsed_data)
+        if handler is self._handler: return
+        if self._handler is not None:
+            self._handler.connected.disconnect(self._on_connected)
+            self._handler.disconnected.disconnect(self._on_disconnected)
+            self._handler.error.disconnect(self._on_serial_error)
+            self._handler.dataReceived.disconnect(self._on_parsed_data)
+        self._handler = handler
+        if handler is not None:
+            handler.connected.connect(self._on_connected)
+            handler.disconnected.connect(self._on_disconnected)
+            handler.error.connect(self._on_serial_error)
+            handler.dataReceived.connect(self._on_parsed_data)
+    def _on_connected(self, port):
+        self.append_log(f"串口已连接: {port}", "ok")
+    def _on_disconnected(self):
+        self.append_log("串口已断开", "warn")
+    def _on_serial_error(self, message):
+        self.append_log(f"错误: {message}", "error")
     def _on_parsed_data(self, data):
         self.append_log(", ".join(f"{key}={value}" for key, value in data.items()))
     def append_log(self, msg, level="info"):
@@ -1290,8 +1365,10 @@ class SerialConfigCard(CardWidget):
             self._sl_port.addItem(self._port_combo.itemText(i), self._port_combo.itemData(i))
         self._sl_port.setCurrentIndex(self._port_combo.currentIndex())
         self._sl_baud.setCurrentIndex(self._baud_combo.currentIndex())
-        self._sl_conn.setEnabled(self._connect_btn.isEnabled())
-        self._sl_disconn.setEnabled(self._disconnect_btn.isEnabled())
+        # A disabled preview parent also makes isEnabled() false. Preserve
+        # connection state instead of making that inherited state permanent.
+        self._sl_conn.setEnabled(not self._connected)
+        self._sl_disconn.setEnabled(self._connected)
         self._sl_status.setText(self._status.text())
         self._sl_status.setTextColor(self._status.lightColor, self._status.darkColor)
 
@@ -1458,12 +1535,20 @@ class DataRecvCard(CardWidget):
         root.addWidget(self._text, 1)
         self._count = 0; self._max_lines = 1000; self._handler = None
     def set_serial_handler(self, h):
+        if h is self._handler: return
+        if self._handler is not None:
+            self._handler.rawReceived.disconnect(self._on_raw)
+            self._handler.dataSent.disconnect(self._on_sent)
+            self._handler.connected.disconnect(self._on_connected)
+            self._handler.disconnected.disconnect(self._on_disconnected)
         self._handler = h
-        if h:
+        if h is not None:
             h.rawReceived.connect(self._on_raw)
             h.dataSent.connect(self._on_sent)
-            h.connected.connect(lambda p: self._sys(f"已连接: {p}"))
-            h.disconnected.connect(lambda: self._sys("已断开"))
+            h.connected.connect(self._on_connected)
+            h.disconnected.connect(self._on_disconnected)
+    def _on_connected(self, port): self._sys(f"已连接: {port}")
+    def _on_disconnected(self): self._sys("已断开")
     def _on_raw(self, data):
         ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
         if self._hex_cb.isChecked():
@@ -1615,15 +1700,15 @@ class MainUI(FluentWindow):
         self.widgets['monitor_tabs'].show()
 
         self.widgets['receive'] = DataRecvCard(self.widgets['monitor_tabs'].widget(0)); self.widgets['receive'].set_title('原始串口数据'); self.widgets['receive'].set_max_lines(200)
-        self.widgets['receive'].setGeometry(0, 0, 368, 276)
+        place_tab_child(self.widgets['monitor_tabs'], self.widgets['receive'], 1, 33, 366, 276)
         self.widgets['receive'].show()
 
         self.widgets['live_table'] = DataTableWidget(self.widgets['monitor_tabs'].widget(1)); self.widgets['live_table'].set_columns(['数据字段', '当前值']); self.widgets['live_table'].set_max_rows(20)
-        self.widgets['live_table'].setGeometry(0, 0, 368, 276)
+        place_tab_child(self.widgets['monitor_tabs'], self.widgets['live_table'], 1, 33, 366, 276)
         self.widgets['live_table'].show()
 
         self.widgets['event_log'] = LogDisplayBox(self.widgets['monitor_tabs'].widget(2)); self.widgets['event_log'].set_max_lines(200)
-        self.widgets['event_log'].setGeometry(0, 0, 368, 276)
+        place_tab_child(self.widgets['monitor_tabs'], self.widgets['event_log'], 1, 33, 366, 276)
         self.widgets['event_log'].show()
 
         self.widgets['command'] = LineEdit(self._page); self.widgets['command'].setPlaceholderText('输入 READ、START 或 STOP，按回车发送'); self.widgets['command'].setText(''); self.widgets['command'].setReadOnly(False)

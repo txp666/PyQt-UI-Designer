@@ -37,7 +37,7 @@ def write_image(path, color):
 class ExportPortabilityTests(unittest.TestCase):
     def run_standalone(self, output, code, cwd):
         result = subprocess.run(
-            [sys.executable, "-c", code, str(output)],
+            [sys.executable, "-X", "faulthandler", "-c", code, str(output)],
             cwd=cwd,
             env={**os.environ, "PYTHONPATH": "", "QT_QPA_PLATFORM": "offscreen"},
             capture_output=True, text=True, timeout=30,
@@ -210,6 +210,8 @@ import sys
 from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from PyQt5 import sip
+from PyQt5.QtCore import QEvent
 from PyQt5.QtWidgets import QApplication
 sys.path.insert(0, sys.argv[1])
 app = QApplication([])
@@ -244,6 +246,16 @@ with ExitStack() as stack:
     assert sent == [b"A1\r\n", b"B1\r\n", b"READ\r\n"], sent
     handler.disconnect()
     assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
+    # Mirror main.py's ordered shutdown rather than handing live Qt wrappers
+    # to Python's atexit cleanup. Exercise a still-pending tab geometry update.
+    geometry = window.widgets[IDS[0]]._designer_child_geometry
+    geometry.schedule()
+    assert geometry._pending
+    window.deleteLater()
+    handler.deleteLater()
+    app.sendPostedEvents(None, QEvent.DeferredDelete)
+    assert sip.isdeleted(window) and sip.isdeleted(handler) and sip.isdeleted(geometry)
+    app.processEvents()
 print("ARBITRARY_WIDGET_IDS_OK")
 '''
             self.assertIn("ARBITRARY_WIDGET_IDS_OK",

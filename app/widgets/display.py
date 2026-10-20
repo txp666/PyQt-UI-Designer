@@ -1,5 +1,6 @@
 # coding: utf-8
 """Display widgets: LED indicator, numeric display, progress bar, image display."""
+from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPainter, QColor, QFont, QPixmap
 from PyQt5.QtWidgets import (
@@ -9,6 +10,17 @@ from qfluentwidgets import ProgressBar, BodyLabel, isDarkTheme, qconfig
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
+
+
+def resolved_image_properties(properties, base_dir=None):
+    props = dict(properties)
+    path = props.get("imagePath", "")
+    if path:
+        source = Path(path).expanduser()
+        if not source.is_absolute():
+            source = Path(base_dir or Path.cwd()) / source
+        props["imagePath"] = str(source.resolve())
+    return props
 
 
 # ---------------------------------------------------------------------------

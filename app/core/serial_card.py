@@ -236,8 +236,10 @@ class SerialConfigCard(CardWidget):
             self._sl_port.addItem(self._port_combo.itemText(i), self._port_combo.itemData(i))
         self._sl_port.setCurrentIndex(self._port_combo.currentIndex())
         self._sl_baud.setCurrentIndex(self._baud_combo.currentIndex())
-        self._sl_conn.setEnabled(self._connect_btn.isEnabled())
-        self._sl_disconn.setEnabled(self._disconnect_btn.isEnabled())
+        # A disabled preview parent also makes isEnabled() false. Preserve
+        # connection state instead of making that inherited state permanent.
+        self._sl_conn.setEnabled(not self._connected)
+        self._sl_disconn.setEnabled(self._connected)
         self._sl_status.setText(self._status.text())
         self._sl_status.setTextColor(self._status.lightColor, self._status.darkColor)
 

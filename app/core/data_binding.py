@@ -164,6 +164,8 @@ class BindingEntry:
 
         dt = self.data_type
         if dt == "ASCII":
+            if not 0 <= self.byte_offset <= len(payload):
+                return None
             end = payload.find(0, self.byte_offset)
             if end < 0:
                 end = len(payload)

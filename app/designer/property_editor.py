@@ -87,6 +87,7 @@ class PropertyEditor(ScrollArea):
 
         signalBus.widgetSelected.connect(self._on_widget_selected)
         signalBus.widgetDeselected.connect(self._on_deselected)
+        signalBus.projectSaved.connect(self._sync_saved_image_path)
 
         self.setStyleSheet(
             "QScrollArea, #propEditorContainer { background: transparent; border: none; }"
@@ -107,6 +108,18 @@ class PropertyEditor(ScrollArea):
 
     def _on_deselected(self):
         self._clear()
+
+    def _sync_saved_image_path(self, _path):
+        item = self._current_item
+        if item is None or sip.isdeleted(item) or item.type_name != "ImageDisplay":
+            return
+        editor = self._editors.get("imagePath")
+        if editor is not None:
+            field = editor.findChild(LineEdit)
+            if field is not None:
+                self._updating = True
+                field.setText(item.properties.get("imagePath", ""))
+                self._updating = False
 
     def _clear(self):
         self.commit_pending_edits()
@@ -524,7 +537,14 @@ class PropertyEditor(ScrollArea):
         signalBus.canvasChanged.emit()
         self._updating = False
 
-        if prop_name == "commandMode":
+        if (self._current_item.type_name in ("Slider", "SpinBox", "GaugeMeter")
+                and prop_name in ("minimum", "maximum", "value")):
+            self._updating = True
+            for name in ("minimum", "maximum", "value"):
+                if name in self._editors:
+                    self._editors[name].setValue(self._current_item.properties[name])
+            self._updating = False
+        elif prop_name == "commandMode":
             self._apply_mode_visibility(value)
         elif prop_name in ("sendOnEnter", "sendOnSelect", "sendOnChange"):
             self._apply_send_toggle_visibility(bool(value))

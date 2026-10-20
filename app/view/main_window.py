@@ -57,6 +57,7 @@ class MainWindow(FluentWindow):
         signalBus.canvasChanged.connect(self._on_canvas_changed)
         qconfig.themeChangedFinished.connect(self._on_theme_changed)
         self.stackedWidget.currentChanged.connect(self._on_page_changed)
+        self.preview_interface.projectDataRequested.connect(self._sync_preview)
 
         QShortcut(QKeySequence.Save, self, self._save_project)
         QShortcut(QKeySequence.New, self, self._new_project)
@@ -65,6 +66,8 @@ class MainWindow(FluentWindow):
 
     def _on_canvas_changed(self):
         self._project_mgr.mark_dirty()
+        if hasattr(self, "preview_interface"):
+            self.preview_interface.invalidate_project("设计已更改，请重新运行预览")
         self._update_title()
 
     def _on_theme_changed(self):
@@ -165,6 +168,9 @@ class MainWindow(FluentWindow):
             self.designer_interface.app_name = "上位机"
             self.designer_interface.canvas_size = (1200, 800)
         self._project_mgr.new_project()
+        if hasattr(self, "preview_interface"):
+            self.preview_interface.invalidate_project(disconnect=True)
+            self.preview_interface.set_project_data(self._project_mgr.current)
         signalBus.widgetDeselected.emit()
         self._update_title()
         InfoBar.success("成功", "已新建项目", parent=self, position=InfoBarPosition.TOP, duration=2000)
@@ -179,6 +185,9 @@ class MainWindow(FluentWindow):
             return
         try:
             self._project_mgr.load_to_scene(self.designer_interface.scene, path)
+            if hasattr(self, "preview_interface"):
+                self.preview_interface.invalidate_project(disconnect=True)
+                self.preview_interface.set_project_data(self._project_mgr.current)
             with QSignalBlocker(signalBus):
                 self.designer_interface.app_name = self._project_mgr.current.app_name
                 self.designer_interface.canvas_size = (
@@ -248,6 +257,4 @@ class MainWindow(FluentWindow):
             event.ignore()
             return
         self.preview_interface._stop_preview()
-        from app.core.serial_manager import serialManager
-        serialManager.disconnect()
         super().closeEvent(event)

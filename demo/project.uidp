@@ -258,9 +258,9 @@
           "id": "receive",
           "type": "DataRecvCard",
           "geometry": {
-            "x": 0,
-            "y": 0,
-            "w": 368,
+            "x": 1,
+            "y": 33,
+            "w": 366,
             "h": 276
           },
           "properties": {
@@ -273,9 +273,9 @@
           "type": "DataTable",
           "tabIndex": 1,
           "geometry": {
-            "x": 0,
-            "y": 0,
-            "w": 368,
+            "x": 1,
+            "y": 33,
+            "w": 366,
             "h": 276
           },
           "properties": {
@@ -288,9 +288,9 @@
           "type": "LogBox",
           "tabIndex": 2,
           "geometry": {
-            "x": 0,
-            "y": 0,
-            "w": 368,
+            "x": 1,
+            "y": 33,
+            "w": 366,
             "h": 276
           },
           "properties": {

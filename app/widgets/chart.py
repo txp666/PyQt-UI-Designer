@@ -59,8 +59,8 @@ class GaugeMeter(QWidget):
 
     def set_range(self, lo: float, hi: float):
         self._min_val = lo
-        self._max_val = hi
-        self.update()
+        self._max_val = max(lo, hi)
+        self.set_value(self._value)
 
     def set_title(self, t: str):
         self._title = t
