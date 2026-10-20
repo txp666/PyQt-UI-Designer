@@ -199,16 +199,24 @@ void loop() {
 下位机发送（C/STM32）：
 
 ```c
-uint8_t frame[14];
+// STM32 是小端，memcpy 会得到 66 66 CA 41；这里按大端逐字节写入
+static void put_float_be(uint8_t *dst, float v) {
+    uint32_t u;
+    memcpy(&u, &v, 4);
+    dst[0] = u >> 24;
+    dst[1] = u >> 16;
+    dst[2] = u >> 8;
+    dst[3] = u;
+}
+
+uint8_t frame[12];
 frame[0] = 0xAA;           // 帧头
 frame[1] = 0x55;
-float temp = 25.3f;
-float humi = 68.5f;
-memcpy(&frame[2], &temp, 4);  // 偏移0: 温度 float32
-memcpy(&frame[6], &humi, 4);  // 偏移4: 湿度 float32
+put_float_be(&frame[2], 25.3f);  // 偏移0: 温度 float32
+put_float_be(&frame[6], 68.5f);  // 偏移4: 湿度 float32
 frame[10] = 0x0D;          // 帧尾
 frame[11] = 0x0A;
-HAL_UART_Transmit(&huart1, frame, 12, 100);
+HAL_UART_Transmit(&huart1, frame, sizeof(frame), 100);
 ```
 
 实际发送的十六进制：
@@ -509,7 +517,7 @@ mbAddress: 10
 sendOnChange: true
 ```
 
-拖动到500 → `01 06 00 0A 01 F4 A8 1B`
+拖动到500 → `01 06 00 0A 01 F4 A9 DF`
 
 分解：
 ```
@@ -517,7 +525,7 @@ sendOnChange: true
 06       功能码 = 写单寄存器
 00 0A    地址 = 10
 01 F4    值 = 500
-A8 1B    CRC16
+A9 DF    CRC16
 ```
 
 ---
