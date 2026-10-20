@@ -179,6 +179,98 @@ print("ARBITRARY_KEYS_OK")
 '''
             self.assertIn("ARBITRARY_KEYS_OK", self.run_standalone(output, code, root))
 
+    def test_imported_widget_ids_remain_literal_keys_in_standalone_runtime(self):
+        from app.widgets.basic import register_basic_widgets
+        from app.widgets.layout import register_layout_widgets
+        register_basic_widgets()
+        register_layout_widgets()
+        ids = ["tab's\n页面\\", "label's\n值\\", "mode-control", "mode control",
+               "button';not_python()#"]
+        project = ProjectData.from_dict({"widgets": [{
+            "id": ids[0], "type": "TabWidget",
+            "properties": {"tabNames": "采集", "currentTab": 0},
+            "children": [
+                {"id": ids[1], "type": "Label", "binding": {"key": "sample"}},
+                {"id": ids[2], "type": "ComboBox", "properties": {
+                    "items": "A\nB", "commands": "A0\nA1", "sendOnSelect": True,
+                }},
+                {"id": ids[3], "type": "ComboBox", "properties": {
+                    "items": "C\nD", "commands": "B0\nB1", "sendOnSelect": True,
+                }},
+                {"id": ids[4], "type": "PushButton", "properties": {
+                    "command": "READ", "notify": True, "notifyType": "成功",
+                }},
+            ],
+        }]})
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "export"
+            generate_project(project, output)
+            code = f"IDS = {ids!r}\n" + r'''
+import sys
+from contextlib import ExitStack
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+from PyQt5.QtWidgets import QApplication
+sys.path.insert(0, sys.argv[1])
+app = QApplication([])
+with ExitStack() as stack:
+    if sys.platform == "darwin":
+        from qframelesswindow.mac import MacFramelessWindow
+        for name in ("updateFrameless", "_hideSystemTitleBar",
+                     "setSystemTitleBarButtonVisible"):
+            stack.enter_context(patch.object(
+                MacFramelessWindow, name, lambda *args, **kwargs: None))
+    import ui
+    from serial_handler import SerialHandler
+    from data_binding import DataBinding
+    window = ui.MainUI()
+    handler = SerialHandler()
+    binding = DataBinding(window, handler)
+    sent = []
+    handler._port = SimpleNamespace(
+        is_open=True, write=lambda data: sent.append(data) or len(data),
+        close=lambda: None)
+    assert set(window.widgets) == set(IDS)
+    page = window.widgets[IDS[0]].widget(0)
+    for name in IDS[1:]:
+        assert window.widgets[name].parentWidget() is page
+    handler.dataReceived.emit({"sample": 42})
+    assert window.widgets[IDS[1]].text() == "42"
+    window.widgets[IDS[2]].setCurrentIndex(1)
+    window.widgets[IDS[3]].setCurrentIndex(1)
+    notice = stack.enter_context(patch.object(ui.InfoBar, "success"))
+    window.widgets[IDS[4]].click()
+    notice.assert_called_once()
+    assert sent == [b"A1\r\n", b"B1\r\n", b"READ\r\n"], sent
+    handler.disconnect()
+    assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
+print("ARBITRARY_WIDGET_IDS_OK")
+'''
+            self.assertIn("ARBITRARY_WIDGET_IDS_OK",
+                          self.run_standalone(output, code, Path(folder)))
+
+    def test_late_generation_failure_preserves_existing_export_and_assets(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / "export"
+            project = ProjectData()
+            generate_project(project, output)
+            (output / "custom.py").write_text("# user extension\n", encoding="utf-8")
+            before = {str(p.relative_to(output)): p.read_bytes()
+                      for p in output.rglob("*") if p.is_file()}
+            write_image(root / "new.png", "#012345")
+            project.app_name = "New application"
+            project.widgets = [
+                image_widget("image", root / "new.png"),
+                {"id": "value", "type": "Label",
+                 "binding": {"parseMode": "HEX字节提取", "byteOffset": "invalid"}},
+            ]
+            with self.assertRaises(ValueError):
+                generate_project(project, output)
+            after = {str(p.relative_to(output)): p.read_bytes()
+                     for p in output.rglob("*") if p.is_file()}
+            self.assertEqual(after, before)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -275,14 +275,19 @@ class ExportBehaviorTests(unittest.TestCase):
         ], r"""
             assert widgets["key"]._ring.maximum() == 200
             assert widgets["key"]._ring.value() == 11
+            assert widgets["key"]._ring.text() == "5%"
             serial.dataReceived.emit({"progress": 45, "state": {"progress": 46}})
             serial.rawReceived.emit(bytes.fromhex("aa5500"))
             serial.rawReceived.emit(bytes.fromhex("2f55aa"))
             serial.dataReceived.emit({"slave": 1, "fc": 3, "reg2": 48})
-            for name, value in (("key", 45), ("json", 46), ("hex", 47), ("modbus", 48)):
+            for name, value, maximum, percentage in (
+                    ("key", 45, 200, "22%"), ("json", 46, 100, "46%"),
+                    ("hex", 47, 100, "47%"), ("modbus", 48, 100, "48%")):
                 ring = widgets[name]
                 assert ring._ring.value() == value, (name, ring._ring.value())
-                assert ring._val.text() == f"{value}%"
+                assert ring._ring.maximum() == maximum
+                assert ring._ring.isTextVisible()
+                assert ring._ring.text() == percentage, (name, ring._ring.text())
             assert widgets["bar"].value() == 45
             serial.dataReceived.emit({"slave": 2, "fc": 3, "reg2": 99})
             assert widgets["modbus"]._ring.value() == 48

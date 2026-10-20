@@ -1,6 +1,7 @@
 """Bounded display cache with full history spooled to a temporary file."""
 from collections import deque
 from itertools import islice
+import math
 import struct
 import tempfile
 
@@ -13,6 +14,8 @@ class ChartHistory:
 
     def append(self, value):
         value = float(value)
+        if not math.isfinite(value):
+            raise ValueError("曲线样本必须是有限数")
         if self._file is None:
             self._file = tempfile.TemporaryFile()
         self._file.write(struct.pack("<d", value))

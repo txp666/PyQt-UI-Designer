@@ -39,12 +39,14 @@ class DataTableWidget(QWidget):
         self.update_kv_data(data)
 
     def set_columns(self, cols: list):
-        self._columns = cols
-        self._table.setColumnCount(len(cols))
-        self._table.setHorizontalHeaderLabels(cols)
+        self._columns = list(cols) or ["字段", "值"]
+        self._table.setColumnCount(len(self._columns))
+        self._table.setHorizontalHeaderLabels(self._columns)
 
     def set_max_rows(self, n: int):
         self._max_rows = max(10, n)
+        while self._table.rowCount() > self._max_rows:
+            self._table.removeRow(self._table.rowCount() - 1)
 
     def append_row(self, values: list):
         row = self._table.rowCount()
@@ -61,9 +63,12 @@ class DataTableWidget(QWidget):
         self._table.setRowCount(0)
         for key, val in data.items():
             row = self._table.rowCount()
+            if row >= self._max_rows:
+                break
             self._table.insertRow(row)
-            self._table.setItem(row, 0, QTableWidgetItem(str(key)))
-            self._table.setItem(row, 1, QTableWidgetItem(str(val)))
+            for column, value in enumerate((key, val)):
+                if column < self._table.columnCount():
+                    self._table.setItem(row, column, QTableWidgetItem(str(value)))
 
     def clear_data(self):
         self._table.setRowCount(0)

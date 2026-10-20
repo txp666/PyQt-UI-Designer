@@ -213,6 +213,9 @@ class Separator(QFrame):
         self._apply()
 
     def _apply(self):
+        # Release the old fixed axis when changing orientation.
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
         if self._orientation == "horizontal":
             self.setFrameShape(QFrame.HLine)
             self.setFixedHeight(2)

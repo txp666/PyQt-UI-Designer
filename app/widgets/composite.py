@@ -1,5 +1,6 @@
 # coding: utf-8
 """Composite card widgets: SerialConfigCard, DataSendCard, DataRecvCard, LogBox, ProgressRing."""
+from html import escape as _escape
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter, QFont
 from PyQt5.QtWidgets import (
@@ -21,6 +22,10 @@ try:
     HAS_SERIAL = True
 except ImportError:
     HAS_SERIAL = False
+
+
+def _log_html(text):
+    return _escape(str(text)).replace("\n", "<br>")
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +201,7 @@ class DataRecvCard(CardWidget):
                 return
         self._output.append(
             f'<span style="color:#9399b2">[{ts}]</span> '
-            f'<span style="color:#a6e3a1">&lt;&lt; {text}</span>')
+            f'<span style="color:#a6e3a1">&lt;&lt; {_log_html(text)}</span>')
         self._count += 1
         self._counter.setText(f"{self._count} 条")
         self._trim()
@@ -213,7 +218,7 @@ class DataRecvCard(CardWidget):
                 return
         self._output.append(
             f'<span style="color:#9399b2">[{ts}]</span> '
-            f'<span style="color:#f9e2af">&gt;&gt; {text}</span>')
+            f'<span style="color:#f9e2af">&gt;&gt; {_log_html(text)}</span>')
         self._trim()
         self._scroll()
 
@@ -226,7 +231,8 @@ class DataRecvCard(CardWidget):
         from datetime import datetime
         ts = datetime.now().strftime("%H:%M:%S")
         self._output.append(
-            f'<span style="color:#74c7ec">[{ts}] --- {msg} ---</span>')
+            f'<span style="color:#74c7ec">[{ts}] --- {_log_html(msg)} ---</span>')
+        self._trim()
 
     def _clear(self):
         self._output.clear()
@@ -243,7 +249,9 @@ class DataRecvCard(CardWidget):
             cursor.deleteChar()
 
     def set_title(self, t): self._title.setText(t)
-    def set_max_lines(self, n): self._max_lines = max(50, n)
+    def set_max_lines(self, n):
+        self._max_lines = max(50, n)
+        self._trim()
 
 
 # ---------------------------------------------------------------------------
@@ -289,10 +297,12 @@ class LogDisplayBox(QFrame):
         from datetime import datetime
         ts = datetime.now().strftime("%H:%M:%S")
         self._output.append(f'<span style="color:#9399b2">[{ts}]</span> '
-                            f'<span style="color:{color}">{text}</span>')
+                            f'<span style="color:{color}">{_log_html(text)}</span>')
         self._trim()
 
-    def set_max_lines(self, n): self._max_lines = max(50, n)
+    def set_max_lines(self, n):
+        self._max_lines = max(50, n)
+        self._trim()
     def clear_log(self): self._output.clear()
 
     def _trim(self):
@@ -449,15 +459,18 @@ class ModbusConfigCard(CardWidget):
 
     def _do_send(self):
         from app.core.serial_manager import serialManager
-        from app.core.protocol_parser import build_modbus_frame
+        from app.core.command_runtime import command_modbus_frame
         if not serialManager.is_connected:
             self._status.setText("串口未连接")
             return
-        slave = self._int_val(self._slave_edit, 1)
         fc = self._FC_MAP.get(self._fc_combo.currentText(), 0x03)
-        addr = self._int_val(self._addr_edit, 0)
-        val = self._int_val(self._val_edit, 1)
-        frame = build_modbus_frame(slave, fc, addr, val, val)
+        try:
+            frame = command_modbus_frame(
+                self._slave_edit.text(), fc, self._addr_edit.text(), self._val_edit.text())
+        except ValueError as exc:
+            self._stop_poll()
+            self._status.setText(str(exc))
+            return
         serialManager.send(frame)
         self._status.setText(f"已发送: {frame.hex(' ').upper()}")
 
@@ -466,7 +479,8 @@ class ModbusConfigCard(CardWidget):
             self._stop_poll()
         else:
             interval = self._int_val(self._poll_edit, 0)
-            if interval <= 0:
+            if not 1 <= interval <= 60000:
+                self._status.setText("轮询间隔应为 1–60000 ms")
                 return
             self._poll_timer.start(interval)
             self._polling = True

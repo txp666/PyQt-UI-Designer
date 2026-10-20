@@ -22,6 +22,9 @@ from app.common.build_support import archive_build, build_environment, build_nui
 from app.widgets.basic import create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
+from app.core.command_runtime import (
+    command_hex_frame, command_packed_frame, command_modbus_frame,
+)
 
 
 class PreviewCanvas(QWidget):
@@ -109,17 +112,8 @@ class PreviewCanvas(QWidget):
     }
 
     @staticmethod
-    def _parse_hex_field(s: str) -> bytes:
-        """Parse a hex string like 'AA 55' into bytes, return empty bytes on failure."""
-        s = s.replace(" ", "")
-        if not s:
-            return b""
-        if len(s) % 2 != 0:
-            s = "0" + s
-        try:
-            return bytes.fromhex(s)
-        except ValueError:
-            return b""
+    def _command_error(error):
+        signalBus.showNotification.emit("提示", str(error), "错误", 2000)
 
     @staticmethod
     def _send_modbus_frame(props: dict, value: int = None):
@@ -129,13 +123,16 @@ class PreviewCanvas(QWidget):
         if not serialManager.is_connected:
             signalBus.showNotification.emit("提示", "串口未连接，命令未发送", "警告", 2000)
             return
-        from app.core.protocol_parser import build_modbus_frame
-        slave = int(props.get("mbSlave", 1))
-        fc_text = props.get("mbFunc", "06 写单寄存器")
-        fc = PreviewCanvas._FC_MAP.get(fc_text, 0x06)
-        addr = int(props.get("mbAddress", 0))
-        val = value if value is not None else int(props.get("mbValue", 1))
-        frame = build_modbus_frame(slave, fc, addr, val, val)
+        try:
+            frame = command_modbus_frame(
+                props.get("mbSlave", 1),
+                PreviewCanvas._FC_MAP.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
+                props.get("mbAddress", 0),
+                value if value is not None else props.get("mbValue", 1),
+            )
+        except ValueError as exc:
+            PreviewCanvas._command_error(exc)
+            return
         serialManager.send(frame)
 
     @staticmethod
@@ -154,24 +151,16 @@ class PreviewCanvas(QWidget):
             return
 
         if mode == "Modbus":
-            try:
-                val = int(cmd) if cmd.strip() else int(props.get("mbValue", 1))
-            except (ValueError, TypeError):
-                val = int(props.get("mbValue", 1))
-            PreviewCanvas._send_modbus_frame(props, val)
+            PreviewCanvas._send_modbus_frame(props, cmd)
             return
         elif mode == "HEX":
-            hex_str = cmd.replace(" ", "")
-            if len(hex_str) % 2 != 0:
-                hex_str = "0" + hex_str
             try:
-                payload = bytes.fromhex(hex_str)
-            except ValueError:
-                signalBus.showNotification.emit("提示", "HEX格式错误", "错误", 2000)
+                frame = command_hex_frame(
+                    cmd, props.get("frameHeader", ""), props.get("frameTail", ""))
+            except ValueError as exc:
+                PreviewCanvas._command_error(exc)
                 return
-            header = PreviewCanvas._parse_hex_field(props.get("frameHeader", ""))
-            tail = PreviewCanvas._parse_hex_field(props.get("frameTail", ""))
-            serialManager.send(header + payload + tail)
+            serialManager.send(frame)
         else:
             suffix = PreviewCanvas._NEWLINE_MAP.get(newline, "\r\n")
             serialManager.send_text(cmd + suffix)
@@ -190,21 +179,23 @@ class PreviewCanvas(QWidget):
         For HEX mode with a struct data type, packs the value as binary first,
         then applies the template to the hex representation.
         """
+        if mode == "Modbus":
+            PreviewCanvas._send_modbus_frame(props, value)
+            return
         if mode == "HEX":
             dt = props.get("dataType", "HEX字符串")
             fmt_info = PreviewCanvas._STRUCT_FMT.get(dt)
             if fmt_info:
-                import struct
                 fmt_char, cast = fmt_info
                 bo = ">" if props.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"
                 try:
-                    packed = struct.pack(bo + fmt_char, cast(value))
-                except (struct.error, ValueError, OverflowError):
-                    signalBus.showNotification.emit("提示", "数值超出类型范围", "错误", 2000)
+                    frame = command_packed_frame(
+                        value, bo + fmt_char, cast, tpl,
+                        props.get("frameHeader", ""), props.get("frameTail", ""))
+                except ValueError as exc:
+                    PreviewCanvas._command_error(exc)
                     return
-                hex_val = packed.hex().upper()
-                cmd = tpl.replace("{value}", hex_val) if "{value}" in tpl else tpl
-                PreviewCanvas._send_command(cmd, mode, newline, props)
+                PreviewCanvas._send_serial_bytes(frame)
                 return
 
         cmd = tpl.replace("{value}", value) if "{value}" in tpl else tpl
@@ -219,7 +210,11 @@ class PreviewCanvas(QWidget):
 
         if type_name == "PushButton":
             cmd = props.get("command", "").strip()
-            if cmd or mode == "Modbus":
+            if mode == "Modbus":
+                settings = {"mbFunc": "03 读保持寄存器", **props}
+                widget.clicked.connect(
+                    lambda _, p=settings: PreviewCanvas._send_modbus_frame(p))
+            elif cmd:
                 widget.clicked.connect(
                     lambda _, c=cmd, m=mode, n=newline, p=props, t=tpl:
                         PreviewCanvas._apply_template(t, c, m, n, p))
@@ -255,6 +250,8 @@ class PreviewCanvas(QWidget):
 
             def _on_select(idx, _w=widget, _m=mode, _n=newline,
                            _p=props, _cmds=cmd_lines, _t=tpl):
+                if idx < 0:
+                    return
                 raw = _cmds[idx] if idx < len(_cmds) and _cmds[idx] else _w.currentText()
                 if raw:
                     PreviewCanvas._apply_template(_t, raw, _m, _n, _p)

@@ -240,8 +240,8 @@
       }
     },
     {
-      "id": "receive",
-      "type": "DataRecvCard",
+      "id": "monitor_tabs",
+      "type": "TabWidget",
       "geometry": {
         "x": 688,
         "y": 355,
@@ -249,9 +249,55 @@
         "h": 310
       },
       "properties": {
-        "title": "数据接收",
-        "maxLines": 1000
-      }
+        "tabNames": "原始数据\n字段表格\n事件日志",
+        "currentTab": 0,
+        "tabLayout": "自由"
+      },
+      "children": [
+        {
+          "id": "receive",
+          "type": "DataRecvCard",
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "w": 368,
+            "h": 276
+          },
+          "properties": {
+            "title": "原始串口数据",
+            "maxLines": 200
+          }
+        },
+        {
+          "id": "live_table",
+          "type": "DataTable",
+          "tabIndex": 1,
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "w": 368,
+            "h": 276
+          },
+          "properties": {
+            "columns": "数据字段\n当前值",
+            "maxRows": 20
+          }
+        },
+        {
+          "id": "event_log",
+          "type": "LogBox",
+          "tabIndex": 2,
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "w": 368,
+            "h": 276
+          },
+          "properties": {
+            "maxLines": 200
+          }
+        }
+      ]
     },
     {
       "id": "command",

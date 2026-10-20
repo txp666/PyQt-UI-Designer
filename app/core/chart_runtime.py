@@ -17,6 +17,7 @@ from qfluentwidgets import (
 
 from .chart_history import ChartHistory
 from .protocol_parser import RawFrameBuffer
+from .binding_values import binding_register
 
 try:
     import pyqtgraph as pg
@@ -65,6 +66,30 @@ _CURVE_FIELD_MAP = {
     "curveMbDataType": "mbDataType", "curveMbRegOrder": "mbRegOrder",
     "curveMbFcFilter": "mbFcFilter", "curveMbSlaveFilter": "mbSlaveFilter",
 }
+
+
+class _HistoryObjectPairs(list):
+    """Distinguish legacy JSON objects while preserving duplicate channel keys."""
+
+
+def _history_json_channels(document):
+    if isinstance(document, _HistoryObjectPairs):
+        channels = list(document)
+    elif isinstance(document, list):
+        channels = []
+        for entry in document:
+            if not isinstance(entry, _HistoryObjectPairs):
+                raise ValueError("曲线 JSON 通道必须包含 name 和 values")
+            entry = dict(entry)
+            if set(entry) != {"name", "values"}:
+                raise ValueError("曲线 JSON 通道必须包含 name 和 values")
+            channels.append((entry["name"], entry["values"]))
+    else:
+        raise ValueError("曲线 JSON 必须是对象或通道数组")
+    for name, values in channels:
+        if not isinstance(name, str) or not isinstance(values, list) or isinstance(values, _HistoryObjectPairs):
+            raise ValueError("曲线 JSON 通道名称必须是文本，样本必须是数组")
+    return channels
 
 
 def build_cfgs_from_props(props: dict) -> list:
@@ -415,17 +440,22 @@ class RealtimeLineChart(QWidget):
         names = [c.get("name", f"曲线{i+1}") for i, c in enumerate(self._cfgs)]
         with open(path, "w", newline="", encoding="utf-8") as output:
             if str(path).lower().endswith(".json"):
-                output.write("{")
+                # Objects retain the original format for unique names. Ordered
+                # channel records keep duplicate names lossless in other JSON readers.
+                duplicate_names = len(set(names)) != len(names)
+                output.write("[" if duplicate_names else "{")
                 for i, name in enumerate(names):
                     if i:
                         output.write(",")
-                    output.write(json.dumps(name, ensure_ascii=False) + ":[")
+                    encoded_name = json.dumps(name, ensure_ascii=False)
+                    output.write(('{"name":' + encoded_name + ',"values":[')
+                                 if duplicate_names else encoded_name + ":[")
                     for index, value in enumerate(self._data[i].values()):
                         if index:
                             output.write(",")
-                        output.write(json.dumps(value))
-                    output.write("]")
-                output.write("}")
+                        output.write(json.dumps(value, allow_nan=False))
+                    output.write("]}" if duplicate_names else "]")
+                output.write("]" if duplicate_names else "}")
             else:
                 writer = csv.writer(output)
                 writer.writerow(names)
@@ -455,15 +485,14 @@ class RealtimeLineChart(QWidget):
             with open(path, "r", encoding="utf-8") as source:
                 if str(path).lower().endswith(".json"):
                     # JSON is a document format; CSV is streamed for large captures.
-                    obj = json.load(source)
-                    if not isinstance(obj, dict):
-                        raise ValueError("曲线 JSON 必须是对象")
-                    names = list(obj)
+                    obj = json.load(source, object_pairs_hook=_HistoryObjectPairs)
+                    channels = _history_json_channels(obj)
+                    names = [name for name, _ in channels]
                     channel_order = self._history_channel_order(names, adopt_channels)
-                    for name in names:
+                    for name, values in channels:
                         history = ChartHistory(self.HISTORY_LIMIT)
                         histories.append(history)
-                        for value in obj[name]:
+                        for value in values:
                             if value is not None:
                                 history.append(float(value))
                 else:
@@ -509,7 +538,7 @@ class RealtimeLineChart(QWidget):
         if path:
             try:
                 self.load_data(path)
-            except (OSError, ValueError, TypeError) as error:
+            except (OSError, ValueError, TypeError, OverflowError) as error:
                 self._mode_label.setText(f"加载失败: {error}")
 
     def configure(self, cfgs, disp_pts=200):
@@ -533,23 +562,24 @@ class RealtimeLineChart(QWidget):
 
     def _on_parsed_data(self, data: dict):
         for i, cfg in enumerate(self._cfgs):
-            pm = cfg.get("parseMode", "键值匹配")
-            val = None
-            if pm == "键值匹配":
-                key = cfg.get("key") or cfg.get("name", "")
-                if key and key in data:
-                    val = data[key]
-            elif pm == "JSON路径":
-                jp = cfg.get("jsonPath", "")
-                if jp:
-                    val = self._resolve_path(data, jp)
-            elif pm == "Modbus":
-                val = self._extract_modbus(cfg, data)
-            if val is not None:
-                try:
-                    self.append_value(i, float(val))
-                except (ValueError, TypeError):
-                    pass
+            try:
+                pm = cfg.get("parseMode", "键值匹配")
+                val = None
+                if pm == "键值匹配":
+                    key = cfg.get("key") or cfg.get("name", "")
+                    if key and key in data:
+                        val = data[key]
+                elif pm == "JSON路径":
+                    jp = cfg.get("jsonPath", "")
+                    if jp:
+                        val = self._resolve_path(data, jp)
+                elif pm == "Modbus":
+                    val = self._extract_modbus(cfg, data)
+                if val is not None:
+                    self.append_value(i, val)
+            except (ValueError, TypeError, OverflowError, struct.error):
+                # Reject a bad sample without losing the other channels in this frame.
+                continue
 
     def _on_raw_data(self, raw: bytes):
         for i, cfg in enumerate(self._cfgs):
@@ -567,7 +597,7 @@ class RealtimeLineChart(QWidget):
                     try:
                         val = struct.unpack(bo + fmt_c, payload[off:off + sz])[0]
                         self.append_value(i, float(val))
-                    except struct.error:
+                    except (ValueError, TypeError, OverflowError, struct.error):
                         pass
 
     @staticmethod
@@ -585,6 +615,7 @@ class RealtimeLineChart(QWidget):
         r0 = data.get(f"reg{idx}")
         if r0 is None:
             return None
+        r0 = binding_register(r0)
         dt = cfg.get("mbDataType", "uint16")
         if dt == "uint16":
             return r0
@@ -593,6 +624,7 @@ class RealtimeLineChart(QWidget):
         r1 = data.get(f"reg{idx + 1}")
         if r1 is None:
             return None
+        r1 = binding_register(r1)
         if cfg.get("mbRegOrder", "大端(AB CD)") == "大端(AB CD)":
             hi, lo = r0, r1
         else:

@@ -71,6 +71,12 @@ def exercise_application():
     assert widgets["protocol_info"].text() == "协议: JSON / 115200 / 8N1"
     assert widgets["command_presets"].currentIndex() == 1
     assert widgets["command_presets"].currentText() == "读取一次"
+    assert widgets["monitor_tabs"].count() == 3
+    assert widgets["monitor_tabs"].currentIndex() == 0
+    assert widgets["live_table"]._table.horizontalHeaderItem(0).text() == "数据字段"
+    assert widgets["live_table"]._max_rows == 20
+    assert receive._max_lines == 200
+    assert widgets["event_log"]._max_lines == 200
 
     def assert_latest_sample():
         sample = samples[-1]
@@ -93,6 +99,12 @@ def exercise_application():
         assert chart._data[1][-1] == sample["pressure"]
         assert receive._count > 0
         assert "temperature" in receive._text.toPlainText()
+        table = widgets["live_table"]._table
+        values = {table.item(row, 0).text(): table.item(row, 1).text()
+                  for row in range(table.rowCount())}
+        for name in ("temperature", "pressure", "running", "setpoint"):
+            assert values[name] == str(sample[name]), (name, values, sample)
+        assert "temperature=" in widgets["event_log"]._text.toPlainText()
 
     def step():
         try:
