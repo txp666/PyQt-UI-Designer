@@ -152,18 +152,34 @@ class CompositeExportTests(unittest.TestCase):
     def test_container_titles_survive_export_and_theme_changes(self):
         self.run_both([control(kind, kind, {"title": f"配置-{kind}"}, index)
                        for index, kind in enumerate(("HBoxLayout", "VBoxLayout", "FlexLayout", "CardContainer"))], r'''
+            from PyQt5.QtGui import QImage, QPainter
             from qfluentwidgets import Theme, setTheme
+            painted = []
+            class RecordingPainter(QPainter):
+                def drawText(self, *args):
+                    painted.append((args[-1], self.pen().color().name()))
+                    return super().drawText(*args)
+            def render_title(widget):
+                painted.clear()
+                image = QImage(widget.size(), QImage.Format_ARGB32_Premultiplied)
+                image.fill(Qt.transparent)
+                # Render the real paintEvent and forward every call to Qt. The
+                # Windows offscreen font backend does not guarantee glyph pixels.
+                with patch.object(sys.modules[type(widget).__module__],
+                                  "QPainter", RecordingPainter):
+                    widget.render(image)
+                return list(painted)
             for theme in (Theme.DARK, Theme.LIGHT):
                 setTheme(theme)
                 app.processEvents()
+                color = "#b3b3b3" if theme == Theme.DARK else "#606060"
                 for kind, widget in widgets.items():
-                    assert widget._title == f"配置-{kind}"
-                    # Render before and after clearing the title to prove it is painted.
-                    titled = widget.grab().toImage()
+                    title = f"配置-{kind}"
+                    assert widget._title == title
+                    assert (title, color) in render_title(widget), (kind, painted)
                     widget.set_title("")
-                    empty = widget.grab().toImage()
-                    assert titled != empty, kind
-                    widget.set_title(f"配置-{kind}")
+                    assert not any(text for text, _ in render_title(widget)), (kind, painted)
+                    widget.set_title(title)
             check_payloads([])
         ''')
 
