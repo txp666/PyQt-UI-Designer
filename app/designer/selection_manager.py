@@ -1,75 +1,82 @@
 # coding: utf-8
 """Selection and alignment helpers for the design canvas."""
 from typing import List
+from PyQt5.QtCore import QPointF
+from PyQt5.QtWidgets import QGraphicsItem
 from app.designer.canvas_item import CanvasItem
 from app.designer.canvas import DesignScene
 
 
 def selected_items(scene: DesignScene) -> List[CanvasItem]:
-    return [i for i in scene.selectedItems() if isinstance(i, CanvasItem)]
+    """Only move independent free items; managed children belong to their layout."""
+    selected = {i for i in scene.selectedItems() if isinstance(i, CanvasItem)}
+    items = []
+    for item in selected:
+        if not item.flags() & QGraphicsItem.ItemIsMovable:
+            continue
+        parent = item._container_parent
+        while parent is not None and parent not in selected:
+            parent = parent._container_parent
+        if parent is None:
+            items.append(item)
+    return items
+
+
+def _move_by_scene_delta(item: CanvasItem, delta: QPointF):
+    position = item.scenePos() + delta
+    parent = item.parentItem()
+    item.setPos(parent.mapFromScene(position) if parent else position)
+    item.notify_changed()
+
+
+def _align(scene: DesignScene, edge: str):
+    items = selected_items(scene)
+    if len(items) < 2:
+        return
+    coordinates = [(item, getattr(item.mapRectToScene(item.rect()), edge)())
+                   for item in items]
+    values = [coordinate for _, coordinate in coordinates]
+    target = max(values) if edge in ("right", "bottom") else min(values)
+    for item, coordinate in coordinates:
+        delta = target - coordinate
+        _move_by_scene_delta(item, QPointF(delta, 0) if edge in ("left", "right")
+                            else QPointF(0, delta))
 
 
 def align_left(scene: DesignScene):
-    items = selected_items(scene)
-    if len(items) < 2:
-        return
-    target_x = min(i.pos().x() for i in items)
-    for i in items:
-        i.setPos(target_x, i.pos().y())
-        i.notify_changed()
+    _align(scene, "left")
 
 
 def align_top(scene: DesignScene):
-    items = selected_items(scene)
-    if len(items) < 2:
-        return
-    target_y = min(i.pos().y() for i in items)
-    for i in items:
-        i.setPos(i.pos().x(), target_y)
-        i.notify_changed()
+    _align(scene, "top")
 
 
 def align_right(scene: DesignScene):
-    items = selected_items(scene)
-    if len(items) < 2:
-        return
-    target_x = max(i.pos().x() + i.rect().width() for i in items)
-    for i in items:
-        i.setPos(target_x - i.rect().width(), i.pos().y())
-        i.notify_changed()
+    _align(scene, "right")
 
 
 def align_bottom(scene: DesignScene):
+    _align(scene, "bottom")
+
+
+def _distribute(scene: DesignScene, horizontal: bool):
     items = selected_items(scene)
-    if len(items) < 2:
+    if len(items) < 3:
         return
-    target_y = max(i.pos().y() + i.rect().height() for i in items)
-    for i in items:
-        i.setPos(i.pos().x(), target_y - i.rect().height())
-        i.notify_changed()
+    edge = "left" if horizontal else "top"
+    coordinates = sorted(
+        ((item, getattr(item.mapRectToScene(item.rect()), edge)()) for item in items),
+        key=lambda entry: (entry[1], entry[0].widget_id))
+    start, stop = coordinates[0][1], coordinates[-1][1]
+    spacing = (stop - start) / (len(coordinates) - 1)
+    for index, (item, coordinate) in enumerate(coordinates):
+        delta = start + index * spacing - coordinate
+        _move_by_scene_delta(item, QPointF(delta, 0) if horizontal else QPointF(0, delta))
 
 
 def distribute_horizontal(scene: DesignScene):
-    items = selected_items(scene)
-    if len(items) < 3:
-        return
-    items.sort(key=lambda i: i.pos().x())
-    left = items[0].pos().x()
-    right = items[-1].pos().x()
-    spacing = (right - left) / (len(items) - 1)
-    for idx, item in enumerate(items):
-        item.setPos(left + idx * spacing, item.pos().y())
-        item.notify_changed()
+    _distribute(scene, True)
 
 
 def distribute_vertical(scene: DesignScene):
-    items = selected_items(scene)
-    if len(items) < 3:
-        return
-    items.sort(key=lambda i: i.pos().y())
-    top = items[0].pos().y()
-    bottom = items[-1].pos().y()
-    spacing = (bottom - top) / (len(items) - 1)
-    for idx, item in enumerate(items):
-        item.setPos(item.pos().x(), top + idx * spacing)
-        item.notify_changed()
+    _distribute(scene, False)

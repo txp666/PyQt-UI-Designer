@@ -12,6 +12,15 @@ from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
 
 
+def tab_names(names_text: str) -> list:
+    """A tab container always has at least one usable page."""
+    return [name.strip() for name in names_text.split("\n") if name.strip()] or ["标签1"]
+
+
+def clamp_tab_index(index: int, count: int) -> int:
+    return max(0, min(int(index), max(0, count - 1)))
+
+
 class HBoxContainer(QFrame):
     """Horizontal flex container — children are laid out left to right."""
 
@@ -166,15 +175,29 @@ class TabContainer(QTabWidget):
         )
 
     def set_tab_names(self, names_text: str):
-        self._tab_names = [n.strip() for n in names_text.split("\n") if n.strip()]
+        self._tab_names = tab_names(names_text)
         self._rebuild_tabs()
 
     def _rebuild_tabs(self):
-        self.clear()
-        for name in self._tab_names:
+        current = self.currentIndex()
+        # Keep surviving page widgets and their contents when a label changes.
+        while self.count() < len(self._tab_names):
             page = QWidget()
             page.setStyleSheet("background: transparent;")
-            self.addTab(page, name)
+            self.addTab(page, "")
+        while self.count() > len(self._tab_names):
+            page = self.widget(self.count() - 1)
+            destination = self.widget(len(self._tab_names) - 1)
+            for child in page.findChildren(QWidget, options=Qt.FindDirectChildrenOnly):
+                position = child.pos()
+                child.setParent(destination)
+                child.move(position)
+                child.show()
+            self.removeTab(self.count() - 1)
+            page.deleteLater()
+        for index, name in enumerate(self._tab_names):
+            self.setTabText(index, name)
+        self.setCurrentIndex(clamp_tab_index(current, self.count()))
 
 
 class Separator(QFrame):
@@ -294,7 +317,7 @@ TAB_META = WidgetMeta(
     min_width=150, min_height=80,
     properties=[
         PropDef("tabNames", "标签名称", PropType.TEXT, "标签1\n标签2\n标签3"),
-        PropDef("currentTab", "当前标签页", PropType.INT, 0, min_val=0, max_val=19),
+        PropDef("currentTab", "当前标签页", PropType.INT, 0, min_val=0, max_val=9999),
         PropDef("tabLayout", "当前页布局", PropType.ENUM, "自由",
                 options=["自由", "垂直", "水平", "弹性(Flex)"]),
     ],
@@ -360,9 +383,7 @@ def create_layout_widget(type_name: str, props: dict, parent=None) -> QWidget:
     if type_name == "TabWidget":
         w = TabContainer(parent)
         w.set_tab_names(props.get("tabNames", "标签1\n标签2"))
-        ct = int(props.get("currentTab", 0))
-        if 0 <= ct < w.count():
-            w.setCurrentIndex(ct)
+        w.setCurrentIndex(clamp_tab_index(props.get("currentTab", 0), w.count()))
         return w
     if type_name == "Separator":
         w = Separator(parent)
@@ -396,9 +417,7 @@ def apply_layout_property(widget, type_name: str, prop_name: str, value):
         if prop_name == "tabNames":
             widget.set_tab_names(value)
         elif prop_name == "currentTab":
-            idx = int(value)
-            if 0 <= idx < widget.count():
-                widget.setCurrentIndex(idx)
+            widget.setCurrentIndex(clamp_tab_index(value, widget.count()))
     elif type_name == "Separator":
         if prop_name == "orientation":
             widget.set_orientation(value)

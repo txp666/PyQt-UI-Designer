@@ -4,12 +4,62 @@ import struct
 from PyQt5.QtCore import QSignalBlocker
 from ui import RealtimeLineChart
 
+"""Conversions shared by live bindings and standalone exported applications."""
+import math
+
+
+def binding_integer(value):
+    """Accept integer-compatible values that fit Qt's signed 32-bit API."""
+    number = int(value)
+    if not -(2 ** 31) <= number < 2 ** 31:
+        raise OverflowError("绑定整数超出 Qt 支持的范围")
+    return number
+
+
+def binding_float(value):
+    """Reject NaN/infinity before passing a sample to a numeric widget."""
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("绑定数值必须是有限数")
+    return number
+
+
+def binding_register(value):
+    """Modbus register payloads must be unsigned 16-bit integers."""
+    if not isinstance(value, int) or not 0 <= value <= 65535:
+        raise ValueError("Modbus 寄存器值必须是 0 到 65535 的整数")
+    return value
+
+
+def binding_boolean(value):
+    """Read explicit boolean tokens or finite numbers; reject unknown text."""
+    if isinstance(value, str):
+        token = value.strip().casefold()
+        if token in ("true", "on", "yes"):
+            return True
+        if token in ("false", "off", "no"):
+            return False
+    return bool(binding_float(value))
+
+
+def binding_led(value, on_value="1", off_value="0"):
+    """Preserve custom LED states before falling back to boolean conversion."""
+    text = str(value).strip()
+    if text == on_value:
+        return True
+    if text == off_value:
+        return False
+    try:
+        return binding_float(value) == binding_float(on_value)
+    except (TypeError, ValueError, OverflowError):
+        return binding_boolean(value)
+
 
 def _format_display(value, fmt):
     if fmt == "自动": return value
     try:
         num = int(float(value)) if not isinstance(value, int) else value
-    except (ValueError, TypeError): return value
+    except (ValueError, TypeError, OverflowError): return value
     if fmt == "十六进制(HEX)":
         return f"0x{num:02X}" if num >= 0 else f"-0x{abs(num):02X}"
     if fmt == "二进制(BIN)":
@@ -52,54 +102,74 @@ class DataBinding:
         self.serial.dataReceived.connect(self._on_data)
 
     def _on_data(self, data: dict):
-        if 'temperature' in data:
-            value = data['temperature']
-            w = self.ui.widgets.get('temperature')
-            if w:
-                w.set_value(str(value))
+        try:
+            if 'temperature' in data and data['temperature'] is not None:
+                value = data['temperature']
+                w = self.ui.widgets.get('temperature')
+                if w:
+                    w.set_value(str(value))
 
-        if 'pressure' in data:
-            value = data['pressure']
-            w = self.ui.widgets.get('pressure')
-            if w:
-                w.set_value(str(value))
+        except (TypeError, ValueError, OverflowError, struct.error):
+            pass
+        try:
+            if 'pressure' in data and data['pressure'] is not None:
+                value = data['pressure']
+                w = self.ui.widgets.get('pressure')
+                if w:
+                    w.set_value(str(value))
 
-        if 'pressure' in data:
-            value = data['pressure']
-            w = self.ui.widgets.get('pressure_ring')
-            if w:
-                w.set_value(int(value))
+        except (TypeError, ValueError, OverflowError, struct.error):
+            pass
+        try:
+            if 'pressure' in data and data['pressure'] is not None:
+                value = data['pressure']
+                w = self.ui.widgets.get('pressure_ring')
+                if w:
+                    w.set_value(binding_integer(value))
 
-        if 'running' in data:
-            value = data['running']
-            w = self.ui.widgets.get('running')
-            if w:
-                _sv = str(value).strip()
-                if _sv == '1': w.set_on(True)
-                elif _sv == '0': w.set_on(False)
-                else:
-                    try: w.set_on(float(_sv) == float('1'))
-                    except (ValueError, TypeError): w.set_on(bool(_sv))
+        except (TypeError, ValueError, OverflowError, struct.error):
+            pass
+        try:
+            if 'running' in data and data['running'] is not None:
+                value = data['running']
+                w = self.ui.widgets.get('running')
+                if w:
+                    w.set_on(binding_led(value, '1', '0'))
 
-        if 'setpoint' in data:
-            value = data['setpoint']
-            w = self.ui.widgets.get('setpoint_slider')
-            if w:
-                with QSignalBlocker(w):
-                    w.setValue(int(value))
-                # Fluent normally moves its handle in the blocked valueChanged signal.
-                w._adjustHandlePos()
+        except (TypeError, ValueError, OverflowError, struct.error):
+            pass
+        try:
+            if 'setpoint' in data and data['setpoint'] is not None:
+                value = data['setpoint']
+                w = self.ui.widgets.get('setpoint_slider')
+                if w:
+                    value = binding_integer(value)
+                    with QSignalBlocker(w):
+                        w.setValue(value)
+                    # Fluent normally moves its handle in the blocked valueChanged signal.
+                    w._adjustHandlePos()
 
-        if 'setpoint' in data:
-            value = data['setpoint']
-            w = self.ui.widgets.get('setpoint_spin')
-            if w:
-                with QSignalBlocker(w):
-                    w.setValue(int(value))
+        except (TypeError, ValueError, OverflowError, struct.error):
+            pass
+        try:
+            if 'setpoint' in data and data['setpoint'] is not None:
+                value = data['setpoint']
+                w = self.ui.widgets.get('setpoint_spin')
+                if w:
+                    value = binding_integer(value)
+                    with QSignalBlocker(w):
+                        w.setValue(value)
 
-        if 'running' in data:
-            value = data['running']
-            w = self.ui.widgets.get('run_switch')
-            if w:
-                with QSignalBlocker(w._switch):
-                    w._switch.setChecked(bool(value))
+        except (TypeError, ValueError, OverflowError, struct.error):
+            pass
+        try:
+            if 'running' in data and data['running'] is not None:
+                value = data['running']
+                w = self.ui.widgets.get('run_switch')
+                if w:
+                    value = binding_boolean(value)
+                    with QSignalBlocker(w._switch):
+                        w._switch.setChecked(value)
+
+        except (TypeError, ValueError, OverflowError, struct.error):
+            pass

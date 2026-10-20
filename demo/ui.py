@@ -1285,11 +1285,11 @@ class MainUI(FluentWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('串口采集 Demo')
-        self.resize(1180, 840)
+        self.resize(1180, 910)
 
         self._page = QWidget()
         self._page.setObjectName("mainPage")
-        self._page.setFixedSize(1080, 740)
+        self._page.setFixedSize(1080, 810)
 
         self.widgets = {}
         self._theme_containers = []
@@ -1372,12 +1372,12 @@ class MainUI(FluentWindow):
         self.widgets['running'].setGeometry(730, 154, 220, 40)
         self.widgets['running'].show()
 
-        self.widgets['start'] = PushButton('启动设备', self._page)
+        self.widgets['start'] = PushButton('启动设备', self._page); self.widgets['start'].setEnabled(True)
         self.widgets['start'].setGeometry(712, 217, 150, 40)
         self.widgets['start'].show()
         self.widgets['start'].clicked.connect(lambda: self._send_text_command(str('START'), '\r\n'))
 
-        self.widgets['stop'] = PushButton('停止设备', self._page)
+        self.widgets['stop'] = PushButton('停止设备', self._page); self.widgets['stop'].setEnabled(True)
         self.widgets['stop'].setGeometry(886, 217, 150, 40)
         self.widgets['stop'].show()
         self.widgets['stop'].clicked.connect(lambda: self._send_text_command(str('STOP'), '\r\n'))
@@ -1390,7 +1390,7 @@ class MainUI(FluentWindow):
         self.widgets['receive'].setGeometry(688, 355, 368, 310)
         self.widgets['receive'].show()
 
-        self.widgets['command'] = LineEdit(self._page); self.widgets['command'].setPlaceholderText('输入 READ、START 或 STOP，按回车发送')
+        self.widgets['command'] = LineEdit(self._page); self.widgets['command'].setPlaceholderText('输入 READ、START 或 STOP，按回车发送'); self.widgets['command'].setText(''); self.widgets['command'].setReadOnly(False)
         self.widgets['command'].setGeometry(24, 690, 440, 36)
         self.widgets['command'].show()
         self.widgets['command'].returnPressed.connect(lambda: self._send_text_command(str(self.widgets['command'].text().strip()), '\r\n'))
@@ -1417,6 +1417,25 @@ class MainUI(FluentWindow):
         self.widgets['run_switch'].setGeometry(710, 295, 325, 36)
         self.widgets['run_switch'].show()
         self.widgets['run_switch']._switch.checkedChanged.connect(lambda c: self._send_text_command(str('START'), '\r\n') if c else self._send_text_command(str('STOP'), '\r\n'))
+
+        self.widgets['reserved'] = PushButton('预留操作（禁用）', self._page); self.widgets['reserved'].setEnabled(False)
+        self.widgets['reserved'].setGeometry(24, 745, 210, 36)
+        self.widgets['reserved'].show()
+        self.widgets['reserved'].clicked.connect(lambda: self._send_text_command(str('STOP'), '\r\n'))
+
+        self.widgets['protocol_info'] = LineEdit(self._page); self.widgets['protocol_info'].setPlaceholderText(''); self.widgets['protocol_info'].setText('协议: JSON / 115200 / 8N1'); self.widgets['protocol_info'].setReadOnly(True)
+        self.widgets['protocol_info'].setGeometry(250, 745, 320, 36)
+        self.widgets['protocol_info'].show()
+
+        self.widgets['command_presets'] = ComboBox(self._page); self.widgets['command_presets'].addItems(['停止设备', '读取一次', '启动设备']); self.widgets['command_presets'].setCurrentIndex(1)
+        self.widgets['command_presets'].setGeometry(590, 745, 240, 36)
+        self.widgets['command_presets'].show()
+        _cmds_command_presets = ['STOP', 'READ', 'START']
+        self.widgets['command_presets'].currentIndexChanged.connect(lambda i: self._send_text_command(str((_cmds_command_presets[i] if i < len(_cmds_command_presets) and _cmds_command_presets[i] else self.widgets['command_presets'].currentText())), '\r\n'))
+
+        self.widgets['preset_hint'] = BodyLabel('快捷命令 · 选择后发送', self._page); _font = self.widgets['preset_hint'].font(); _font.setPointSize(12); _font.setBold(False); self.widgets['preset_hint'].setFont(_font); self.widgets['preset_hint'].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.widgets['preset_hint'].setGeometry(850, 745, 200, 36)
+        self.widgets['preset_hint'].show()
 
 
     def _send_text_command(self, cmd, suffix="\r\n"):

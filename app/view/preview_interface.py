@@ -59,10 +59,9 @@ class PreviewCanvas(QWidget):
         try:
             actual_parent = parent_widget
             if isinstance(parent_widget, QTabWidget):
-                tab_idx = wd.get("tabIndex", 0)
+                from app.widgets.layout import clamp_tab_index
+                tab_idx = clamp_tab_index(wd.get("tabIndex", 0), parent_widget.count())
                 page = parent_widget.widget(tab_idx)
-                if page is None and parent_widget.count() > 0:
-                    page = parent_widget.widget(0)
                 if page:
                     actual_parent = page
 
@@ -235,7 +234,8 @@ class PreviewCanvas(QWidget):
                                    _m=mode, _n=newline, _p=props, _t=tpl):
                         if _m == "Modbus":
                             val = 0xFF00 if checked else 0x0000
-                            PreviewCanvas._send_modbus_frame(_p, val)
+                            PreviewCanvas._send_modbus_frame(
+                                {**_p, "mbFunc": "05 写单线圈"}, val)
                         else:
                             c = _on if checked else _off
                             if c:

@@ -2,7 +2,8 @@
 """Property editor panel — dynamic form driven by widget metadata."""
 from typing import Optional
 
-from PyQt5.QtCore import Qt
+from PyQt5 import sip
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFormLayout,
     QSizePolicy, QFrame, QFileDialog,
@@ -48,6 +49,15 @@ for _v in _CHART_PARSE_VIS.values():
     _CHART_PARSE_ALL |= _v
 
 
+class _TabNamesEdit(TextEdit):
+    """Commit a complete list of page names, not each transient keystroke."""
+    editingFinished = pyqtSignal()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.editingFinished.emit()
+
+
 class PropertyEditor(ScrollArea):
     """Right panel showing editable properties for the selected widget."""
 
@@ -83,7 +93,10 @@ class PropertyEditor(ScrollArea):
         )
 
     def set_scene(self, scene):
+        if hasattr(self, "_scene"):
+            self._scene.aboutToSerialize.disconnect(self.commit_pending_edits)
         self._scene = scene
+        scene.aboutToSerialize.connect(self.commit_pending_edits)
 
     def _on_widget_selected(self, widget_id: str):
         if not hasattr(self, "_scene"):
@@ -96,6 +109,7 @@ class PropertyEditor(ScrollArea):
         self._clear()
 
     def _clear(self):
+        self.commit_pending_edits()
         self._current_item = None
         self._editors.clear()
         while self._layout.count():
@@ -107,6 +121,7 @@ class PropertyEditor(ScrollArea):
         self._layout.addWidget(self._empty_label)
 
     def _load_item(self, item: CanvasItem):
+        self.commit_pending_edits()
         self._current_item = item
         self._editors.clear()
         self._prop_rows.clear()
@@ -185,12 +200,11 @@ class PropertyEditor(ScrollArea):
                            or item.properties.get("sendOnChange", False))
                 self._apply_send_toggle_visibility(send_on)
 
-            if item.type_name == "TabWidget" and "tabLayout" in self._editors:
-                ct = int(item.properties.get("currentTab", 0))
-                real_val = item.properties.get(f"_tabLayout_{ct}", "垂直")
-                self._updating = True
-                self._editors["tabLayout"].setCurrentText(real_val)
-                self._updating = False
+            if item.type_name == "TabWidget":
+                self._sync_tab_editors()
+                self._editors["tabNames"].setToolTip(
+                    "每行一个标签，离开输入框后应用，按序号保留页面。减少页数时，"
+                    "超出页的控件移至最后一页；名称为空时保留“标签1”。")
 
             if item.type_name == "RealtimeChart":
                 self._load_curve_editors(item)
@@ -388,10 +402,16 @@ class PropertyEditor(ScrollArea):
             return editor
 
         if prop_def.prop_type == PropType.TEXT:
-            editor = TextEdit()
+            editor = _TabNamesEdit() if prop_def.name == "tabNames" else TextEdit()
             editor.setPlainText(str(current_value))
             editor.setMaximumHeight(80)
-            editor.textChanged.connect(lambda n=prop_def.name: self._on_text_prop_changed(n, editor))
+            if prop_def.name == "tabNames":
+                editor.textChanged.connect(self._on_pending_tab_names_changed)
+                editor.editingFinished.connect(
+                    lambda: self.commit_pending_edits(editor))
+            else:
+                editor.textChanged.connect(
+                    lambda n=prop_def.name: self._on_text_prop_changed(n, editor))
             return editor
 
         return None
@@ -460,6 +480,39 @@ class PropertyEditor(ScrollArea):
                 editor.setText(str(stored))
         self._updating = False
 
+    def _on_pending_tab_names_changed(self):
+        if not self._updating:
+            signalBus.canvasChanged.emit()
+
+    def commit_pending_edits(self, editor=None):
+        current = self._editors.get("tabNames")
+        if (self._updating or current is None or not self._current_item
+                or sip.isdeleted(self._current_item)
+                or (editor is not None and editor is not current)):
+            return
+        if (hasattr(self, "_scene")
+                and self._current_item.scene() is not self._scene):
+            return
+        text = current.toPlainText()
+        if text != self._current_item.properties.get("tabNames", ""):
+            self._on_prop_changed("tabNames", text)
+
+    def _sync_tab_editors(self):
+        item = self._current_item
+        if item is None or item.type_name != "TabWidget":
+            return
+        updating = self._updating
+        self._updating = True
+        current = int(item.properties.get("currentTab", 0))
+        if "currentTab" in self._editors:
+            editor = self._editors["currentTab"]
+            editor.setRange(0, item._inner_widget.count() - 1)
+            editor.setValue(current)
+        if "tabLayout" in self._editors:
+            self._editors["tabLayout"].setCurrentText(
+                item.properties.get(f"_tabLayout_{current}", "自由"))
+        self._updating = updating
+
     def _on_prop_changed(self, prop_name: str, value):
         if self._updating or not self._current_item:
             return
@@ -475,16 +528,10 @@ class PropertyEditor(ScrollArea):
             self._apply_mode_visibility(value)
         elif prop_name in ("sendOnEnter", "sendOnSelect", "sendOnChange"):
             self._apply_send_toggle_visibility(bool(value))
-        elif (prop_name == "currentTab"
+        elif (prop_name in ("currentTab", "tabNames")
               and self._current_item
               and self._current_item.type_name == "TabWidget"):
-            ct = int(value)
-            layout_val = self._current_item.properties.get(
-                f"_tabLayout_{ct}", "垂直")
-            if "tabLayout" in self._editors:
-                self._updating = True
-                self._editors["tabLayout"].setCurrentText(layout_val)
-                self._updating = False
+            self._sync_tab_editors()
         elif (self._current_item
               and self._current_item.type_name == "RealtimeChart"):
             if prop_name == "currentCurve":

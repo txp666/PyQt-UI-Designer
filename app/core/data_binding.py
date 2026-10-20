@@ -14,6 +14,9 @@ from PyQt5.QtCore import QObject, QSignalBlocker
 
 from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
+from app.core.binding_values import (
+    binding_boolean, binding_float, binding_integer, binding_led, binding_register,
+)
 
 _STRUCT_FMT = {
     "uint8": ("B", 1), "int8": ("b", 1),
@@ -108,6 +111,7 @@ class BindingEntry:
         r0 = data.get(f"reg{idx}")
         if r0 is None:
             return None
+        r0 = binding_register(r0)
 
         if dt == "uint16":
             return r0
@@ -117,6 +121,7 @@ class BindingEntry:
         r1 = data.get(f"reg{idx + 1}")
         if r1 is None:
             return None
+        r1 = binding_register(r1)
         if self.mb_reg_order == "大端(AB CD)":
             high, low = r0, r1
         else:
@@ -215,7 +220,7 @@ class BindingEntry:
             return value
         try:
             num = int(float(value)) if not isinstance(value, int) else value
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             return value
         if self.display_format == "十六进制(HEX)":
             return f"0x{num:02X}" if num >= 0 else f"-0x{abs(num):02X}"
@@ -346,10 +351,13 @@ class DataBindingEngine(QObject):
         for b in self._bindings:
             if b.parse_mode not in ("键值匹配", "JSON路径", "Modbus"):
                 continue
-            value = b.extract_from_parsed(data)
-            if value is None:
+            try:
+                value = b.extract_from_parsed(data)
+                if value is not None:
+                    self._push_value(b, value)
+            except (TypeError, ValueError, OverflowError, struct.error):
+                # A malformed device field must not stop the other bindings.
                 continue
-            self._push_value(b, value)
 
     def _on_raw(self, raw: bytes):
         """Handle raw bytes — HEX字节提取 mode."""
@@ -359,7 +367,10 @@ class DataBindingEngine(QObject):
             if b.parse_mode != "HEX字节提取":
                 continue
             for value in b.extract_all_from_raw(raw):
-                self._push_value(b, value)
+                try:
+                    self._push_value(b, value)
+                except (TypeError, ValueError, OverflowError, struct.error):
+                    continue
 
     def _push_value(self, b: BindingEntry, raw_value):
         value = b.evaluate(raw_value)
@@ -374,14 +385,12 @@ class DataBindingEngine(QObject):
         # Device feedback updates the display without sending the value back
         # as another user command (or showing a user-action notification).
         if binding.type_name == "ToggleSwitch" and prop == "checked":
+            value = binding_boolean(value)
             with QSignalBlocker(widget._switch):
-                widget._switch.setChecked(bool(value))
+                widget._switch.setChecked(value)
             return
         if binding.type_name in ("Slider", "SpinBox") and prop == "value":
-            try:
-                value = int(value)
-            except (TypeError, ValueError, OverflowError):
-                return
+            value = binding_integer(value)
             with QSignalBlocker(widget):
                 widget.setValue(value)
             if binding.type_name == "Slider":
@@ -398,17 +407,14 @@ class DataBindingEngine(QObject):
                     pass
             return
 
+        if prop == "value":
+            if binding.type_name in ("ProgressBar", "ProgressRingDisplay"):
+                value = binding_integer(value)
+            elif binding.type_name == "GaugeMeter":
+                value = binding_float(value)
+
         if binding.type_name == "LEDIndicator" and prop == "on":
-            sv = str(value).strip()
-            if sv == binding.led_on_value:
-                value = True
-            elif sv == binding.led_off_value:
-                value = False
-            else:
-                try:
-                    value = float(sv) == float(binding.led_on_value)
-                except (ValueError, TypeError):
-                    value = bool(sv)
+            value = binding_led(value, binding.led_on_value, binding.led_off_value)
 
         from app.widgets.basic import apply_property
         try:

@@ -23,6 +23,7 @@ class DesignScene(QGraphicsScene):
     """Scene that holds all CanvasItems and draws a grid background."""
 
     itemSelectionUpdated = pyqtSignal(object)
+    aboutToSerialize = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)

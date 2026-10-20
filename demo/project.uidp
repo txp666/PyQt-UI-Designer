@@ -3,7 +3,7 @@
   "appName": "串口采集 Demo",
   "canvas": {
     "width": 1080,
-    "height": 740,
+    "height": 810,
     "gridSize": 10
   },
   "widgets": [
@@ -407,6 +407,111 @@
         "parseMode": "键值匹配",
         "key": "running"
       }
+    },
+    {
+      "id": "reserved",
+      "type": "PushButton",
+      "properties": {
+        "text": "预留操作（禁用）",
+        "enabled": false,
+        "commandMode": "文本",
+        "command": "STOP",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "03 读保持寄存器",
+        "mbAddress": 0,
+        "mbValue": 1,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "按钮已按下",
+        "notifyType": "成功",
+        "notifyDuration": 3000
+      },
+      "geometry": {
+        "x": 24,
+        "y": 745,
+        "w": 210,
+        "h": 36
+      },
+      "binding": null
+    },
+    {
+      "id": "protocol_info",
+      "type": "LineEdit",
+      "properties": {
+        "placeholderText": "",
+        "text": "协议: JSON / 115200 / 8N1",
+        "readOnly": true,
+        "sendOnEnter": false,
+        "commandMode": "文本",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "geometry": {
+        "x": 250,
+        "y": 745,
+        "w": 320,
+        "h": 36
+      },
+      "binding": null
+    },
+    {
+      "id": "command_presets",
+      "type": "ComboBox",
+      "properties": {
+        "items": "停止设备\n读取一次\n启动设备",
+        "currentIndex": 1,
+        "sendOnSelect": true,
+        "commands": "STOP\nREAD\nSTART",
+        "commandMode": "文本",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0,
+        "mbValue": 1
+      },
+      "geometry": {
+        "x": 590,
+        "y": 745,
+        "w": 240,
+        "h": 36
+      },
+      "binding": null
+    },
+    {
+      "id": "preset_hint",
+      "type": "Label",
+      "properties": {
+        "text": "快捷命令 · 选择后发送",
+        "fontSize": 12,
+        "bold": false,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      },
+      "geometry": {
+        "x": 850,
+        "y": 745,
+        "w": 200,
+        "h": 36
+      },
+      "binding": null
     }
   ],
   "serial": {

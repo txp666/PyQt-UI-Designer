@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 )
 
 from app.widgets.basic import create_widget, apply_property
+from app.widgets.layout import clamp_tab_index, tab_names
 from app.core.widget_registry import registry
 
 HANDLE_SIZE = 8
@@ -92,6 +93,10 @@ class CanvasItem(QGraphicsRectItem):
         self.widget_id = widget_id or f"{type_name}_{uuid.uuid4().hex[:6]}"
         self.type_name = type_name
         self.properties = dict(properties)
+        if type_name == "TabWidget":
+            self.properties["currentTab"] = clamp_tab_index(
+                self.properties.get("currentTab", 0),
+                len(tab_names(self.properties.get("tabNames", "标签1\n标签2"))))
         self.binding: Optional[Dict] = None
         self._grid_size = 10
 
@@ -112,7 +117,7 @@ class CanvasItem(QGraphicsRectItem):
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
 
         self._proxy = QGraphicsProxyWidget(self)
-        self._inner_widget = create_widget(type_name, properties)
+        self._inner_widget = create_widget(type_name, self.properties)
         self._inner_widget.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self._proxy.setWidget(self._inner_widget)
         self._proxy.setPos(0, 0)
@@ -158,8 +163,9 @@ class CanvasItem(QGraphicsRectItem):
         if child not in self._container_children:
             self._container_children.append(child)
         if self.type_name == "TabWidget":
-            child.tab_index = (self.properties.get("currentTab", 0)
-                               if tab_index is None else tab_index)
+            child.tab_index = clamp_tab_index(
+                self.properties.get("currentTab", 0) if tab_index is None else tab_index,
+                self._inner_widget.count())
             mode = self.properties.get(
                 f"_tabLayout_{child.tab_index}", "自由")
             child.setFlag(QGraphicsItem.ItemIsMovable, mode == "自由")
@@ -370,6 +376,8 @@ class CanvasItem(QGraphicsRectItem):
             h.setVisible(visible)
 
     def set_property(self, name: str, value: Any):
+        if self.type_name == "TabWidget" and name == "currentTab":
+            value = clamp_tab_index(value, self._inner_widget.count())
         self.properties[name] = value
         if self.type_name == "TabWidget" and name == "tabLayout":
             ct = self.properties.get("currentTab", 0)
@@ -390,6 +398,17 @@ class CanvasItem(QGraphicsRectItem):
         old_hint_h = layout.sizeHint().height() if layout else -1
 
         apply_property(self._inner_widget, self.type_name, name, value)
+        if self.type_name == "TabWidget" and name == "tabNames":
+            count = self._inner_widget.count()
+            current = clamp_tab_index(self.properties.get("currentTab", 0), count)
+            self.properties["currentTab"] = current
+            self._inner_widget.setCurrentIndex(current)
+            for child in self._container_children:
+                child.tab_index = clamp_tab_index(child.tab_index, count)
+            for key in list(self.properties):
+                if key.startswith("_tabLayout_") and key[11:].isdigit():
+                    if int(key[11:]) >= count:
+                        del self.properties[key]
 
         if layout:
             layout.activate()
@@ -400,7 +419,8 @@ class CanvasItem(QGraphicsRectItem):
                 r = self.rect()
                 self.set_rect(QRectF(0, 0, r.width(), max(min_h, new_hint_h)))
 
-        if self.is_container() and name in ("spacing", "direction", "currentTab", "layout"):
+        if self.is_container() and name in ("spacing", "direction", "currentTab",
+                                          "tabNames", "layout"):
             self.relayout_children()
 
     def snap_to_grid(self):

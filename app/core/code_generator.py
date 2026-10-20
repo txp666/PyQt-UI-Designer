@@ -397,9 +397,11 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str):
         if children:
             if wtype == "TabWidget":
                 from collections import defaultdict
+                from app.widgets.layout import tab_names, clamp_tab_index
                 tabs = defaultdict(list)
+                page_count = len(tab_names(props.get("tabNames", "标签1\n标签2")))
                 for c in children:
-                    tabs[c.get("tabIndex", 0)].append(c)
+                    tabs[clamp_tab_index(c.get("tabIndex", 0), page_count)].append(c)
                 for ti, tab_children in sorted(tabs.items()):
                     page_var = f"self.widgets['{wid}'].widget({ti})"
                     _gen_widgets_recursive(tab_children, lines, page_var)
@@ -558,7 +560,8 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
     pv = parent_var
 
     if wtype == "PushButton":
-        return f"self.widgets['{wid}'] = PushButton({p('text', '按钮')}, {pv})"
+        return (f"self.widgets['{wid}'] = PushButton({p('text', '按钮')}, {pv}); "
+                f"self.widgets['{wid}'].setEnabled({p('enabled', True)})")
     if wtype == "Label":
         alignment = {"Left": "Qt.AlignLeft | Qt.AlignVCenter",
                      "Center": "Qt.AlignCenter",
@@ -572,11 +575,17 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                 f"self.widgets['{wid}'].setAlignment({alignment})")
     if wtype == "LineEdit":
         return (f"self.widgets['{wid}'] = LineEdit({pv}); "
-                f"self.widgets['{wid}'].setPlaceholderText({p('placeholderText', '')})")
+                f"self.widgets['{wid}'].setPlaceholderText({p('placeholderText', '')}); "
+                f"self.widgets['{wid}'].setText({p('text', '')}); "
+                f"self.widgets['{wid}'].setReadOnly({p('readOnly', False)})")
     if wtype == "ComboBox":
         items = [s.strip() for s in props.get("items", "").split("\n") if s.strip()]
-        return (f"self.widgets['{wid}'] = ComboBox({pv}); "
+        code = (f"self.widgets['{wid}'] = ComboBox({pv}); "
                 f"self.widgets['{wid}'].addItems({repr(items)})")
+        index = props.get("currentIndex", 0)
+        if 0 <= index < len(items):
+            code += f"; self.widgets['{wid}'].setCurrentIndex({index})"
+        return code
     if wtype == "ToggleSwitch":
         lbl = props.get("label", "开关")
         return (f"_tw = QWidget({pv}); _tl = QHBoxLayout(_tw); _tl.setContentsMargins(0,0,0,0); "
@@ -637,13 +646,14 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                 f"self.widgets['{wid}'].setObjectName('groupContainer'); "
                 f"self._theme_containers.append((self.widgets['{wid}'], 'group'))")
     if wtype == "TabWidget":
-        tab_names = [n.strip() for n in props.get("tabNames", "标签1\n标签2").split("\n") if n.strip()]
+        from app.widgets.layout import tab_names, clamp_tab_index
+        names = tab_names(props.get("tabNames", "标签1\n标签2"))
         parts = [f"self.widgets['{wid}'] = QTabWidget({pv})",
                  f"self.widgets['{wid}'].setObjectName('tabContainer')",
                  f"self._theme_containers.append((self.widgets['{wid}'], 'tabs'))"]
-        for name in tab_names:
+        for name in names:
             parts.append(f"self.widgets['{wid}'].addTab(QWidget(), {repr(name)})")
-        ct = int(props.get("currentTab", 0))
+        ct = clamp_tab_index(props.get("currentTab", 0), len(names))
         if ct > 0:
             parts.append(f"self.widgets['{wid}'].setCurrentIndex({ct})")
         return "; ".join(parts)
@@ -762,6 +772,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
     if has_hex:
         lines.append('from serial_handler import RawFrameBuffer')
     lines.append('')
+    lines.append(runtime_source("binding_values.py"))
 
     lines += [
         '',
@@ -769,7 +780,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         '    if fmt == "自动": return value',
         '    try:',
         '        num = int(float(value)) if not isinstance(value, int) else value',
-        '    except (ValueError, TypeError): return value',
+        '    except (ValueError, TypeError, OverflowError): return value',
         '    if fmt == "十六进制(HEX)":',
         '        return f"0x{num:02X}" if num >= 0 else f"-0x{abs(num):02X}"',
         '    if fmt == "二进制(BIN)":',
@@ -835,7 +846,12 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         lines.append('    def _on_data(self, data: dict):')
         parsed_bindings = [b for b in bindings if b["parseMode"] in ("键值匹配", "JSON路径", "Modbus")]
         for b in parsed_bindings:
-            _gen_binding_apply(lines, b, source="parsed")
+            fragment = []
+            _gen_binding_apply(fragment, b, source="parsed")
+            lines.append('        try:')
+            lines.extend('    ' + line if line else '' for line in fragment)
+            lines.append('        except (TypeError, ValueError, OverflowError, struct.error):')
+            lines.append('            pass')
         if not parsed_bindings:
             lines.append('        pass')
         lines.append('')
@@ -851,7 +867,10 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         hex_bindings = [b for b in bindings if b["parseMode"] == "HEX字节提取"]
         for index, b in enumerate(hex_bindings):
             lines.append(f'        for frame in self._raw_frames[{b["widget_id"]!r}].feed(raw):')
-            lines.append(f'            self._raw_binding_{index}(frame)')
+            lines.append('            try:')
+            lines.append(f'                self._raw_binding_{index}(frame)')
+            lines.append('            except (TypeError, ValueError, OverflowError, struct.error):')
+            lines.append('                pass')
         if not hex_bindings:
             lines.append('        pass')
         lines.append('')
@@ -876,7 +895,7 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     if source == "parsed":
         if pm == "键值匹配":
             key = b["key"]
-            lines.append(f"        if {key!r} in data:")
+            lines.append(f"        if {key!r} in data and data[{key!r}] is not None:")
             lines.append(f"            value = data[{key!r}]")
         elif pm == "JSON路径":
             jp = b["jsonPath"]
@@ -902,6 +921,7 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
             if mb_dt in ("uint16", "int16"):
                 lines.append(f"        else:")
                 lines.append(f"            value = data.get(f'reg{reg_idx}')")
+                lines.append(f"            if value is not None: value = binding_register(value)")
                 if mb_dt == "int16":
                     lines.append(f"            if value is not None and value > 32767: value = value - 65536")
             else:
@@ -910,6 +930,7 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
                 lines.append(f"            _r1 = data.get(f'reg{reg_idx + 1}')")
                 lines.append(f"            if _r0 is None or _r1 is None: value = None")
                 lines.append(f"            else:")
+                lines.append(f"                _r0, _r1 = binding_register(_r0), binding_register(_r1)")
                 if mb_ro == "大端(AB CD)":
                     lines.append(f"                _raw = _r0.to_bytes(2,'big') + _r1.to_bytes(2,'big')")
                 else:
@@ -925,18 +946,19 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
         off = b["byteOffset"]
         dt = b["dataType"]
         bo_str = b.get("byteOrder", "大端(BE)")
-        fh = b.get("frameHeader", "").replace(" ", "")
-        ft = b.get("frameTail", "").replace(" ", "")
+        from app.core.data_binding import BindingEntry
+        fh = BindingEntry._hex_to_bytes(b.get("frameHeader", ""))
+        ft = BindingEntry._hex_to_bytes(b.get("frameTail", ""))
         raw_var = "raw"
         if fh or ft:
             lines.append(f"        _payload = raw")
             if fh:
-                lines.append(f"        _hdr = bytes.fromhex({repr(fh)})")
+                lines.append(f"        _hdr = {fh!r}")
                 lines.append(f"        _hi = _payload.find(_hdr)")
                 lines.append(f"        if _hi < 0: return")
                 lines.append(f"        _payload = _payload[_hi + len(_hdr):]")
             if ft:
-                lines.append(f"        _tlr = bytes.fromhex({repr(ft)})")
+                lines.append(f"        _tlr = {ft!r}")
                 lines.append(f"        _ti = _payload.find(_tlr)")
                 lines.append(f"        if _ti < 0: return")
                 lines.append(f"        _payload = _payload[:_ti]")
@@ -973,27 +995,24 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     elif wtype == "LEDIndicator":
         on_val = b.get("onValue", "1")
         off_val = b.get("offValue", "0")
-        lines.append(f"{indent}    _sv = str(value).strip()")
-        lines.append(f"{indent}    if _sv == {repr(on_val)}: w.set_on(True)")
-        lines.append(f"{indent}    elif _sv == {repr(off_val)}: w.set_on(False)")
-        lines.append(f"{indent}    else:")
-        lines.append(f"{indent}        try: w.set_on(float(_sv) == float({repr(on_val)}))")
-        lines.append(f"{indent}        except (ValueError, TypeError): w.set_on(bool(_sv))")
+        lines.append(f"{indent}    w.set_on(binding_led(value, {on_val!r}, {off_val!r}))")
     elif wtype == "ProgressBar":
-        lines.append(f"{indent}    w.setValue(int(value))")
+        lines.append(f"{indent}    w.setValue(binding_integer(value))")
     elif wtype == "ProgressRingDisplay":
-        lines.append(f"{indent}    w.set_value(int(value))")
+        lines.append(f"{indent}    w.set_value(binding_integer(value))")
     elif wtype == "GaugeMeter":
-        lines.append(f"{indent}    w.set_value(float(value))")
+        lines.append(f"{indent}    w.set_value(binding_float(value))")
     elif wtype in ("Slider", "SpinBox"):
+        lines.append(f"{indent}    value = binding_integer(value)")
         lines.append(f"{indent}    with QSignalBlocker(w):")
-        lines.append(f"{indent}        w.setValue(int(value))")
+        lines.append(f"{indent}        w.setValue(value)")
         if wtype == "Slider":
             lines.append(f"{indent}    # Fluent normally moves its handle in the blocked valueChanged signal.")
             lines.append(f"{indent}    w._adjustHandlePos()")
     elif wtype == "ToggleSwitch":
+        lines.append(f"{indent}    value = binding_boolean(value)")
         lines.append(f"{indent}    with QSignalBlocker(w._switch):")
-        lines.append(f"{indent}        w._switch.setChecked(bool(value))")
+        lines.append(f"{indent}        w._switch.setChecked(value)")
     else:
         lines.append(f"{indent}    if hasattr(w, 'setText'): w.setText(str(value))")
     lines.append("")

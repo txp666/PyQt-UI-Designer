@@ -147,6 +147,7 @@ class ProjectManager:
 
     def save_from_scene(self, scene: DesignScene, path: str, app_name: str = None):
         """Serialize current scene to .uidp file."""
+        scene.aboutToSerialize.emit()
         candidate = copy.deepcopy(self._current)
         if app_name is not None:
             candidate.app_name = app_name
@@ -211,6 +212,7 @@ class ProjectManager:
 
     def export_scene_data(self, scene: DesignScene, app_name: str = None) -> ProjectData:
         """Capture current scene state into ProjectData (without saving to file)."""
+        scene.aboutToSerialize.emit()
         if app_name is not None:
             self._current.app_name = app_name
         self._current.canvas_width = int(scene.sceneRect().width())

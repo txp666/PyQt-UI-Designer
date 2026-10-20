@@ -66,6 +66,11 @@ def exercise_application():
     assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
     assert not serial.is_connected
     assert card.port == "DEMO"
+    assert not widgets["reserved"].isEnabled()
+    assert widgets["protocol_info"].isReadOnly()
+    assert widgets["protocol_info"].text() == "协议: JSON / 115200 / 8N1"
+    assert widgets["command_presets"].currentIndex() == 1
+    assert widgets["command_presets"].currentText() == "读取一次"
 
     def assert_latest_sample():
         sample = samples[-1]
@@ -101,6 +106,11 @@ def exercise_application():
                 assert type(serial._parser).__name__ == "LineParser"
                 assert not card._sl_conn.isEnabled()
                 assert card._sl_disconn.isEnabled()
+                QTest.mouseClick(widgets["reserved"], Qt.LeftButton)
+                widgets["protocol_info"].selectAll()
+                QTest.keyClicks(widgets["protocol_info"], "changed")
+                assert widgets["protocol_info"].text() == "协议: JSON / 115200 / 8N1"
+                assert not sent
                 state["phase"] = "receiving"
             elif phase == "receiving" and len(samples) >= 3:
                 assert_latest_sample()
@@ -164,6 +174,18 @@ def exercise_application():
                 assert_latest_sample()
                 assert len(sent) == 7, sent
                 assert "READ" in receive._text.toPlainText()
+                widgets["command_presets"].setCurrentIndex(0)
+                assert sent[-1] == b"STOP\r\n", sent
+                state["phase"] = "preset_stop"
+            elif phase == "preset_stop" and samples[-1]["running"] == 0:
+                assert_latest_sample()
+                assert len(sent) == 8, sent
+                widgets["command_presets"].setCurrentIndex(2)
+                assert sent[-1] == b"START\r\n", sent
+                state["phase"] = "preset_start"
+            elif phase == "preset_start" and samples[-1]["running"] == 1:
+                assert_latest_sample()
+                assert len(sent) == 9, sent
                 old_thread = serial._thread
                 state["old_port"] = serial._port
                 card._sl_disconn.click()
