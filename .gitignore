@@ -40,6 +40,7 @@ Desktop.ini
 output/
 *.uidp
 !demo/project.uidp
+!examples/tutorials/*.uidp
 
 # Cursor
 .cursor/

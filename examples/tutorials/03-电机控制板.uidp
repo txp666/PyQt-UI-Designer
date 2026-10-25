@@ -1,0 +1,308 @@
+{
+  "version": "1.0",
+  "appName": "电机控制板",
+  "canvas": {
+    "width": 900,
+    "height": 600,
+    "gridSize": 10
+  },
+  "widgets": [
+    {
+      "id": "Label_cd5e76",
+      "type": "Label",
+      "geometry": {
+        "x": 20.0,
+        "y": 10.0,
+        "w": 360.0,
+        "h": 30.0
+      },
+      "properties": {
+        "text": "电机控制板",
+        "fontSize": 20,
+        "bold": true,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      },
+      "binding": null
+    },
+    {
+      "id": "SerialConfigCard_ad8c0b",
+      "type": "SerialConfigCard",
+      "geometry": {
+        "x": 20.0,
+        "y": 60.0,
+        "w": 860.0,
+        "h": 50.0
+      },
+      "properties": {
+        "title": "串口配置",
+        "displayMode": "单行",
+        "defaultParser": "项目设置",
+        "defaultBaud": "115200",
+        "defaultDatabits": "8",
+        "defaultParity": "None",
+        "defaultStopbits": "1",
+        "defaultFlow": "无"
+      },
+      "binding": null
+    },
+    {
+      "id": "GaugeMeter_6d7ccd",
+      "type": "GaugeMeter",
+      "geometry": {
+        "x": 20.0,
+        "y": 120.0,
+        "w": 180.0,
+        "h": 180.0
+      },
+      "properties": {
+        "title": "转速",
+        "unit": "rpm",
+        "value": 0.0,
+        "minimum": 0.0,
+        "maximum": 3000.0
+      },
+      "binding": {
+        "parseMode": "HEX字节提取",
+        "key": "",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "float32",
+        "byteOrder": "小端(LE)",
+        "expression": null,
+        "frameHeader": "AA 55",
+        "frameTail": "0D 0A",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "NumericDisplay_62a9cf",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 220.0,
+        "y": 120.0,
+        "w": 200.0,
+        "h": 90.0
+      },
+      "properties": {
+        "title": "目标转速",
+        "value": "0.00",
+        "unit": "rpm",
+        "fontSize": 28,
+        "displayFormat": "自动"
+      },
+      "binding": {
+        "parseMode": "HEX字节提取",
+        "key": "",
+        "jsonPath": "",
+        "byteOffset": 4,
+        "dataType": "int16",
+        "byteOrder": "小端(LE)",
+        "expression": null,
+        "frameHeader": "AA 55",
+        "frameTail": "0D 0A",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "NumericDisplay_3c5fc1",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 430.0,
+        "y": 120.0,
+        "w": 200.0,
+        "h": 90.0
+      },
+      "properties": {
+        "title": "电流",
+        "value": "0.00",
+        "unit": "mA",
+        "fontSize": 28,
+        "displayFormat": "自动"
+      },
+      "binding": {
+        "parseMode": "HEX字节提取",
+        "key": "",
+        "jsonPath": "",
+        "byteOffset": 6,
+        "dataType": "uint16",
+        "byteOrder": "小端(LE)",
+        "expression": null,
+        "frameHeader": "AA 55",
+        "frameTail": "0D 0A",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "LEDIndicator_f16aa4",
+      "type": "LEDIndicator",
+      "geometry": {
+        "x": 680.0,
+        "y": 130.0,
+        "w": 140.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "运行状态",
+        "color": "green",
+        "on": true,
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "HEX字节提取",
+        "key": "",
+        "jsonPath": "",
+        "byteOffset": 8,
+        "dataType": "uint8",
+        "byteOrder": "大端(BE)",
+        "expression": null,
+        "frameHeader": "AA 55",
+        "frameTail": "0D 0A",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "ToggleSwitch_19ef5d",
+      "type": "ToggleSwitch",
+      "geometry": {
+        "x": 680.0,
+        "y": 180.0,
+        "w": 140.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "启停",
+        "checked": false,
+        "commandMode": "HEX",
+        "onCommand": "01 01",
+        "offCommand": "01 00",
+        "commandTemplate": "{value}",
+        "frameHeader": "AA 55",
+        "frameTail": "0D 0A",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbAddress": 0,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "开关已切换",
+        "notifyType": "信息",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    },
+    {
+      "id": "Slider_5f776d",
+      "type": "Slider",
+      "geometry": {
+        "x": 220.0,
+        "y": 240.0,
+        "w": 415.0,
+        "h": 30.0
+      },
+      "properties": {
+        "minimum": 0,
+        "maximum": 3000,
+        "value": 1000,
+        "sendOnChange": true,
+        "commandMode": "HEX",
+        "commandTemplate": "02 {value}",
+        "frameHeader": "AA 55",
+        "frameTail": "0D 0A",
+        "commandNewline": "\\r\\n",
+        "dataType": "int16",
+        "byteOrder": "小端(LE)",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": null
+    },
+    {
+      "id": "RealtimeChart_5e1b58",
+      "type": "RealtimeChart",
+      "geometry": {
+        "x": 20.0,
+        "y": 320.0,
+        "w": 560.0,
+        "h": 260.0
+      },
+      "properties": {
+        "title": "实时曲线",
+        "displayPoints": 200,
+        "curveCount": 2,
+        "currentCurve": 1,
+        "curveName": "目标转速",
+        "curveParseMode": "HEX字节提取",
+        "curveKey": "",
+        "curveJsonPath": "",
+        "curveByteOffset": 4,
+        "curveDataType": "int16",
+        "curveByteOrder": "小端(LE)",
+        "curveFrameHeader": "AA 55",
+        "curveFrameTail": "0D 0A",
+        "curveRegIndex": 0,
+        "curveMbDataType": "uint16",
+        "curveMbRegOrder": "大端(AB CD)",
+        "curveMbFcFilter": -1,
+        "curveMbSlaveFilter": -1,
+        "_curve_0_name": "实际转速",
+        "_curve_0_parseMode": "HEX字节提取",
+        "_curve_0_byteOrder": "小端(LE)",
+        "_curve_0_frameHeader": "AA 55",
+        "_curve_0_frameTail": "0D 0A",
+        "_curve_1_name": "目标转速",
+        "_curve_1_parseMode": "HEX字节提取",
+        "_curve_1_byteOffset": 4,
+        "_curve_1_dataType": "int16",
+        "_curve_1_byteOrder": "小端(LE)",
+        "_curve_1_frameHeader": "AA 55",
+        "_curve_1_frameTail": "0D 0A"
+      },
+      "binding": null
+    },
+    {
+      "id": "DataRecvCard_b8dc9b",
+      "type": "DataRecvCard",
+      "geometry": {
+        "x": 600.0,
+        "y": 320.0,
+        "w": 280.0,
+        "h": 260.0
+      },
+      "properties": {
+        "title": "数据接收",
+        "maxLines": 1000
+      },
+      "binding": null
+    }
+  ],
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  }
+}

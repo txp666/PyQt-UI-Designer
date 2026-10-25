@@ -1,0 +1,351 @@
+{
+  "version": "1.0",
+  "appName": "PID 调参助手",
+  "canvas": {
+    "width": 900,
+    "height": 570,
+    "gridSize": 10
+  },
+  "widgets": [
+    {
+      "id": "Label_a19896",
+      "type": "Label",
+      "geometry": {
+        "x": 20.0,
+        "y": 10.0,
+        "w": 360.0,
+        "h": 30.0
+      },
+      "properties": {
+        "text": "PID 调参助手",
+        "fontSize": 20,
+        "bold": true,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      },
+      "binding": null
+    },
+    {
+      "id": "SerialConfigCard_1e0997",
+      "type": "SerialConfigCard",
+      "geometry": {
+        "x": 20.0,
+        "y": 60.0,
+        "w": 860.0,
+        "h": 50.0
+      },
+      "properties": {
+        "title": "串口配置",
+        "displayMode": "单行",
+        "defaultParser": "项目设置",
+        "defaultBaud": "115200",
+        "defaultDatabits": "8",
+        "defaultParity": "None",
+        "defaultStopbits": "1",
+        "defaultFlow": "无"
+      },
+      "binding": null
+    },
+    {
+      "id": "RealtimeChart_850033",
+      "type": "RealtimeChart",
+      "geometry": {
+        "x": 20.0,
+        "y": 120.0,
+        "w": 860.0,
+        "h": 300.0
+      },
+      "properties": {
+        "title": "实时曲线",
+        "displayPoints": 400,
+        "curveCount": 2,
+        "currentCurve": 1,
+        "curveName": "实际",
+        "curveParseMode": "键值匹配",
+        "curveKey": "pos",
+        "curveJsonPath": "",
+        "curveByteOffset": 0,
+        "curveDataType": "float32",
+        "curveByteOrder": "大端(BE)",
+        "curveFrameHeader": "",
+        "curveFrameTail": "",
+        "curveRegIndex": 0,
+        "curveMbDataType": "uint16",
+        "curveMbRegOrder": "大端(AB CD)",
+        "curveMbFcFilter": -1,
+        "curveMbSlaveFilter": -1,
+        "_curve_0_name": "目标",
+        "_curve_0_key": "tgt",
+        "_curve_1_name": "实际",
+        "_curve_1_key": "pos"
+      },
+      "binding": null
+    },
+    {
+      "id": "NumericDisplay_47753b",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 20.0,
+        "y": 430.0,
+        "w": 200.0,
+        "h": 80.0
+      },
+      "properties": {
+        "title": "Kp",
+        "value": "0.00",
+        "unit": "",
+        "fontSize": 28,
+        "displayFormat": "自动"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "kp",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": null,
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "NumericDisplay_a8d34e",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 240.0,
+        "y": 430.0,
+        "w": 200.0,
+        "h": 80.0
+      },
+      "properties": {
+        "title": "Ki",
+        "value": "0.00",
+        "unit": "",
+        "fontSize": 28,
+        "displayFormat": "自动"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "ki",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": null,
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "NumericDisplay_cbab88",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 460.0,
+        "y": 430.0,
+        "w": 200.0,
+        "h": 80.0
+      },
+      "properties": {
+        "title": "Kd",
+        "value": "0.00",
+        "unit": "",
+        "fontSize": 28,
+        "displayFormat": "自动"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "kd",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": null,
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "Slider_126bdd",
+      "type": "Slider",
+      "geometry": {
+        "x": 20.0,
+        "y": 520.0,
+        "w": 200.0,
+        "h": 30.0
+      },
+      "properties": {
+        "minimum": 0,
+        "maximum": 1000,
+        "value": 300,
+        "sendOnChange": true,
+        "commandMode": "文本",
+        "commandTemplate": "KP={value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "commandNewline": "\\r\\n",
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": null
+    },
+    {
+      "id": "Slider_5376e3",
+      "type": "Slider",
+      "geometry": {
+        "x": 240.0,
+        "y": 520.0,
+        "w": 200.0,
+        "h": 30.0
+      },
+      "properties": {
+        "minimum": 0,
+        "maximum": 1000,
+        "value": 0,
+        "sendOnChange": true,
+        "commandMode": "文本",
+        "commandTemplate": "KI={value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "commandNewline": "\\r\\n",
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": null
+    },
+    {
+      "id": "Slider_d03a9c",
+      "type": "Slider",
+      "geometry": {
+        "x": 460.0,
+        "y": 520.0,
+        "w": 200.0,
+        "h": 30.0
+      },
+      "properties": {
+        "minimum": 0,
+        "maximum": 200,
+        "value": 0,
+        "sendOnChange": true,
+        "commandMode": "文本",
+        "commandTemplate": "KD={value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "commandNewline": "\\r\\n",
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": null
+    },
+    {
+      "id": "Label_00cc00",
+      "type": "Label",
+      "geometry": {
+        "x": 700.0,
+        "y": 440.0,
+        "w": 70.0,
+        "h": 30.0
+      },
+      "properties": {
+        "text": "设定值",
+        "fontSize": 11,
+        "bold": false,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      },
+      "binding": null
+    },
+    {
+      "id": "LineEdit_d56900",
+      "type": "LineEdit",
+      "geometry": {
+        "x": 770.0,
+        "y": 440.0,
+        "w": 110.0,
+        "h": 36.0
+      },
+      "properties": {
+        "placeholderText": "回车发送",
+        "text": "",
+        "readOnly": false,
+        "sendOnEnter": true,
+        "commandMode": "文本",
+        "commandTemplate": "TARGET={value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": null
+    },
+    {
+      "id": "ToggleSwitch_d440d1",
+      "type": "ToggleSwitch",
+      "geometry": {
+        "x": 700.0,
+        "y": 500.0,
+        "w": 180.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "暂停",
+        "checked": false,
+        "commandMode": "文本",
+        "onCommand": "PAUSE=1",
+        "offCommand": "PAUSE=0",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbAddress": 0,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "开关已切换",
+        "notifyType": "信息",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    }
+  ],
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  }
+}

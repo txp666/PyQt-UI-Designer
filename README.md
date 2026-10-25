@@ -280,6 +280,7 @@ PyQt-UI-Designer/
 │   ├── view/            # 主窗口，以及设计器、预览运行、设置页面
 │   └── widgets/         # 控件定义：基础、布局、显示、图表、通信、复合
 ├── demo/                # 可独立运行的导出示例、源工程与模拟设备
+├── examples/tutorials/  # 视频教程里搭建的工程（.uidp）及各自的数据格式
 ├── docs/
 │   ├── protocol.md      # 通信协议文档
 │   └── release-notes/   # 各版本发布说明

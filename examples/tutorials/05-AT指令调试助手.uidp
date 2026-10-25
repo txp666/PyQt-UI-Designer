@@ -1,0 +1,291 @@
+{
+  "version": "1.0",
+  "appName": "AT 指令调试助手",
+  "canvas": {
+    "width": 900,
+    "height": 640,
+    "gridSize": 10
+  },
+  "widgets": [
+    {
+      "id": "Label_8af0ae",
+      "type": "Label",
+      "geometry": {
+        "x": 20.0,
+        "y": 10.0,
+        "w": 360.0,
+        "h": 30.0
+      },
+      "properties": {
+        "text": "AT 指令调试助手",
+        "fontSize": 20,
+        "bold": true,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      },
+      "binding": null
+    },
+    {
+      "id": "SerialConfigCard_296540",
+      "type": "SerialConfigCard",
+      "geometry": {
+        "x": 20.0,
+        "y": 60.0,
+        "w": 360.0,
+        "h": 340.0
+      },
+      "properties": {
+        "title": "串口配置",
+        "displayMode": "完整",
+        "defaultParser": "项目设置",
+        "defaultBaud": "115200",
+        "defaultDatabits": "8",
+        "defaultParity": "None",
+        "defaultStopbits": "1",
+        "defaultFlow": "无"
+      },
+      "binding": null
+    },
+    {
+      "id": "DataRecvCard_54983c",
+      "type": "DataRecvCard",
+      "geometry": {
+        "x": 400.0,
+        "y": 60.0,
+        "w": 480.0,
+        "h": 380.0
+      },
+      "properties": {
+        "title": "数据接收",
+        "maxLines": 1000
+      },
+      "binding": null
+    },
+    {
+      "id": "DataSendCard_cae113",
+      "type": "DataSendCard",
+      "geometry": {
+        "x": 400.0,
+        "y": 450.0,
+        "w": 480.0,
+        "h": 150.0
+      },
+      "properties": {
+        "title": "数据发送",
+        "placeholder": "输入要发送的数据..."
+      },
+      "binding": null
+    },
+    {
+      "id": "Label_420f64",
+      "type": "Label",
+      "geometry": {
+        "x": 20.0,
+        "y": 400.0,
+        "w": 120.0,
+        "h": 30.0
+      },
+      "properties": {
+        "text": "快捷指令",
+        "fontSize": 14,
+        "bold": true,
+        "alignment": "Left",
+        "displayFormat": "自动"
+      },
+      "binding": null
+    },
+    {
+      "id": "PushButton_bd97f5",
+      "type": "PushButton",
+      "geometry": {
+        "x": 20.0,
+        "y": 440.0,
+        "w": 170.0,
+        "h": 36.0
+      },
+      "properties": {
+        "text": "AT 测试",
+        "enabled": true,
+        "commandMode": "文本",
+        "command": "AT",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "03 读保持寄存器",
+        "mbAddress": 0,
+        "mbValue": 1,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "按钮已按下",
+        "notifyType": "成功",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    },
+    {
+      "id": "PushButton_46e916",
+      "type": "PushButton",
+      "geometry": {
+        "x": 210.0,
+        "y": 440.0,
+        "w": 170.0,
+        "h": 36.0
+      },
+      "properties": {
+        "text": "查询版本",
+        "enabled": true,
+        "commandMode": "文本",
+        "command": "AT+VER?",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "03 读保持寄存器",
+        "mbAddress": 0,
+        "mbValue": 1,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "按钮已按下",
+        "notifyType": "成功",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    },
+    {
+      "id": "PushButton_340d9a",
+      "type": "PushButton",
+      "geometry": {
+        "x": 20.0,
+        "y": 480.0,
+        "w": 170.0,
+        "h": 36.0
+      },
+      "properties": {
+        "text": "LED 开",
+        "enabled": true,
+        "commandMode": "文本",
+        "command": "AT+LED=1",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "03 读保持寄存器",
+        "mbAddress": 0,
+        "mbValue": 1,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "按钮已按下",
+        "notifyType": "成功",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    },
+    {
+      "id": "PushButton_71db5e",
+      "type": "PushButton",
+      "geometry": {
+        "x": 210.0,
+        "y": 480.0,
+        "w": 170.0,
+        "h": 36.0
+      },
+      "properties": {
+        "text": "LED 关",
+        "enabled": true,
+        "commandMode": "文本",
+        "command": "AT+LED=0",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "03 读保持寄存器",
+        "mbAddress": 0,
+        "mbValue": 1,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "按钮已按下",
+        "notifyType": "成功",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    },
+    {
+      "id": "ComboBox_db7fbf",
+      "type": "ComboBox",
+      "geometry": {
+        "x": 20.0,
+        "y": 530.0,
+        "w": 360.0,
+        "h": 36.0
+      },
+      "properties": {
+        "items": "普通模式\n省电模式\n调试模式",
+        "currentIndex": 0,
+        "sendOnSelect": true,
+        "commands": "AT+MODE=1\nAT+MODE=2\nAT+MODE=3",
+        "commandMode": "文本",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0,
+        "mbValue": 1
+      },
+      "binding": null
+    },
+    {
+      "id": "LineEdit_15f6c8",
+      "type": "LineEdit",
+      "geometry": {
+        "x": 20.0,
+        "y": 570.0,
+        "w": 360.0,
+        "h": 36.0
+      },
+      "properties": {
+        "placeholderText": "设备名称，回车发送",
+        "text": "",
+        "readOnly": false,
+        "sendOnEnter": true,
+        "commandMode": "文本",
+        "commandTemplate": "AT+NAME={value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbFunc": "06 写单寄存器",
+        "mbAddress": 0
+      },
+      "binding": null
+    }
+  ],
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  }
+}
