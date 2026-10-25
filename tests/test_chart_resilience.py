@@ -141,6 +141,27 @@ class ChartResilienceTests(unittest.TestCase):
             assert not errors, errors
         """)
 
+    def test_plot_keeps_its_width_while_readings_change_length(self):
+        self.run_both("""
+            chart.configure([{"name": "目标", "key": "tgt"}, {"name": "实际", "key": "pos"}])
+            chart.resize(700, 300)
+            chart.show()
+            widths = []
+            def settle():
+                chart._refresh_all()
+                chart.layout().activate()
+                widths.append(chart._plot.width())
+            for pos in (100, 99.82, 100, 137.5, 90, -5.25, 0.001234, 100):
+                serial.dataReceived.emit({"tgt": 100, "pos": pos})
+                settle()
+            chart._update_table_at_cursor(123.0)  # the cursor reading replaces 实时
+            chart.layout().activate()
+            widths.append(chart._plot.width())
+            chart._mode_label.setText("实时")
+            settle()
+            assert len(set(widths)) == 1, widths
+        """)
+
     def test_duplicate_names_roundtrip_and_legacy_json_remain_lossless(self):
         self.run_both("""
             chart.configure([{"name": "温度", "key": "a"},

@@ -114,6 +114,9 @@ class RealtimeLineChart(QWidget):
 
     HISTORY_LIMIT = 10000
     REFRESH_MS = 33
+    # the value table starts wide enough for these, so typical readings never resize the plot
+    _SAMPLE_READING = "-0000.00"
+    _SAMPLE_MODE = "游标: x=00000"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -164,7 +167,8 @@ class RealtimeLineChart(QWidget):
             self._cursor_line = None
 
         # right panel: mode label + value labels
-        right_panel = QVBoxLayout()
+        self._side = QWidget()
+        right_panel = QVBoxLayout(self._side)
         right_panel.setContentsMargins(2, 0, 2, 0)
         right_panel.setSpacing(0)
         self._mode_label = QLabel("实时")
@@ -177,7 +181,7 @@ class RealtimeLineChart(QWidget):
         right_panel.addLayout(self._val_panel)
         right_panel.addStretch()
         self._val_labels: list = []
-        main_h.addLayout(right_panel)
+        main_h.addWidget(self._side)
 
         self._root.addLayout(main_h, 1)
 
@@ -353,7 +357,8 @@ class RealtimeLineChart(QWidget):
             self._checkboxes.append(cb)
             self._cb_row.addWidget(cb)
 
-            vl = QLabel(f"<b style='color:rgb{color}'>{name}</b>  --")
+            # sized for a typical reading up front; apply_theme then shows the real values
+            vl = QLabel(f"<b style='color:rgb{color}'>{name}</b>  {self._SAMPLE_READING}")
             vl.setStyleSheet("font-size: 11px; padding: 1px 2px;")
             self._val_panel.addWidget(vl)
             self._val_labels.append(vl)
@@ -361,7 +366,21 @@ class RealtimeLineChart(QWidget):
         self._cb_row.addStretch()
         self._cursor_mode = False
         self._mode_label.setText("实时")
+        self._side.setMinimumWidth(0)
+        self._hold_side_width()
         self.apply_theme()
+
+    def _hold_side_width(self):
+        """Let the value table widen but never narrow back. A reading that gets shorter (99.82 -> 100) would
+        otherwise hand its space to the plot, and the whole curve would shift sideways with every sample."""
+        for label in (self._mode_label, *self._val_labels):
+            label.ensurePolished()
+        margins = self._side.layout().contentsMargins()
+        need = max([self._mode_label.fontMetrics().horizontalAdvance(self._SAMPLE_MODE)]
+                   + [label.sizeHint().width() for label in self._val_labels])
+        need += margins.left() + margins.right()
+        if need > self._side.minimumWidth():
+            self._side.setMinimumWidth(need)
 
     def _toggle(self, index: int, visible: bool):
         if index < len(self._curves) and self._curves[index]:
@@ -407,6 +426,7 @@ class RealtimeLineChart(QWidget):
             visible = self._data[i].tail(self._display_points) if i < len(self._data) else []
             val = f"{visible[idx]:.4g}" if 0 <= idx < len(visible) else "--"
             lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
+        self._hold_side_width()
 
     def _update_table_realtime(self):
         for i, lbl in enumerate(self._val_labels):
@@ -417,6 +437,7 @@ class RealtimeLineChart(QWidget):
             else:
                 val = "--"
             lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
+        self._hold_side_width()
 
     # -- data input -----------------------------------------------------------
 
