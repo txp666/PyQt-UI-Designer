@@ -1,16 +1,13 @@
 # coding: utf-8
 """Design-time chart registration and preview signal wiring."""
-from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QPainter, QColor, QFont, QPen
 from PyQt5.QtWidgets import QWidget
-from qfluentwidgets import isDarkTheme, qconfig
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
-from app.core.signal_lifetime import SignalConnections
 from app.core.chart_runtime import (
     RealtimeLineChart as RuntimeChart, build_cfgs_from_props, _CURVE_FIELD_MAP,
     _DEFAULT_CURVE_CFG,
 )
+from app.core.gauge_runtime import GaugeMeter  # noqa: F401  (registered below, shared with exports)
 
 
 class RealtimeLineChart(RuntimeChart):
@@ -29,93 +26,6 @@ class RealtimeLineChart(RuntimeChart):
         self._listening = False
         self._serial_connections.clear()
         self.reset_stream()
-
-
-# ---------------------------------------------------------------------------
-# Gauge meter
-# ---------------------------------------------------------------------------
-
-class GaugeMeter(QWidget):
-    """Analog gauge / dial meter display."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._value = 0.0
-        self._min_val = 0.0
-        self._max_val = 100.0
-        self._title = "仪表"
-        self._unit = ""
-        self.setMinimumSize(80, 80)
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
-
-    def set_value(self, v: float):
-        self._value = max(self._min_val, min(self._max_val, v))
-        self.update()
-
-    def set_range(self, lo: float, hi: float):
-        self._min_val = lo
-        self._max_val = max(lo, hi)
-        self.set_value(self._value)
-
-    def set_title(self, t: str):
-        self._title = t
-        self.update()
-
-    def set_unit(self, u: str):
-        self._unit = u
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        w, h = self.width(), self.height()
-        side = min(w, h) - 10
-        cx, cy = w / 2, h / 2
-        radius = side / 2
-
-        # arc background
-        arc_rect = QRectF(cx - radius, cy - radius, side, side)
-        start_angle = 225  # degrees
-        span_angle = -270
-
-        dark = isDarkTheme()
-        bg_pen = QPen(QColor("#555555" if dark else "#dcdcdc"), max(6, side / 12))
-        bg_pen.setCapStyle(Qt.RoundCap)
-        painter.setPen(bg_pen)
-        painter.drawArc(arc_rect, int(start_angle * 16), int(span_angle * 16))
-
-        # value arc
-        rng = self._max_val - self._min_val
-        ratio = (self._value - self._min_val) / rng if rng > 0 else 0
-        val_span = span_angle * ratio
-
-        val_pen = QPen(QColor("#4cc2ff" if dark else "#0078d4"), max(6, side / 12))
-        val_pen.setCapStyle(Qt.RoundCap)
-        painter.setPen(val_pen)
-        painter.drawArc(arc_rect, int(start_angle * 16), int(val_span * 16))
-
-        # value text
-        painter.setPen(QColor("#f3f3f3" if dark else "#1e1e1e"))
-        font_size = max(10, int(side / 6))
-        painter.setFont(QFont(self.font().family(), font_size, QFont.Bold))
-        val_text = f"{self._value:.1f}"
-        painter.drawText(self.rect(), Qt.AlignCenter, val_text)
-
-        # unit text below
-        painter.setFont(QFont(self.font().family(), max(8, int(font_size * 0.6))))
-        painter.setPen(QColor("#b3b3b3" if dark else "#606060"))
-        unit_rect = self.rect().adjusted(0, int(font_size * 1.5), 0, 0)
-        painter.drawText(unit_rect, Qt.AlignHCenter | Qt.AlignTop, self._unit)
-
-        # title text above
-        painter.setFont(QFont(self.font().family(), max(8, int(font_size * 0.5))))
-        painter.setPen(QColor("#b3b3b3" if dark else "#606060"))
-        title_rect = self.rect().adjusted(0, 0, 0, -int(font_size * 1.5))
-        painter.drawText(title_rect, Qt.AlignHCenter | Qt.AlignBottom, self._title)
-
-        painter.end()
 
 
 # ---------------------------------------------------------------------------

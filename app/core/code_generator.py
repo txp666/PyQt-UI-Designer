@@ -1131,42 +1131,8 @@ def _realtime_chart_class() -> str:
 
 
 def _gauge_class() -> str:
-    return '''
-class GaugeMeter(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._value=0; self._min=0; self._max=100; self._title="仪表"; self._unit=""
-        self.setMinimumSize(80, 80)
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
-    def set_value(self, v): self._value=max(self._min,min(self._max,v)); self.update()
-    def set_range(self, lo, hi): self._min=lo; self._max=max(lo,hi); self.set_value(self._value)
-    def set_title(self, t): self._title=t; self.update()
-    def set_unit(self, u): self._unit=u; self.update()
-    def paintEvent(self, event):
-        p = QPainter(self); p.setRenderHint(QPainter.Antialiasing)
-        from PyQt5.QtCore import QRectF
-        side = min(self.width(), self.height())-10; cx=self.width()/2; cy=self.height()/2; r=side/2
-        arc = QRectF(cx-r, cy-r, side, side)
-        from PyQt5.QtGui import QPen
-        dark = isDarkTheme()
-        bg = QPen(QColor("#555555" if dark else "#dcdcdc"), max(6,side/12)); bg.setCapStyle(Qt.RoundCap)
-        p.setPen(bg); p.drawArc(arc, 225*16, -270*16)
-        ratio = (self._value-self._min)/(self._max-self._min) if self._max>self._min else 0
-        vp = QPen(QColor("#4cc2ff" if dark else "#0078d4"), max(6,side/12)); vp.setCapStyle(Qt.RoundCap)
-        p.setPen(vp); p.drawArc(arc, 225*16, int(-270*ratio*16))
-        p.setPen(QColor("#f3f3f3" if dark else "#1e1e1e")); fs=max(10,int(side/6))
-        p.setFont(QFont(self.font().family(),fs,QFont.Bold))
-        p.drawText(self.rect(), Qt.AlignCenter, f"{self._value:.1f}")
-        p.setFont(QFont(self.font().family(), max(8, int(fs * 0.6))))
-        p.setPen(QColor("#b3b3b3" if dark else "#606060"))
-        p.drawText(self.rect().adjusted(0, int(fs * 1.5), 0, 0),
-                   Qt.AlignHCenter | Qt.AlignTop, self._unit)
-        p.setFont(QFont(self.font().family(), max(8, int(fs * 0.5))))
-        p.drawText(self.rect().adjusted(0, 0, 0, -int(fs * 1.5)),
-                   Qt.AlignHCenter | Qt.AlignBottom, self._title)
-        p.end()
-'''
+    return runtime_source("gauge_runtime.py").replace(
+        "from .signal_lifetime import SignalConnections", "")
 
 
 def _serial_terminal_class() -> str:
