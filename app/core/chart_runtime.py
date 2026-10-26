@@ -4,6 +4,7 @@ import csv
 import json
 import struct
 from itertools import zip_longest
+from pathlib import Path
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel
@@ -137,6 +138,10 @@ class RealtimeLineChart(QWidget):
         self._refresh_timer.timeout.connect(self._refresh_all)
         self.destroyed.connect(lambda _=None, histories=self._data: [h.close() for h in histories])
         self._checkboxes: list = []
+        # a loaded recording laid over the live curves: [(name, values)], their dashed curves and table rows
+        self._refs: list = []
+        self._ref_curves: list = []
+        self._ref_labels: list = []
         self._listening = False
         self._cursor_mode = False
 
@@ -204,6 +209,10 @@ class RealtimeLineChart(QWidget):
         self._load_btn.setFixedWidth(64)
         self._load_btn.clicked.connect(self._load_data)
         tb.addWidget(self._load_btn)
+        self._clear_ref_btn = FluentPushButton("清除对比")
+        self._clear_ref_btn.clicked.connect(self.clear_reference)
+        self._clear_ref_btn.hide()
+        tb.addWidget(self._clear_ref_btn)
         self._root.addLayout(tb)
 
         self._cb_row = QHBoxLayout()
@@ -236,6 +245,9 @@ class RealtimeLineChart(QWidget):
             for index, curve in enumerate(self._curves):
                 if curve:
                     curve.setPen(pg.mkPen(self._curve_color(index), width=2))
+            for index, curve in enumerate(self._ref_curves):
+                if curve:
+                    curve.setPen(self._ref_pen(index))
         elif self._missing_label is not None:
             setCustomStyleSheet(
                 self._missing_label,
@@ -244,7 +256,7 @@ class RealtimeLineChart(QWidget):
             )
         self._mode_label.setStyleSheet(
             f"font-size: 10px; color: {accent}; padding: 1px 0;")
-        for label in self._val_labels:
+        for label in self._val_labels + self._ref_labels:
             label.setStyleSheet(
                 f"font-size: 11px; padding: 1px 2px; color: {foreground};")
         if self._cursor_mode and self._cursor_line:
@@ -299,12 +311,17 @@ class RealtimeLineChart(QWidget):
         for i in range(len(self._data)):
             if i < len(self._curves) and self._curves[i]:
                 self._curves[i].setData(self._data[i].tail(self._display_points))
+        start = self._window_start()
+        for curve, (_, values) in zip(self._ref_curves, self._refs):
+            if curve:
+                curve.setData(values[start:start + self._display_points])
         if self._cursor_mode and self._cursor_line:
             self._update_table_at_cursor(self._cursor_line.value())
         else:
             self._update_table_realtime()
 
     def _rebuild_curves(self):
+        self.clear_reference()  # its rows live in the value table rebuilt below
         self._raw_frames = [
             RawFrameBuffer(_hex_to_bytes(cfg.get("frameHeader", "")),
                            _hex_to_bytes(cfg.get("frameTail", ""))) for cfg in self._cfgs
@@ -373,11 +390,11 @@ class RealtimeLineChart(QWidget):
     def _hold_side_width(self):
         """Let the value table widen but never narrow back. A reading that gets shorter (99.82 -> 100) would
         otherwise hand its space to the plot, and the whole curve would shift sideways with every sample."""
-        for label in (self._mode_label, *self._val_labels):
+        for label in (self._mode_label, *self._val_labels, *self._ref_labels):
             label.ensurePolished()
         margins = self._side.layout().contentsMargins()
         need = max([self._mode_label.fontMetrics().horizontalAdvance(self._SAMPLE_MODE)]
-                   + [label.sizeHint().width() for label in self._val_labels])
+                   + [label.sizeHint().width() for label in self._val_labels + self._ref_labels])
         need += margins.left() + margins.right()
         if need > self._side.minimumWidth():
             self._side.setMinimumWidth(need)
@@ -385,6 +402,56 @@ class RealtimeLineChart(QWidget):
     def _toggle(self, index: int, visible: bool):
         if index < len(self._curves) and self._curves[index]:
             self._curves[index].setVisible(visible)
+
+    # -- comparison overlay ---------------------------------------------------
+
+    def load_reference(self, path):
+        """Lay a saved recording over the live curves as dashed curves, to compare runs. The live curves and
+        their history stay as they are; the two line up sample for sample from the start of each."""
+        names, histories = self._read_history(path)
+        try:
+            refs = [(f"{name}（{Path(path).stem}）", list(history.values()))
+                    for name, history in zip(names, histories)]
+        finally:
+            for history in histories:
+                history.close()
+        self.clear_reference()
+        self._refs = refs
+        for index in range(len(refs)):
+            self._ref_curves.append(self._plot.plot(pen=self._ref_pen(index)) if self._plot else None)
+            label = QLabel()
+            self._val_panel.addWidget(label)
+            self._ref_labels.append(label)
+        self._clear_ref_btn.show()
+        self.apply_theme()
+        self._refresh_all()
+
+    def clear_reference(self):
+        for curve in self._ref_curves:
+            if self._plot and curve:
+                self._plot.removeItem(curve)
+        for label in self._ref_labels:
+            self._val_panel.removeWidget(label)
+            label.deleteLater()
+        self._refs, self._ref_curves, self._ref_labels = [], [], []
+        self._clear_ref_btn.hide()
+
+    def _ref_color(self, index):
+        """A recording takes the palette colours after the live curves', so it stands apart even where it
+        crosses the curve it is compared with; the value table names which is which."""
+        return self._curve_color(len(self._cfgs) + index)
+
+    def _ref_pen(self, index):
+        return pg.mkPen(self._ref_color(index), width=2, style=Qt.DashLine)
+
+    def _window_start(self):
+        """Sample number of the first point the live window shows."""
+        return max(0, max((h.count for h in self._data), default=0) - self._display_points)
+
+    def _update_reference_rows(self, sample):
+        for index, (label, (name, values)) in enumerate(zip(self._ref_labels, self._refs)):
+            val = f"{values[sample]:.4g}" if 0 <= sample < len(values) else "--"
+            label.setText(f"<b style='color:rgb{self._ref_color(index)}'>{name}</b>  {val}")
 
     # -- cursor ---------------------------------------------------------------
 
@@ -426,6 +493,7 @@ class RealtimeLineChart(QWidget):
             visible = self._data[i].tail(self._display_points) if i < len(self._data) else []
             val = f"{visible[idx]:.4g}" if 0 <= idx < len(visible) else "--"
             lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
+        self._update_reference_rows(self._window_start() + idx)
         self._hold_side_width()
 
     def _update_table_realtime(self):
@@ -437,6 +505,8 @@ class RealtimeLineChart(QWidget):
             else:
                 val = "--"
             lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
+        # the recording at the point the live run has reached
+        self._update_reference_rows(max((h.count for h in self._data), default=0) - 1)
         self._hold_side_width()
 
     # -- data input -----------------------------------------------------------
@@ -504,32 +574,11 @@ class RealtimeLineChart(QWidget):
         rejected instead of silently associating samples with another parser.
         An empty, unconfigured default chart can adopt the file's channels.
         """
-        histories = []
         adopt_channels = (self._cfgs == [_DEFAULT_CURVE_CFG]
                           and not any(history.count for history in self._data))
+        names, histories = self._read_history(path)
         try:
-            with open(path, "r", encoding="utf-8") as source:
-                if str(path).lower().endswith(".json"):
-                    # JSON is a document format; CSV is streamed for large captures.
-                    obj = json.load(source, object_pairs_hook=_HistoryObjectPairs)
-                    channels = _history_json_channels(obj)
-                    names = [name for name, _ in channels]
-                    channel_order = self._history_channel_order(names, adopt_channels)
-                    for name, values in channels:
-                        history = ChartHistory(self.HISTORY_LIMIT)
-                        histories.append(history)
-                        for value in values:
-                            if value is not None:
-                                history.append(float(value))
-                else:
-                    rows = csv.reader(source)
-                    names = next(rows, [])
-                    channel_order = self._history_channel_order(names, adopt_channels)
-                    histories = [ChartHistory(self.HISTORY_LIMIT) for _ in names]
-                    for row in rows:
-                        for index, history in enumerate(histories):
-                            if index < len(row) and row[index].strip():
-                                history.append(float(row[index]))
+            channel_order = self._history_channel_order(names, adopt_channels)
         except Exception:
             for history in histories:
                 history.close()
@@ -542,6 +591,36 @@ class RealtimeLineChart(QWidget):
             self._cfgs = [{**_DEFAULT_CURVE_CFG, "name": name} for name in names]
             self._rebuild_curves()
         self._refresh_all()
+
+    def _read_history(self, path):
+        """Channel names and their samples from a saved CSV or JSON file; the caller closes the histories."""
+        histories = []
+        try:
+            with open(path, "r", encoding="utf-8") as source:
+                if str(path).lower().endswith(".json"):
+                    # JSON is a document format; CSV is streamed for large captures.
+                    obj = json.load(source, object_pairs_hook=_HistoryObjectPairs)
+                    channels = _history_json_channels(obj)
+                    names = [name for name, _ in channels]
+                    for name, values in channels:
+                        history = ChartHistory(self.HISTORY_LIMIT)
+                        histories.append(history)
+                        for value in values:
+                            if value is not None:
+                                history.append(float(value))
+                else:
+                    rows = csv.reader(source)
+                    names = next(rows, [])
+                    histories = [ChartHistory(self.HISTORY_LIMIT) for _ in names]
+                    for row in rows:
+                        for index, history in enumerate(histories):
+                            if index < len(row) and row[index].strip():
+                                history.append(float(row[index]))
+        except Exception:
+            for history in histories:
+                history.close()
+            raise
+        return names, histories
 
     def _history_channel_order(self, names, adopt_channels=False):
         expected = [cfg.get("name", f"曲线{i+1}") for i, cfg in enumerate(self._cfgs)]
@@ -560,10 +639,10 @@ class RealtimeLineChart(QWidget):
 
     def _load_data(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "加载曲线数据", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
+            self, "加载对比曲线", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
         if path:
             try:
-                self.load_data(path)
+                self.load_reference(path)
             except (OSError, ValueError, TypeError, OverflowError) as error:
                 self._mode_label.setText(f"加载失败: {error}")
 

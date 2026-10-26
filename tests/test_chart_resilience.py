@@ -162,6 +162,39 @@ class ChartResilienceTests(unittest.TestCase):
             assert len(set(widths)) == 1, widths
         """)
 
+    def test_loaded_recording_overlays_the_live_curves(self):
+        self.run_both("""
+            from PyQt5.QtCore import Qt
+            chart.configure([{"name": "电压", "key": "v"}])
+            for v in (4.1, 4.0, 3.9):
+                serial.dataReceived.emit({"v": v})
+            path = Path("上周.csv")
+            path.write_text("电压\\n4.2\\n3.8\\n3.5\\n3.2\\n", encoding="utf-8")
+            chart.load_reference(path)
+            chart._refresh_all()
+            assert [list(h.values()) for h in chart._data] == [[4.1, 4.0, 3.9]]  # the live curve stays
+            assert list(chart._ref_curves[0].yData) == [4.2, 3.8, 3.5, 3.2]
+            assert chart._ref_curves[0].opts["pen"].style() == Qt.DashLine
+            assert not chart._clear_ref_btn.isHidden()
+            def readings():
+                return [lbl.text().split()[-1] for lbl in chart._val_labels + chart._ref_labels]
+            assert readings() == ["3.9", "3.5"], readings()  # live now, and the recording at the same sample
+            chart._update_table_at_cursor(1.0)
+            assert readings() == ["4", "3.8"], readings()  # the cursor reads both
+            serial.dataReceived.emit({"v": 3.8})
+            chart.save_data(Path("本次.csv"))
+            assert Path("本次.csv").read_text(encoding="utf-8").split() == ["电压", "4.1", "4.0", "3.9", "3.8"]
+            chart.clear_reference()
+            assert chart._ref_curves == [] and chart._ref_labels == [] and chart._clear_ref_btn.isHidden()
+            assert [list(h.values()) for h in chart._data] == [[4.1, 4.0, 3.9, 3.8]]
+            path.write_text("电压\\n1\\nnan\\n", encoding="utf-8")
+            try:
+                chart.load_reference(path)
+            except (TypeError, ValueError, OverflowError):
+                pass
+            assert chart._ref_curves == [], "a bad file must not leave a half-loaded overlay"
+        """)
+
     def test_duplicate_names_roundtrip_and_legacy_json_remain_lossless(self):
         self.run_both("""
             chart.configure([{"name": "温度", "key": "a"},
