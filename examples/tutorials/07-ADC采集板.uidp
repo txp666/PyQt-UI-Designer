@@ -1,0 +1,359 @@
+{
+  "version": "1.0",
+  "appName": "ADC 采集板",
+  "canvas": {
+    "width": 900,
+    "height": 400,
+    "gridSize": 10
+  },
+  "widgets": [
+    {
+      "id": "Label_62e2ae",
+      "type": "Label",
+      "geometry": {
+        "x": 20.0,
+        "y": 10.0,
+        "w": 360.0,
+        "h": 30.0
+      },
+      "properties": {
+        "text": "ADC 采集板",
+        "fontSize": 20,
+        "bold": true,
+        "alignment": "Left",
+        "displayFormat": "自动",
+        "decimals": "自动"
+      },
+      "binding": null
+    },
+    {
+      "id": "SerialConfigCard_58d7bf",
+      "type": "SerialConfigCard",
+      "geometry": {
+        "x": 20.0,
+        "y": 60.0,
+        "w": 860.0,
+        "h": 50.0
+      },
+      "properties": {
+        "title": "串口配置",
+        "displayMode": "单行",
+        "defaultParser": "项目设置",
+        "defaultBaud": "115200",
+        "defaultDatabits": "8",
+        "defaultParity": "None",
+        "defaultStopbits": "1",
+        "defaultFlow": "无"
+      },
+      "binding": null
+    },
+    {
+      "id": "NumericDisplay_36ca75",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 20.0,
+        "y": 130.0,
+        "w": 200.0,
+        "h": 120.0
+      },
+      "properties": {
+        "title": "原始值 adc0",
+        "value": "0.00",
+        "unit": "",
+        "fontSize": 28,
+        "displayFormat": "自动",
+        "decimals": "自动"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "adc0",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": null,
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "NumericDisplay_260722",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 240.0,
+        "y": 130.0,
+        "w": 200.0,
+        "h": 120.0
+      },
+      "properties": {
+        "title": "电压",
+        "value": "0.00",
+        "unit": "V",
+        "fontSize": 28,
+        "displayFormat": "自动",
+        "decimals": "2"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "adc0",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": "value * 3.3 / 4095",
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "NumericDisplay_c9d9e9",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 460.0,
+        "y": 130.0,
+        "w": 220.0,
+        "h": 120.0
+      },
+      "properties": {
+        "title": "状态寄存器 st",
+        "value": "0.00",
+        "unit": "",
+        "fontSize": 28,
+        "displayFormat": "二进制(BIN)",
+        "decimals": "自动"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "st",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": null,
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "GaugeMeter_1baacb",
+      "type": "GaugeMeter",
+      "geometry": {
+        "x": 700.0,
+        "y": 120.0,
+        "w": 180.0,
+        "h": 190.0
+      },
+      "properties": {
+        "title": "温度",
+        "unit": "°C",
+        "value": 0.0,
+        "minimum": 0.0,
+        "maximum": 60.0
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "adc1",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": "value * 330 / 4095",
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "LEDIndicator_7a94d7",
+      "type": "LEDIndicator",
+      "geometry": {
+        "x": 20.0,
+        "y": 340.0,
+        "w": 140.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "运行",
+        "color": "green",
+        "on": false,
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "st",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": "value & 1",
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "LEDIndicator_c1b59a",
+      "type": "LEDIndicator",
+      "geometry": {
+        "x": 190.0,
+        "y": 340.0,
+        "w": 140.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "加热",
+        "color": "blue",
+        "on": false,
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "st",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": "(value >> 1) & 1",
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "LEDIndicator_927cf3",
+      "type": "LEDIndicator",
+      "geometry": {
+        "x": 360.0,
+        "y": 340.0,
+        "w": 140.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "过温",
+        "color": "red",
+        "on": false,
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "st",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": "(value >> 2) & 1",
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "LEDIndicator_6f2aa8",
+      "type": "LEDIndicator",
+      "geometry": {
+        "x": 530.0,
+        "y": 340.0,
+        "w": 140.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "欠压",
+        "color": "yellow",
+        "on": false,
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "adc0",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": "value * 3.3 / 4095 < 1",
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    },
+    {
+      "id": "ToggleSwitch_d93566",
+      "type": "ToggleSwitch",
+      "geometry": {
+        "x": 700.0,
+        "y": 340.0,
+        "w": 180.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "加热",
+        "checked": false,
+        "commandMode": "文本",
+        "onCommand": "HEAT=1",
+        "offCommand": "HEAT=0",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbAddress": 0,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "开关已切换",
+        "notifyType": "信息",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    }
+  ],
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  }
+}
