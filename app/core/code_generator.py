@@ -207,6 +207,9 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
     lines.append(runtime_source("command_runtime.py").replace(
         "from .protocol_parser import build_modbus_frame",
         "from serial_handler import build_modbus_frame",
+    ).replace(
+        "from .protocol_parser import build_modbus_tcp_frame",
+        "from serial_handler import build_modbus_tcp_frame",
     ))
 
     # custom widget classes needed (recursive)
@@ -358,13 +361,12 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send(frame)
 
     def _send_modbus(self, slave, func, address, value=1):
+        # One request per connected link: RTU, or MBAP where the link parses Modbus TCP.
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
-                frame = command_modbus_frame(slave, func, address, value)
+                send_modbus_command(self._comm_hub, slave, func, address, value)
             except ValueError as exc:
                 self._command_error(exc)
-                return
-            self._comm_hub.send(frame)
 
     def _send_packed_value(self, value, fmt, cast=int, tpl="{value}", header="", tail=""):
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
@@ -1535,10 +1537,12 @@ class ModbusConfigCard(CardWidget):
             self._status.setText("未连接"); return
         try:
             fc = self._FC.get(self._fc.currentText(), 3)
-            frame = command_modbus_frame(
-                self._slave.text(), fc, self._addr.text(), self._val.text())
-            if self._handler.send(frame):
-                self._status.setText(f"已发送: {frame.hex(' ').upper()}")
+            frames = send_modbus_command(
+                self._handler, self._slave.text(), fc, self._addr.text(), self._val.text())
+            if frames:
+                text = f"已发送: {frames[0].hex(' ').upper()}"
+                if len(frames) > 1: text += f"（{len(frames)} 条链路）"
+                self._status.setText(text)
             else:
                 self._stop_poll()
                 self._status.setText("发送失败，请检查连接")

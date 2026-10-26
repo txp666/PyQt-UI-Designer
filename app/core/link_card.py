@@ -26,7 +26,7 @@ class LinkConfigCard(CardWidget):
     LINK = ""  # name of this card's link on a CommHub
     TITLE = "连接配置"
     LABEL_WIDTH = 56
-    PARSERS = ["项目设置", "line", "hex", "modbus"]
+    PARSERS = ["项目设置", "line", "hex", "modbus", "modbus_tcp"]
 
     def __init__(self, parent=None):
         super().__init__(parent)

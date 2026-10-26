@@ -133,6 +133,57 @@ class LinkCardTests(unittest.TestCase):
             check_payloads([b"READ\r\n"])
         ''')
 
+    def test_modbus_card_frames_requests_as_mbap_over_a_modbus_tcp_link(self):
+        self.run_both([
+            control("tcp", "TcpConfigCard", {"defaultParser": "modbus_tcp"}),
+            control("bus", "ModbusConfigCard", {"defaultSlave": 1, "defaultFunc": "03 读保持寄存器",
+                                                "defaultAddr": 0, "defaultValue": 2}, 1),
+            parity.control("value", "NumericDisplay", {"title": "温度"}, 16) | {
+                "binding": {"parseMode": "Modbus", "mbRegIndex": 0, "mbDataType": "uint16"}},
+        ], r'''
+            import time
+            from PyQt5.QtNetwork import QHostAddress, QTcpServer
+            def wait_for(predicate, what):
+                deadline = time.monotonic() + 5
+                while not predicate() and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                assert predicate(), f"Timed out waiting for {what}"
+            card, bus = widgets["tcp"], widgets["bus"]
+            assert card._parser_combo.currentText() == "modbus_tcp"
+            device = QTcpServer()
+            assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
+            card._host_edit.setText("127.0.0.1")
+            card._port_spin.setValue(device.serverPort())
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            wait_for(lambda: device.hasPendingConnections() and card._handler.is_connected, "the link")
+            peer = device.nextPendingConnection()
+            assert card._handler.parser_type == "modbus_tcp"
+
+            # The serial port (line parser) gets RTU, the Modbus TCP link gets MBAP.
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            rtu = bytes.fromhex("010300000002c40b")
+            check_payloads([rtu])
+            wait_for(lambda: peer.bytesAvailable() >= 12, "the MBAP request")
+            request = bytes(peer.readAll())
+            assert request[2:] == bytes.fromhex("0000000601030000 0002".replace(" ", "")), request.hex()
+            assert bus._status.text().startswith("已发送: 01 03 00 00 00 02 C4 0B（2 条链路）"), bus._status.text()
+
+            # The device answers with a Modbus TCP response, parsed like an RTU one.
+            received = []
+            card._handler.dataReceived.connect(received.append)
+            peer.write(request[:2] + bytes.fromhex("000000070103040019 0001".replace(" ", "")))
+            peer.flush()
+            wait_for(lambda: received, "the response")
+            assert received == [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1}], received
+            if os.environ["APPLICATION_MODE"] == "export":  # the preview harness runs no bindings
+                assert widgets["value"]._value.text() == "25", widgets["value"]._value.text()
+            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            assert not card._handler.is_active
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            check_payloads([rtu, rtu])
+            assert bus._status.text() == "已发送: 01 03 00 00 00 02 C4 0B", bus._status.text()
+        ''')
+
     def test_mqtt_card_preserves_configuration_and_publishes_commands(self):
         self.run_both([
             control("mqtt", "MqttConfigCard", {

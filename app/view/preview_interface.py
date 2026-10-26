@@ -26,7 +26,7 @@ from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
 from app.core.signal_lifetime import SignalConnections
 from app.core.command_runtime import (
-    command_hex_frame, command_packed_frame, command_modbus_frame,
+    command_hex_frame, command_packed_frame, send_modbus_command,
 )
 
 
@@ -130,14 +130,16 @@ class PreviewCanvas(QWidget):
 
     @staticmethod
     def _send_modbus_frame(props: dict, value: int = None):
-        """Build and send a Modbus RTU frame from widget properties.
+        """Send a Modbus request from widget properties over every connected link, framed
+        for each link (RTU, or MBAP where the link parses Modbus TCP).
         If value is provided, it overrides mbValue from props."""
         from app.core.comm_manager import commHub
         if not commHub.is_connected:
             signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
         try:
-            frame = command_modbus_frame(
+            send_modbus_command(
+                commHub,
                 props.get("mbSlave", 1),
                 PreviewCanvas._FC_MAP.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
                 props.get("mbAddress", 0),
@@ -145,8 +147,6 @@ class PreviewCanvas(QWidget):
             )
         except ValueError as exc:
             PreviewCanvas._command_error(exc)
-            return
-        commHub.send(frame)
 
     @staticmethod
     def _send_serial_bytes(raw: bytes):

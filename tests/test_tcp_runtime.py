@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QApplication
 from app.core import protocol_parser as protocol
 from app.core import tcp_runtime
 from app.core.code_generator import _gen_tcp_handler
+from app.core.command_runtime import send_modbus_command
 
 HEX_CONFIG = {"parser": "hex", "parserConfig": {
     "header": "AA55", "footer": "55AA", "fields": [["v", 0, 2, "uint16"]]}}
@@ -192,6 +193,36 @@ class TcpLinkTests(unittest.TestCase):
             self.assertEqual(self.of(client_events, "data"), [{"x": 1}])
         exported = self.runtimes({"baudRate": 9600, "parity": "Even", **HEX_CONFIG})[1]
         self.assertEqual(exported["TcpHandler"].DEFAULT_CONFIG, HEX_CONFIG)
+
+    def test_modbus_tcp_link_frames_requests_with_mbap_and_parses_responses(self):
+        config = {"parser": "modbus_tcp", "parserConfig": {"fields": ["temperature"]}}
+        for namespace in self.runtimes(config):
+            device, host = self.make(namespace), self.make(namespace, config)
+            device_events, host_events = self.record(device), self.record(host)
+            self.assertTrue(device.connect("127.0.0.1", 0, mode="服务端", parser_type="hex",
+                                           parser_config={"header": "FF", "footer": "FE"}))
+            self.assertTrue(host.connect("127.0.0.1", device.port))
+            self.wait_for(lambda: host.is_connected and device.peer_count == 1, "the host link")
+            self.assertEqual(host.parser_type, "modbus_tcp")
+            self.assertEqual(len(send_modbus_command(host, 1, 3, 0, 2)), 1)
+            self.wait_for(lambda: self.of(device_events, "raw"), "the request")
+            request = b"".join(self.of(device_events, "raw"))
+            self.assertEqual(request[2:], bytes.fromhex("000000060103 00000002".replace(" ", "")))
+            response = request[:2] + bytes.fromhex("0000 0007 01 03 04 00ff 0001".replace(" ", ""))
+            self.assertTrue(device.send(response[:5]))
+            QTest.qWait(30)
+            self.assertTrue(device.send(response[5:]))
+            self.wait_for(lambda: self.of(host_events, "data"), "the response")
+            self.assertEqual(self.of(host_events, "data"),
+                             [{"slave": 1, "fc": 3, "temperature": 255, "reg1": 1}])
+            # The same link framed as RTU over TCP keeps the CRC.
+            self.assertTrue(host.connect("127.0.0.1", device.port, parser_type="modbus"))
+            self.wait_for(lambda: host.is_connected and device.peer_count == 1, "the RTU link")
+            self.assertEqual(host.parser_type, "modbus")
+            del device_events[:]
+            self.assertEqual(len(send_modbus_command(host, 1, 3, 0, 2)), 1)
+            self.wait_for(lambda: self.of(device_events, "raw"), "the RTU request")
+            self.assertEqual(b"".join(self.of(device_events, "raw")).hex(), "010300000002c40b")
 
     def test_reconnecting_replaces_the_previous_link(self):
         for namespace in self.runtimes():

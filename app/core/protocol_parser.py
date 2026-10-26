@@ -1,5 +1,5 @@
 # coding: utf-8
-"""Data frame parsers for serial communication."""
+"""Data frame parsers shared by every communication link."""
 import json
 from typing import Optional, Dict, Any, List
 
@@ -254,37 +254,90 @@ class ModbusRTUParser(BaseParser):
                 self._buf = self._buf[1:]
                 continue
             self._buf = self._buf[length:]
-            slave, fc = frame[:2]
-            if fc in (1, 2, 3, 4):
-                results.append(self._parse_read_response(slave, fc, frame[3:-2]))
-            elif fc >= 0x80:
-                results.append({"slave": slave, "fc": fc, "error": frame[2]})
-            else:
-                results.append({"slave": slave, "fc": fc,
-                                "address": int.from_bytes(frame[2:4], "big"),
-                                "value": int.from_bytes(frame[4:6], "big")})
+            results.append(modbus_response(frame[0], frame[1], frame[2:-2], self._fields))
         return results
 
-    def _parse_read_response(self, slave: int, fc: int,
-                             payload: bytes) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"slave": slave, "fc": fc}
-        if fc in (0x03, 0x04):
-            regs = []
-            for i in range(0, len(payload), 2):
-                if i + 1 < len(payload):
-                    regs.append(int.from_bytes(payload[i:i + 2], "big"))
-            for idx, val in enumerate(regs):
-                name = self._fields[idx] if idx < len(self._fields) else f"reg{idx}"
-                result[name] = val
-        elif fc in (0x01, 0x02):
-            bits = []
-            for b in payload:
-                for bit_i in range(8):
-                    bits.append((b >> bit_i) & 1)
-            for idx, val in enumerate(bits):
-                name = self._fields[idx] if idx < len(self._fields) else f"coil{idx}"
-                result[name] = val
-        return result
+
+def modbus_response(slave: int, fc: int, data: bytes, fields=()) -> Dict[str, Any]:
+    """Interpret a response PDU body (the bytes after the function code).
+
+    Shared by the RTU and TCP parsers, so both produce the same dictionaries:
+    ``reg0, reg1, …`` or ``coil0, coil1, …`` (or custom field names) for reads,
+    ``address``/``value`` for write echoes and ``error`` for exceptions.
+    """
+    result: Dict[str, Any] = {"slave": slave, "fc": fc}
+    if fc in (0x03, 0x04):
+        payload = data[1:]
+        regs = []
+        for i in range(0, len(payload), 2):
+            if i + 1 < len(payload):
+                regs.append(int.from_bytes(payload[i:i + 2], "big"))
+        for idx, val in enumerate(regs):
+            name = fields[idx] if idx < len(fields) else f"reg{idx}"
+            result[name] = val
+    elif fc in (0x01, 0x02):
+        bits = []
+        for b in data[1:]:
+            for bit_i in range(8):
+                bits.append((b >> bit_i) & 1)
+        for idx, val in enumerate(bits):
+            name = fields[idx] if idx < len(fields) else f"coil{idx}"
+            result[name] = val
+    elif fc >= 0x80:
+        result["error"] = data[0]
+    else:
+        result["address"] = int.from_bytes(data[0:2], "big")
+        result["value"] = int.from_bytes(data[2:4], "big")
+    return result
+
+
+class ModbusTCPParser(BaseParser):
+    """Parse Modbus TCP response ADUs.
+
+    An ADU is a 7-byte MBAP header (transaction id, protocol id 0, length, unit id)
+    followed by the PDU; there is no CRC, so the length field and the PDU layout are
+    the only framing checks. Output matches ModbusRTUParser, with the unit id as ``slave``.
+    """
+
+    def __init__(self, fields: list = None):
+        self._buf = b""
+        self._fields = fields or []
+
+    @staticmethod
+    def _frame_length(buf):
+        """Length of the ADU starting at buf[0]; 0 if these bytes cannot start one."""
+        if int.from_bytes(buf[2:4], "big") != 0:
+            return 0
+        length = int.from_bytes(buf[4:6], "big")
+        fc = buf[7]
+        if fc in (1, 2, 3, 4):
+            count = buf[8]
+            if not 1 <= count <= 250 or (fc in (3, 4) and count % 2) or length != count + 3:
+                return 0
+        elif fc in (5, 6, 15, 16):
+            if length != 6:
+                return 0
+        elif fc in (0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x8F, 0x90):
+            if length != 3:
+                return 0
+        else:
+            return 0
+        return 6 + length
+
+    def feed(self, data: bytes) -> List[Dict[str, Any]]:
+        self._buf += data
+        results = []
+        while len(self._buf) >= 9:  # the shortest ADU is an exception response
+            length = self._frame_length(self._buf)
+            if not length:
+                self._buf = self._buf[1:]
+                continue
+            if len(self._buf) < length:
+                break
+            frame = self._buf[:length]
+            self._buf = self._buf[length:]
+            results.append(modbus_response(frame[6], frame[7], frame[8:], self._fields))
+        return results
 
 
 def modbus_crc(data: bytes) -> bytes:
@@ -322,6 +375,15 @@ def build_modbus_frame(slave: int, func: int, address: int,
     return pdu + modbus_crc(pdu)
 
 
+def build_modbus_tcp_frame(unit: int, func: int, address: int, value: int = 0,
+                           count: int = 1, transaction: int = 0) -> bytes:
+    """Build a Modbus TCP request ADU: MBAP header plus the same PDU as RTU, without CRC."""
+    pdu = build_modbus_frame(unit, func, address, value, count)[1:-2]
+    body = bytes([unit]) + pdu
+    return (transaction.to_bytes(2, "big") + b"\x00\x00"
+            + len(body).to_bytes(2, "big") + body)
+
+
 def create_parser(parser_type: str, config: dict = None) -> BaseParser:
     config = config or {}
     if parser_type == "line":
@@ -334,4 +396,6 @@ def create_parser(parser_type: str, config: dict = None) -> BaseParser:
         )
     elif parser_type == "modbus":
         return ModbusRTUParser(fields=config.get("fields", []))
+    elif parser_type == "modbus_tcp":
+        return ModbusTCPParser(fields=config.get("fields", []))
     raise ValueError(f"未知解析模式: {parser_type}")

@@ -342,9 +342,18 @@ class ProgressRingDisplay(QWidget):
 # Modbus Config Card
 # ---------------------------------------------------------------------------
 
+def modbus_sent_status(frames):
+    """Status text for frames just sent: the first frame, and how many links got one."""
+    text = f"已发送: {frames[0].hex(' ').upper()}"
+    if len(frames) > 1:
+        text += f"（{len(frames)} 条链路）"
+    return text
+
+
 class ModbusConfigCard(CardWidget):
-    """Modbus RTU configuration card with read/write controls and response display.
-    Auto-wired to the communication hub."""
+    """Modbus configuration card with read/write controls and response display.
+    Requests go out over every connected link, as RTU or Modbus TCP to match that
+    link's parser. Auto-wired to the communication hub."""
 
     _FC_MAP = {
         "01 读线圈": 0x01, "02 读离散输入": 0x02,
@@ -456,20 +465,20 @@ class ModbusConfigCard(CardWidget):
 
     def _do_send(self):
         from app.core.comm_manager import commHub
-        from app.core.command_runtime import command_modbus_frame
+        from app.core.command_runtime import send_modbus_command
         if not commHub.is_connected:
             self._status.setText("未连接")
             return
         fc = self._FC_MAP.get(self._fc_combo.currentText(), 0x03)
         try:
-            frame = command_modbus_frame(
-                self._slave_edit.text(), fc, self._addr_edit.text(), self._val_edit.text())
+            frames = send_modbus_command(
+                commHub, self._slave_edit.text(), fc, self._addr_edit.text(), self._val_edit.text())
         except ValueError as exc:
             self._stop_poll()
             self._status.setText(str(exc))
             return
-        if commHub.send(frame):
-            self._status.setText(f"已发送: {frame.hex(' ').upper()}")
+        if frames:
+            self._status.setText(modbus_sent_status(frames))
         else:
             self._stop_poll()
             self._status.setText("发送失败，请检查连接")
@@ -539,7 +548,7 @@ SERIAL_CONFIG_META = WidgetMeta(
         PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
                 options=["完整", "简洁", "单行"]),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus"]),
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp"]),
         PropDef("defaultBaud", "默认波特率", PropType.ENUM, "115200",
                 options=["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]),
         PropDef("defaultDatabits", "默认数据位", PropType.ENUM, "8",
@@ -569,7 +578,7 @@ TCP_CONFIG_META = WidgetMeta(
         PropDef("defaultHost", "默认地址", PropType.STRING, "127.0.0.1"),
         PropDef("defaultPort", "默认端口", PropType.INT, 8080, min_val=1, max_val=65535),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus"]),
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp"]),
     ],
 )
 
@@ -594,7 +603,7 @@ MQTT_CONFIG_META = WidgetMeta(
         PropDef("defaultQos", "默认 QoS", PropType.ENUM, "0", options=["0", "1", "2"]),
         PropDef("defaultTls", "默认启用 TLS", PropType.BOOL, False),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus"]),
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp"]),
     ],
 )
 
