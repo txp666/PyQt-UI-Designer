@@ -212,17 +212,21 @@ class MqttLinkTests(unittest.TestCase):
             handler = self.make(namespace)
             events = self.record(handler)
             client = self.connect(handler, subscribe="t")
-            client.fire("on_disconnect", {}, ReasonCode(7, "Connection lost"), None)
+            client.fire("on_disconnect", {}, ReasonCode(128, "Unspecified error"), None)
             self.wait_for(lambda: ("disconnected",) in events, "the loss")
-            self.assertEqual(events[-2:], [("error", "MQTT 连接断开，正在重连: Connection lost"),
-                                           ("disconnected",)])
+            self.assertEqual(events[-2:], [("error", "MQTT 连接断开，正在重连"), ("disconnected",)])
             self.assertTrue(handler.is_active and not handler.is_connected)
             self.assertTrue(client.loop_running, "paho's loop keeps reconnecting")
             client.fire("on_message", FakeMessage("t", b"1"))
             client.fire("on_connect", {}, ReasonCode(0, "Success"), None)
             self.wait_for(lambda: handler.is_connected, "the reconnection")
             self.assertEqual(events[-1], ("connected", "MQTT 127.0.0.1:1883"))
-            self.assertEqual(client.subscriptions, [("t", 0), ("t", 0)])
+            client.fire("on_disconnect", {}, ReasonCode(141, "Keep alive timeout"), None)
+            self.wait_for(lambda: not handler.is_connected, "the keepalive loss")
+            self.assertEqual(events[-2], ("error", "MQTT 连接断开，正在重连: Keep alive timeout"))
+            client.fire("on_connect", {}, ReasonCode(0, "Success"), None)
+            self.wait_for(lambda: handler.is_connected, "the second reconnection")
+            self.assertEqual(client.subscriptions, [("t", 0)] * 3)
             self.assertEqual(self.of(events, "data"), [], "messages while down are dropped")
 
             handler.disconnect()
@@ -240,10 +244,15 @@ class MqttLinkTests(unittest.TestCase):
             events = self.record(handler)
             self.assertTrue(handler.connect(username="u"))
             refused = FakeClient.instances[-1]
-            refused.fire("on_connect", {}, ReasonCode(5, "Not authorized"), None)
+            refused.fire("on_connect", {}, ReasonCode(135, "Not authorized"), None)
             self.wait_for(lambda: not handler.is_active, "the rejected connection")
             self.assertFalse(refused.loop_running)
-            self.assertEqual(events, [("error", "MQTT 连接失败: Not authorized"), ("disconnected",)])
+            self.assertEqual(events, [("error", "MQTT 连接失败: 未授权，请检查用户名和密码"),
+                                      ("disconnected",)])
+            self.assertTrue(handler.connect())
+            FakeClient.instances[-1].fire("on_connect", {}, ReasonCode(159, "Connection rate exceeded"), None)
+            self.wait_for(lambda: not handler.is_active, "the rate-limited connection")
+            self.assertEqual(events[-2], ("error", "MQTT 连接失败: Connection rate exceeded"))
 
             self.assertTrue(handler.connect(host="nowhere"))
             unreachable = FakeClient.instances[-1]
@@ -252,6 +261,11 @@ class MqttLinkTests(unittest.TestCase):
             self.assertFalse(unreachable.loop_running)
             self.assertEqual(events[-2:], [("error", "MQTT 连接失败: 无法连接到服务器"),
                                            ("disconnected",)])
+            self.assertTrue(handler.connect(host="secure", tls=True))
+            FakeClient.instances[-1].fire("on_connect_fail")
+            self.wait_for(lambda: not handler.is_active, "the failed TLS connection")
+            self.assertEqual(events[-2], ("error", "MQTT 连接失败: 无法连接到服务器"
+                                                   "（已启用 TLS，请检查端口和服务器证书）"))
 
     def test_paho_1_signatures_and_missing_dependency(self):
         for namespace in self.runtimes(paho=FakePaho1):
@@ -266,10 +280,19 @@ class MqttLinkTests(unittest.TestCase):
             client.fire("on_message", FakeMessage("t", b"7"))
             self.wait_for(lambda: self.of(events, "data"), "the v1 message")
             self.assertEqual(self.of(events, "data"), [{"ch0": 7, "t": 7}])
-            client.fire("on_disconnect", 1)
+            client.fire("on_disconnect", 7)
             self.wait_for(lambda: not handler.is_connected, "the v1 loss")
-            self.assertEqual(events[-2], ("error", "MQTT 连接断开，正在重连: connack 1"))
+            self.assertEqual(events[-2], ("error", "MQTT 连接断开，正在重连"))
+            client.fire("on_connect", {}, 0)
+            self.wait_for(lambda: handler.is_connected, "the v1 reconnection")
+            client.fire("on_disconnect", 16)
+            self.wait_for(lambda: not handler.is_connected, "the second v1 loss")
+            self.assertEqual(events[-2], ("error", "MQTT 连接断开，正在重连: error 16"))
             handler.disconnect()
+            self.assertTrue(handler.connect(username="u"))
+            FakeClient.instances[-1].fire("on_connect", {}, 4)
+            self.wait_for(lambda: not handler.is_active, "the v1 refusal")
+            self.assertEqual(events[-2], ("error", "MQTT 连接失败: 用户名或密码错误"))
             with patch.object(mqtt_runtime, "mqtt", None), patch.dict(namespace, {"mqtt": None}):
                 self.assertFalse(handler.connect())
             self.assertEqual(events[-1], ("error", "paho-mqtt 未安装，请运行 pip install paho-mqtt"))
