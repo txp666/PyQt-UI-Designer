@@ -84,6 +84,8 @@ class LinkCardTests(unittest.TestCase):
             card._port_spin.setValue(device_port)
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             assert "连接中" in card._status.text(), card._status.text()
+            assert not card._connect_btn.isEnabled() and not card._host_edit.isEnabled()
+            assert card._disconnect_btn.isEnabled(), "断开 cancels a pending connection"
             wait_for(lambda: device.hasPendingConnections() and link.is_connected, "the connection")
             peer = device.nextPendingConnection()
             assert card._status.text() == "● 已连接", card._status.text()
@@ -229,6 +231,13 @@ class LinkCardTests(unittest.TestCase):
             assert client.client_id == "panel-1"
             assert client.calls == [("auth", "user", "secret"), ("tls",), ("connect", "broker.local", 8883)], client.calls
             assert "连接中" in card._status.text(), card._status.text()
+            assert card._disconnect_btn.isEnabled() and not card._connect_btn.isEnabled()
+            # 断开 cancels the attempt and stops paho's network loop.
+            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            assert not link.is_active and not client.loop_running
+            assert card._status.text() == "未连接" and card._connect_btn.isEnabled()
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            client = FakeClient.instances[-1]
             client.fire("on_connect", {}, ReasonCode(0, "Success"), None)
             wait_for(lambda: link.is_connected, "the CONNACK")
             assert client.subscriptions == [("home/+/state", 1)]
@@ -243,9 +252,19 @@ class LinkCardTests(unittest.TestCase):
             client.fire("on_message", SimpleNamespace(topic="home/1/state", payload=b"temp=25.5"))
             wait_for(lambda: "temp=25.5" in recv.toPlainText(), "device data")
 
-            client.fire("on_connect", {}, ReasonCode(5, "Not authorized"), None)
+            # The broker goes away: the card shows the retry and 断开 stays available.
+            client.fire("on_disconnect", {}, ReasonCode(128, "Unspecified error"), None)
+            wait_for(lambda: not link.is_connected, "the loss")
+            assert link.is_active and card._status.text() == "重连中...", card._status.text()
+            assert card._disconnect_btn.isEnabled() and not card._connect_btn.isEnabled()
+            assert not card._host_edit.isEnabled()
+            client.fire("on_connect", {}, ReasonCode(0, "Success"), None)
+            wait_for(lambda: link.is_connected, "the reconnection")
+            assert card._status.text() == "● 已连接", card._status.text()
+
+            client.fire("on_connect", {}, ReasonCode(135, "Not authorized"), None)
             wait_for(lambda: not link.is_active, "the rejected session")
-            assert card._status.text() == "MQTT 连接失败: Not authorized", card._status.text()
+            assert card._status.text() == "MQTT 连接失败: 未授权，请检查用户名和密码", card._status.text()
             assert card._connect_btn.isEnabled() and card._host_edit.isEnabled()
             assert not client.loop_running
             check_payloads([b"READ"])

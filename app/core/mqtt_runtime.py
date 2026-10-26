@@ -44,10 +44,31 @@ def _reason_value(code):
         return -1
 
 
-def _reason_text(code):
-    if isinstance(code, int) and mqtt is not None and hasattr(mqtt, "connack_string"):
-        return mqtt.connack_string(code)
-    return str(code)
+# MQTT 5 style CONNACK reason codes; paho 2 also reports MQTT 3.1.1 refusals this way.
+_CONNACK_TEXT = {132: "协议版本不支持", 133: "客户端ID无效", 134: "用户名或密码错误",
+                 135: "未授权，请检查用户名和密码", 136: "服务器不可用"}
+_V1_CONNACK = {1: 132, 2: 133, 3: 136, 4: 134, 5: 135}  # paho 1 passes MQTT 3.1.1 return codes
+
+
+def _connack_text(code):
+    """Why the broker refused a connection, in the user's language where we know it."""
+    if isinstance(code, int):
+        text = _CONNACK_TEXT.get(_V1_CONNACK.get(code, code))
+        if text is None and mqtt is not None and hasattr(mqtt, "connack_string"):
+            text = mqtt.connack_string(code)
+        return text or str(code)
+    return _CONNACK_TEXT.get(_reason_value(code)) or str(code)
+
+
+def _disconnect_text(code):
+    """Why the connection dropped; empty when paho only knows it was lost."""
+    if isinstance(code, int):  # paho 1: an MQTT_ERR_* value, 7 = connection lost
+        if code == 7:
+            return ""
+        if mqtt is not None and hasattr(mqtt, "error_string"):
+            return mqtt.error_string(code)
+        return str(code)
+    return "" if _reason_value(code) == 128 else str(code)  # 128: unspecified error
 
 
 class MqttHandler(QObject):
@@ -74,6 +95,7 @@ class MqttHandler(QObject):
         self._publish_topic = ""
         self._qos = 0
         self._retain = False
+        self._tls = False
         self._parser_setup = ("line", {})
         self._parsers = {}
         self._description = ""
@@ -162,7 +184,8 @@ class MqttHandler(QObject):
                 client = mqtt.Client(client_id=client_id, userdata=generation)
             if username:
                 client.username_pw_set(username, password or None)
-            if pick(tls, "tls"):
+            use_tls = bool(pick(tls, "tls"))
+            if use_tls:
                 client.tls_set()
             client.on_connect = self._paho_connect
             client.on_connect_fail = self._paho_connect_fail
@@ -178,6 +201,7 @@ class MqttHandler(QObject):
         self._topics = topics
         self._publish_topic = publish_topic
         self._qos = qos
+        self._tls = use_tls
         self._retain = bool(cfg["retain"])
         self._parser_setup = (selected_parser, selected_config)
         self._parsers = {}
@@ -226,7 +250,7 @@ class MqttHandler(QObject):
     # ---- paho thread ----
 
     def _paho_connect(self, client, generation, flags, code, *_properties):
-        self._connectResult.emit(generation, _reason_value(code), _reason_text(code))
+        self._connectResult.emit(generation, _reason_value(code), _connack_text(code))
 
     def _paho_connect_fail(self, client, generation):
         self._connectResult.emit(generation, -1, "无法连接到服务器")
@@ -234,7 +258,7 @@ class MqttHandler(QObject):
     def _paho_disconnect(self, client, generation, *args):
         # paho 1: (rc) or (rc, properties)   paho 2: (disconnect_flags, reason_code, properties)
         code = args[0] if len(args) <= 2 else args[1]
-        self._connectionLost.emit(generation, _reason_value(code), _reason_text(code))
+        self._connectionLost.emit(generation, _reason_value(code), _disconnect_text(code))
 
     def _paho_message(self, client, generation, message):
         self._messageArrived.emit(generation, message.topic, bytes(message.payload))
@@ -245,6 +269,9 @@ class MqttHandler(QObject):
         if generation != self._generation or self._client is None:
             return
         if code != 0:
+            if code == -1 and self._tls:
+                # paho does not say why; an untrusted certificate looks the same as a dead port.
+                message += "（已启用 TLS，请检查端口和服务器证书）"
             self.error.emit(f"MQTT 连接失败: {message}")
             self.disconnect()
             return
@@ -266,7 +293,7 @@ class MqttHandler(QObject):
         # paho keeps reconnecting; its next successful CONNACK reports connected again.
         self._up = False
         self._parsers = {}
-        self.error.emit(f"MQTT 连接断开，正在重连: {message}")
+        self.error.emit("MQTT 连接断开，正在重连" + (f": {message}" if message else ""))
         self.disconnected.emit()
         self.connectionChanged.emit(False)
 

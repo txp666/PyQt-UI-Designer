@@ -133,6 +133,17 @@ class LinkConfigCard(CardWidget):
             self._connect_btn.setEnabled(True)
             if not self._failed:
                 self._set_status("连接失败", "error")
+        elif not self._handler.is_connected and getattr(self._handler, "is_active", False):
+            self._set_pending("连接中...")
+
+    def _set_pending(self, text):
+        """Connecting or reconnecting: the fields stay locked and 断开 cancels the attempt."""
+        self._connected = False
+        self._connect_btn.setEnabled(False)
+        self._disconnect_btn.setEnabled(True)
+        for editor in self._editors:
+            editor.setEnabled(False)
+        self._set_status(text, "busy")
 
     def _on_disconnect(self):
         if self._handler is None:
@@ -145,7 +156,10 @@ class LinkConfigCard(CardWidget):
         self.set_connected(True)
 
     def _on_link_disconnected(self):
-        self.set_connected(False)
+        if getattr(self._handler, "is_active", False):
+            self._set_pending("重连中...")  # the link keeps retrying until 断开
+        else:
+            self.set_connected(False)
 
     def _on_link_error(self, message):
         self._failed = True
