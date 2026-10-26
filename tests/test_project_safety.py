@@ -112,6 +112,23 @@ class ProjectSafetyTests(unittest.TestCase):
             signalBus.canvasChanged.disconnect(edits)
             signalBus.widgetDeselected.disconnect(deselect)
 
+    def test_loading_a_smaller_canvas_resets_the_view_scroll_range(self):
+        from PyQt5.QtWidgets import QGraphicsView
+        view = QGraphicsView(self.scene)
+        self.addCleanup(view.deleteLater)
+        view.resize(700, 500)
+        view.show()
+        self.app.processEvents()
+        bar = view.horizontalScrollBar()
+        self.assertGreater(bar.maximum(), 0)  # the default 1200-wide canvas overflows
+        self.path.write_text(json.dumps({"canvas": {"width": 400, "height": 300},
+                                         "widgets": [{"type": "PushButton"}]}))
+        self.manager.load_to_scene(self.scene, str(self.path))
+        self.app.processEvents()
+        self.assertEqual((bar.minimum(), bar.maximum()), (0, 0))
+        self.assertEqual(view.mapFromScene(0, 0).x(), view.mapFromScene(400, 0).x() - 400)
+        self.assertGreater(view.mapFromScene(0, 0).x(), 0)  # centred, not cut off on the left
+
 
 class WindowHarness(QWidget):
     """Only project actions; a native frameless window is not needed here."""

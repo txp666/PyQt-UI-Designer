@@ -245,6 +245,9 @@ class ProjectManager:
                 for item in old_items:
                     scene.add_canvas_item(item)
                 raise
+        # The blocker also hid the new canvas size from the views, which would keep the old scroll range
+        # and show a smaller project shifted off to one side.
+        scene.sceneRectChanged.emit(scene.sceneRect())
         self._current = candidate
         self._dirty = False
         scene.clearSelection()
