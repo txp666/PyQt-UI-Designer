@@ -1,0 +1,188 @@
+{
+  "version": "1.0",
+  "appName": "电池放电测试",
+  "canvas": {
+    "width": 900,
+    "height": 600,
+    "gridSize": 10
+  },
+  "widgets": [
+    {
+      "id": "Label_8d2a08",
+      "type": "Label",
+      "geometry": {
+        "x": 20.0,
+        "y": 10.0,
+        "w": 360.0,
+        "h": 30.0
+      },
+      "properties": {
+        "text": "电池放电测试",
+        "fontSize": 20,
+        "bold": true,
+        "alignment": "Left",
+        "displayFormat": "自动",
+        "decimals": "自动"
+      },
+      "binding": null
+    },
+    {
+      "id": "SerialConfigCard_a96314",
+      "type": "SerialConfigCard",
+      "geometry": {
+        "x": 20.0,
+        "y": 60.0,
+        "w": 860.0,
+        "h": 50.0
+      },
+      "properties": {
+        "title": "串口配置",
+        "displayMode": "单行",
+        "defaultParser": "项目设置",
+        "defaultBaud": "115200",
+        "defaultDatabits": "8",
+        "defaultParity": "None",
+        "defaultStopbits": "1",
+        "defaultFlow": "无"
+      },
+      "binding": null
+    },
+    {
+      "id": "RealtimeChart_761d57",
+      "type": "RealtimeChart",
+      "geometry": {
+        "x": 20.0,
+        "y": 120.0,
+        "w": 480.0,
+        "h": 280.0
+      },
+      "properties": {
+        "title": "实时曲线",
+        "displayPoints": 200,
+        "curveCount": 1,
+        "currentCurve": 0,
+        "curveName": "电压",
+        "curveParseMode": "键值匹配",
+        "curveKey": "v",
+        "curveJsonPath": "",
+        "curveByteOffset": 0,
+        "curveDataType": "float32",
+        "curveByteOrder": "大端(BE)",
+        "curveFrameHeader": "",
+        "curveFrameTail": "",
+        "curveRegIndex": 0,
+        "curveMbDataType": "uint16",
+        "curveMbRegOrder": "大端(AB CD)",
+        "curveMbFcFilter": -1,
+        "curveMbSlaveFilter": -1,
+        "_curve_0_name": "电压",
+        "_curve_0_key": "v"
+      },
+      "binding": null
+    },
+    {
+      "id": "DataTable_45ef0e",
+      "type": "DataTable",
+      "geometry": {
+        "x": 520.0,
+        "y": 120.0,
+        "w": 360.0,
+        "h": 280.0
+      },
+      "properties": {
+        "columns": "时间\nv\ni\nmah",
+        "recordMode": "逐行记录",
+        "maxRows": 2000
+      },
+      "binding": null
+    },
+    {
+      "id": "LogBox_51e92f",
+      "type": "LogBox",
+      "geometry": {
+        "x": 20.0,
+        "y": 410.0,
+        "w": 670.0,
+        "h": 170.0
+      },
+      "properties": {
+        "maxLines": 500
+      },
+      "binding": null
+    },
+    {
+      "id": "ToggleSwitch_61c6df",
+      "type": "ToggleSwitch",
+      "geometry": {
+        "x": 710.0,
+        "y": 420.0,
+        "w": 170.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "放电",
+        "checked": false,
+        "commandMode": "文本",
+        "onCommand": "START",
+        "offCommand": "STOP",
+        "commandTemplate": "{value}",
+        "frameHeader": "",
+        "frameTail": "",
+        "dataType": "HEX字符串",
+        "byteOrder": "大端(BE)",
+        "commandNewline": "\\r\\n",
+        "mbSlave": 1,
+        "mbAddress": 0,
+        "notify": false,
+        "notifyTitle": "提示",
+        "notifyContent": "开关已切换",
+        "notifyType": "信息",
+        "notifyDuration": 3000
+      },
+      "binding": null
+    },
+    {
+      "id": "LEDIndicator_6254bd",
+      "type": "LEDIndicator",
+      "geometry": {
+        "x": 710.0,
+        "y": 470.0,
+        "w": 170.0,
+        "h": 30.0
+      },
+      "properties": {
+        "label": "放电中",
+        "color": "green",
+        "on": false,
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "键值匹配",
+        "key": "run",
+        "jsonPath": "",
+        "byteOffset": 0,
+        "dataType": "uint16",
+        "byteOrder": "大端(BE)",
+        "expression": null,
+        "frameHeader": "",
+        "frameTail": "",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16",
+        "mbRegOrder": "大端(AB CD)",
+        "mbFcFilter": -1,
+        "mbSlaveFilter": -1
+      }
+    }
+  ],
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  }
+}
