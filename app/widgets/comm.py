@@ -1,79 +1,19 @@
 # coding: utf-8
 """Communication widgets: data table."""
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QHeaderView,
-    QTableWidgetItem, QAbstractItemView,
-)
-from qfluentwidgets import TableWidget
+from PyQt5.QtWidgets import QWidget
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
-from app.core.signal_lifetime import SignalConnections
+from app.core.table_runtime import DataTableWidget as RuntimeTable
 
 
-class DataTableWidget(QWidget):
-    """Table showing key-value data records with history.
-    Auto-wired to signalBus for live parsed serial data."""
+class DataTableWidget(RuntimeTable):
+    """The shared data table, auto-wired to signalBus for live parsed serial data."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(2)
-
-        self._table = TableWidget()
-        self._table.setColumnCount(2)
-        self._table.setHorizontalHeaderLabels(["字段", "值"])
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        layout.addWidget(self._table)
-
-        self._columns = ["字段", "值"]
-        self._max_rows = 500
-
         from app.common.signal_bus import signalBus
-        self._serial_connections = SignalConnections(self)
-        self._serial_connections.connect(signalBus.serialDataReceived, self._on_parsed_data)
-
-    def _on_parsed_data(self, data: dict):
-        self.update_kv_data(data)
-
-    def set_columns(self, cols: list):
-        self._columns = list(cols) or ["字段", "值"]
-        self._table.setColumnCount(len(self._columns))
-        self._table.setHorizontalHeaderLabels(self._columns)
-
-    def set_max_rows(self, n: int):
-        self._max_rows = max(10, n)
-        while self._table.rowCount() > self._max_rows:
-            self._table.removeRow(self._table.rowCount() - 1)
-
-    def append_row(self, values: list):
-        row = self._table.rowCount()
-        if row >= self._max_rows:
-            self._table.removeRow(0)
-            row = self._table.rowCount()
-        self._table.insertRow(row)
-        for col, val in enumerate(values):
-            if col < self._table.columnCount():
-                self._table.setItem(row, col, QTableWidgetItem(str(val)))
-        self._table.scrollToBottom()
-
-    def update_kv_data(self, data: dict):
-        self._table.setRowCount(0)
-        for key, val in data.items():
-            row = self._table.rowCount()
-            if row >= self._max_rows:
-                break
-            self._table.insertRow(row)
-            for column, value in enumerate((key, val)):
-                if column < self._table.columnCount():
-                    self._table.setItem(row, column, QTableWidgetItem(str(value)))
-
-    def clear_data(self):
-        self._table.setRowCount(0)
+        self._serial_connections.connect(signalBus.serialDataReceived, self.on_data)
 
 
 DATA_TABLE_META = WidgetMeta(
@@ -85,6 +25,7 @@ DATA_TABLE_META = WidgetMeta(
     min_width=200, min_height=100,
     properties=[
         PropDef("columns", "列名", PropType.TEXT, "字段\n值"),
+        PropDef("recordMode", "记录方式", PropType.ENUM, "最新值", options=["最新值", "逐行记录"]),
         PropDef("maxRows", "最大行数", PropType.INT, 500, min_val=10, max_val=50000),
     ],
 )
@@ -103,6 +44,7 @@ def create_comm_widget(type_name: str, props: dict, parent=None) -> QWidget:
         cols_text = props.get("columns", "字段\n值")
         cols = [c.strip() for c in cols_text.split("\n") if c.strip()]
         w.set_columns(cols)
+        w.set_record_mode(props.get("recordMode", "最新值"))
         w.set_max_rows(props.get("maxRows", 500))
         return w
     return None
@@ -113,5 +55,7 @@ def apply_comm_property(widget, type_name: str, prop_name: str, value):
         if prop_name == "columns":
             cols = [c.strip() for c in value.split("\n") if c.strip()]
             widget.set_columns(cols)
+        elif prop_name == "recordMode":
+            widget.set_record_mode(value)
         elif prop_name == "maxRows":
             widget.set_max_rows(value)

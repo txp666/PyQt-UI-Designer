@@ -635,6 +635,7 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                    if name.strip()]
         return (f"self.widgets[{wid!r}] = DataTableWidget({pv}); "
                 f"self.widgets[{wid!r}].set_columns({columns!r}); "
+                f"self.widgets[{wid!r}].set_record_mode({p('recordMode', '最新值')}); "
                 f"self.widgets[{wid!r}].set_max_rows({p('maxRows', 500)})")
 
     # Layout containers
@@ -1202,50 +1203,8 @@ class TitledCardContainer(CardWidget):
 
 
 def _data_table_class() -> str:
-    return '''
-class DataTableWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._serial_connections = SignalConnections(self)
-        layout = QVBoxLayout(self); layout.setContentsMargins(2,2,2,2)
-        self._table = TableWidget(); self._table.setColumnCount(2)
-        self._table.setHorizontalHeaderLabels(["字段","值"])
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        layout.addWidget(self._table)
-        self._max_rows = 500
-    def set_serial_handler(self, handler):
-        self._serial_connections.clear()
-        self._serial_connections.connect(handler.dataReceived, self.update_kv_data)
-    def set_columns(self, columns):
-        self._columns = list(columns) or ["字段", "值"]
-        self._table.setColumnCount(len(self._columns))
-        self._table.setHorizontalHeaderLabels(self._columns)
-    def set_max_rows(self, count):
-        self._max_rows = max(10, count)
-        while self._table.rowCount() > self._max_rows:
-            self._table.removeRow(self._table.rowCount() - 1)
-    def append_row(self, values):
-        if self._table.rowCount() >= self._max_rows:
-            self._table.removeRow(0)
-        row = self._table.rowCount()
-        self._table.insertRow(row)
-        for column, value in enumerate(values):
-            if column < self._table.columnCount():
-                self._table.setItem(row, column, QTableWidgetItem(str(value)))
-        self._table.scrollToBottom()
-    def update_kv_data(self, data):
-        self._table.setRowCount(0)
-        for k,v in data.items():
-            r = self._table.rowCount()
-            if r >= self._max_rows: break
-            self._table.insertRow(r)
-            for column, value in enumerate((k, v)):
-                if column < self._table.columnCount():
-                    self._table.setItem(r, column, QTableWidgetItem(str(value)))
-    def clear_data(self): self._table.setRowCount(0)
-'''
+    return runtime_source("table_runtime.py").replace(
+        "from .signal_lifetime import SignalConnections", "")
 
 
 def _image_display_class() -> str:

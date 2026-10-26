@@ -281,6 +281,30 @@ class BindingResilienceTests(unittest.TestCase):
             assert text("volts") == "ERR" and text("label") == "nan" and text("whole") == "True"
         """)
 
+    def test_data_table_logs_one_row_per_frame(self):
+        def table(name, properties):
+            return {"id": name, "type": "DataTable", "properties": properties,
+                    "geometry": {"x": 10, "y": 10, "w": 300, "h": 200}}
+        self.run_both([
+            table("log", {"recordMode": "逐行记录", "columns": "时间\ntemp\nhumi", "maxRows": 10}),
+            table("snap", {}),
+        ], """
+            import re
+            def rows(name):
+                t = widgets[name]._table
+                return [[t.item(r, c).text() if t.item(r, c) else "" for c in range(t.columnCount())]
+                        for r in range(t.rowCount())]
+            emit_data({"temp": 25.1, "humi": 60})
+            emit_data({"other": 1})  # carries none of the logged keys: no row
+            emit_data({"temp": 25.3})  # a key this frame lacks stays empty
+            assert [row[1:] for row in rows("log")] == [["25.1", "60"], ["25.3", ""]], rows("log")
+            assert all(re.fullmatch(r"\\d\\d:\\d\\d:\\d\\d\\.\\d{3}", row[0]) for row in rows("log")), rows("log")
+            for k in range(12):
+                emit_data({"temp": k, "humi": 50 + k})
+            assert len(rows("log")) == 10 and rows("log")[-1][1:] == ["11", "61"], rows("log")
+            assert rows("snap") == [["temp", "11"], ["humi", "61"]], rows("snap")  # the latest frame only
+        """)
+
     def test_nonfinite_display_formatting_does_not_stop_other_fields(self):
         self.run_both([
             bound("NumericDisplay", "display", properties={"displayFormat": "十六进制(HEX)"}),
