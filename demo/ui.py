@@ -114,9 +114,12 @@ def install_fluent_signal_lifetimes():
         ColorSettingCard, ComboBoxSettingCard,
     )
     from qfluentwidgets.common.animation import BackgroundAnimationWidget
+    from qfluentwidgets.components.widgets.stacked_widget import PopUpAniStackedWidget
     from qfluentwidgets.window.fluent_window import FluentWidget, FluentTitleBar
 
     _bridge_fluent_slot(BackgroundAnimationWidget, "_updateBackgroundColor", 0)
+    # Page animations have no QObject parent and can finish after the window is gone.
+    _bridge_fluent_slot(PopUpAniStackedWidget, "_PopUpAniStackedWidget__onAniFinished", 0)
     _bridge_fluent_slot(FluentWidget, "_onThemeChangedFinished", 0)
     _bridge_fluent_slot(FluentTitleBar, "setTitle", 1)
     _bridge_fluent_slot(FluentTitleBar, "setIcon", 1)

@@ -113,6 +113,27 @@ class WindowSignalLifetimeTests(unittest.TestCase):
             "from app.view.main_window import MainWindow\nwindow = MainWindow()\n"
             + _TITLE_CHECKS)
 
+    def test_page_animation_finishing_after_the_window_is_gone(self):
+        # Fluent's page animations have no QObject parent, so they outlive the window. A compiled
+        # app's slot is not disconnected with its stack, so a late finish reached a deleted widget.
+        self.run_script("""
+            from PyQt5.QtTest import QTest
+            from qfluentwidgets.components.widgets.stacked_widget import PopUpAniStackedWidget
+            opaque_slots(stack, PopUpAniStackedWidget, ("_PopUpAniStackedWidget__onAniFinished",))
+            from app.view.main_window import MainWindow
+            window = MainWindow()
+            window.show()
+            QTest.qWait(400)
+            window.switchTo(window.preview_interface)
+            animation = window.stackedWidget.view._ani
+            assert window.close()
+            window.deleteLater()
+            app.sendPostedEvents(None, QEvent.DeferredDelete)
+            assert sip.isdeleted(window) and not sip.isdeleted(animation)
+            animation.finished.emit()
+            assert not errors, errors
+        """)
+
     def test_selected_scene_can_be_destroyed_after_its_view(self):
         self.run_script("""
             from app.designer.canvas import DesignScene, DesignView
