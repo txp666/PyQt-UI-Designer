@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QApplication
 
 from app.core import comm_runtime, mqtt_runtime, protocol_parser as protocol, serial_runtime, tcp_runtime
 from app.core.code_generator import _gen_comm_hub, _gen_mqtt_handler, _gen_serial_handler, _gen_tcp_handler
+from app.core.command_runtime import send_modbus_command
 from tests.test_mqtt_runtime import FakeClient, FakePaho2, ReasonCode
 
 
@@ -135,6 +136,29 @@ class CommHubTests(unittest.TestCase):
             self.assertEqual(states[-1], False)
             hub.disconnect()
             self.assertEqual(events.count(("disconnected",)), 3)
+
+    def test_modbus_requests_are_framed_for_each_connected_link(self):
+        for namespace in self.runtimes():
+            hub = self.make(namespace, {"parser": "modbus"})
+            port = MemoryPort()
+            hub.serial._port = port
+            self.assertEqual(hub.serial.parser_type, "modbus")
+            self.assertTrue(hub.tcp.connect("127.0.0.1", 0, mode="服务端", parser_type="modbus_tcp"))
+            peer = tcp_runtime.TcpHandler()
+            self.addCleanup(peer.deleteLater)
+            self.addCleanup(peer.disconnect)
+            received = []
+            peer.rawReceived.connect(received.append)
+            self.assertTrue(peer.connect("127.0.0.1", hub.tcp.port))
+            self.wait_for(lambda: peer.is_connected and hub.tcp.peer_count == 1, "the TCP peer")
+            frames = send_modbus_command(hub, 1, 6, 10, 500)
+            self.assertEqual(port.sent, [bytes.fromhex("0106000a01f4a9df")])
+            self.wait_for(lambda: received, "the MBAP frame")
+            self.assertEqual(received[0][2:], bytes.fromhex("000000060106000a01f4"))
+            self.assertEqual(frames, [port.sent[0], received[0]])
+            with self.assertRaises(ValueError):
+                send_modbus_command(hub, 1, 6, 10, 70000)
+            self.assertEqual(len(port.sent), 1)
 
     def test_designer_hub_publishes_on_the_signal_bus(self):
         from app.common.signal_bus import signalBus

@@ -110,6 +110,7 @@ class SerialHandler(QObject):
         self._config = {"baudRate": 115200, "dataBits": 8, "parity": "None",
                         "stopBits": 1, "flowControl": "none", "parser": "line",
                         "parserConfig": {"separator": ","}, **config}
+        self.parser_type = self._config["parser"]  # Modbus commands are framed to match
 
     @property
     def is_connected(self):
@@ -149,6 +150,7 @@ class SerialHandler(QObject):
             return False
         self._port = port_obj
         self._parser = parser
+        self.parser_type = selected_parser
         self._thread = SerialReaderThread(port_obj, parser, self)
         self._thread.rawReceived.connect(self._on_raw)
         self._thread.parsedReceived.connect(self._on_parsed)

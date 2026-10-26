@@ -101,7 +101,7 @@ class SerialConfigCard(CardWidget):
         self._parser_w = self._make_row()
         self._parser_w.layout().addWidget(BodyLabel("解析模式"))
         self._parser_combo = ComboBox()
-        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus"])
+        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus", "modbus_tcp"])
         self._parser_w.layout().addWidget(self._parser_combo, 1)
         self._root.addWidget(self._parser_w)
 

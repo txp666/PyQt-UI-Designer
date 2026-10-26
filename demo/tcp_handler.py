@@ -51,6 +51,12 @@ class TcpHandler(QObject):
     def configure(self, config):
         self._config = {"mode": CLIENT, "host": "127.0.0.1", "port": 8080,
                         "parser": "line", "parserConfig": {"separator": ","}, **config}
+        self._parser_setup = (self._config["parser"], self._config["parserConfig"])
+
+    @property
+    def parser_type(self):
+        """The parser in use; Modbus commands are framed to match (MBAP for modbus_tcp)."""
+        return self._parser_setup[0]
 
     @property
     def is_connected(self):

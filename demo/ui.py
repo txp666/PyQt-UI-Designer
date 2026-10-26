@@ -170,7 +170,8 @@ def command_packed_frame(value, fmt, cast=int, template="{value}", header="", ta
     return command_hex_frame(template.replace("{value}", payload.hex()), header, tail)
 
 
-def command_modbus_frame(slave, func, address, value):
+def modbus_request(slave, func, address, value):
+    """Validate a Modbus request and return its integer fields."""
     try:
         slave, func, address, value = (int(item) for item in (slave, func, address, value))
     except (TypeError, ValueError, OverflowError) as exc:
@@ -189,8 +190,51 @@ def command_modbus_frame(slave, func, address, value):
         valid = False
     if not valid:
         raise ValueError("Modbus 值或读取数量超出功能码允许范围")
+    return slave, func, address, value
+
+
+def command_modbus_frame(slave, func, address, value):
+    """A validated Modbus RTU request frame (CRC16 appended)."""
+    slave, func, address, value = modbus_request(slave, func, address, value)
     from serial_handler import build_modbus_frame
     return build_modbus_frame(slave, func, address, value, value)
+
+
+_transaction = [0]
+
+
+def next_modbus_transaction():
+    """Successive MBAP transaction identifiers, wrapping at 16 bits."""
+    _transaction[0] = (_transaction[0] + 1) & 0xFFFF
+    return _transaction[0]
+
+
+def command_modbus_tcp_frame(slave, func, address, value, transaction=None):
+    """A validated Modbus TCP request ADU (MBAP header, no CRC)."""
+    slave, func, address, value = modbus_request(slave, func, address, value)
+    from serial_handler import build_modbus_tcp_frame
+    if transaction is None:
+        transaction = next_modbus_transaction()
+    return build_modbus_tcp_frame(slave, func, address, value, value, transaction)
+
+
+def send_modbus_command(hub, slave, func, address, value):
+    """Validate once, then send the request over every connected link, framed for that link.
+
+    A link parsing Modbus TCP gets an MBAP frame, every other link an RTU frame. Returns
+    the frames that were accepted; an invalid request raises before anything is sent.
+    """
+    request = modbus_request(slave, func, address, value)
+    links = getattr(hub, "connected_links", None)
+    if links is None:  # a single link rather than a hub
+        links = [hub] if hub.is_connected else []
+    frames = []
+    for link in links:
+        if getattr(link, "parser_type", "") == "modbus_tcp":
+            frames.append((link, command_modbus_tcp_frame(*request)))
+        else:
+            frames.append((link, command_modbus_frame(*request)))
+    return [frame for link, frame in frames if link.send(frame)]
 
 """Preserve the designer's tab-relative coordinates in real Qt tab pages."""
 from PyQt5.QtCore import QObject, QEvent, QPoint, QRect, QTimer
@@ -1592,7 +1636,7 @@ class SerialConfigCard(CardWidget):
         self._parser_w = self._make_row()
         self._parser_w.layout().addWidget(BodyLabel("解析模式"))
         self._parser_combo = ComboBox()
-        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus"])
+        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus", "modbus_tcp"])
         self._parser_w.layout().addWidget(self._parser_combo, 1)
         self._root.addWidget(self._parser_w)
 
@@ -2143,13 +2187,12 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send(frame)
 
     def _send_modbus(self, slave, func, address, value=1):
+        # One request per connected link: RTU, or MBAP where the link parses Modbus TCP.
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
-                frame = command_modbus_frame(slave, func, address, value)
+                send_modbus_command(self._comm_hub, slave, func, address, value)
             except ValueError as exc:
                 self._command_error(exc)
-                return
-            self._comm_hub.send(frame)
 
     def _send_packed_value(self, value, fmt, cast=int, tpl="{value}", header="", tail=""):
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:

@@ -72,6 +72,46 @@ class ProtocolTests(unittest.TestCase):
             self.assertEqual(parser.feed(wire[:split]) + parser.feed(wire[split:]),
                              [result for _, result in messages])
 
+    def test_modbus_tcp_split_all_response_types_and_multiple_frames(self):
+        messages = [
+            (bytes.fromhex("0001 0000 0009 01 03 06 03e8 09c4 0064".replace(" ", "")),
+             {"slave": 1, "fc": 3, "reg0": 1000, "reg1": 2500, "reg2": 100}),
+            (bytes.fromhex("0002 0000 0004 11 01 01 05".replace(" ", "")),
+             {"slave": 17, "fc": 1, "coil0": 1, "coil1": 0, "coil2": 1, "coil3": 0,
+              "coil4": 0, "coil5": 0, "coil6": 0, "coil7": 0}),
+            (bytes.fromhex("0003 0000 0006 02 06 0200 0005".replace(" ", "")),
+             {"slave": 2, "fc": 6, "address": 512, "value": 5}),
+            (bytes.fromhex("0004 0000 0003 01 83 02".replace(" ", "")),
+             {"slave": 1, "fc": 131, "error": 2}),
+        ]
+        wire = b"".join(adu for adu, _ in messages)
+        for split in range(len(wire) + 1):
+            parser = protocol.ModbusTCPParser()
+            self.assertEqual(parser.feed(wire[:split]) + parser.feed(wire[split:]),
+                             [result for _, result in messages])
+        named = protocol.create_parser("modbus_tcp", {"fields": ["temperature"]})
+        self.assertEqual(named.feed(messages[0][0]),
+                         [{"slave": 1, "fc": 3, "temperature": 1000, "reg1": 2500, "reg2": 100}])
+
+    def test_modbus_tcp_rejects_bad_headers_and_inconsistent_lengths(self):
+        valid = bytes.fromhex("000100000005010302002a")
+        parser = protocol.ModbusTCPParser()
+        for noise in (
+            bytes.fromhex("00010001000501030200ff"),      # protocol id must be 0
+            bytes.fromhex("000100000006010302002aff"),    # length does not match the byte count
+            bytes.fromhex("0001000000050103030000"),      # odd register byte count
+            bytes.fromhex("000100000005010603000000"),    # write echo must have length 6
+            bytes.fromhex("0001000000030199"),            # unknown function code
+        ):
+            with self.subTest(noise=noise.hex()):
+                self.assertEqual(parser.feed(noise), [])
+        self.assertEqual(parser.feed(b"\xff" * 10000 + valid),
+                         [{"slave": 1, "fc": 3, "reg0": 42}])
+        self.assertLessEqual(len(parser._buf), 9)
+        request = protocol.build_modbus_tcp_frame(1, 3, 0, count=2, transaction=7)
+        self.assertEqual(request.hex(), "000700000006010300000002")
+        self.assertEqual(parser.feed(request), [], "requests are not responses")
+
     def test_modbus_bad_crc_and_noise_do_not_hide_next_valid_response(self):
         valid = frame(bytes.fromhex("0103020007"))
         parser = protocol.ModbusRTUParser()
@@ -93,6 +133,8 @@ class RuntimeParityTests(unittest.TestCase):
                 ("LineParser", b"a=1\na=2\n", [{"a": 1}, {"a": 2}]),
                 ("ModbusRTUParser", frame(bytes.fromhex("0103020001")) * 2,
                  [{"slave": 1, "fc": 3, "reg0": 1}] * 2),
+                ("ModbusTCPParser", bytes.fromhex("000100000005010302000a") * 2,
+                 [{"slave": 1, "fc": 3, "reg0": 10}] * 2),
             ):
                 parser_class = namespace.get(parser_name, getattr(protocol, parser_name))
                 chunks = [packet[:2], packet[2:]]
