@@ -162,6 +162,8 @@ class SerialHandler(QObject):
         return self.connect(port, baudrate, **kwargs)
 
     def disconnect(self):
+        if self._thread is None and self._port is None:
+            return  # already idle; the hub disconnects every link
         if self._thread:
             self._thread.stop()
             self._thread.deleteLater()

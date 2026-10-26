@@ -49,9 +49,9 @@ class PreviewCanvas(QWidget):
 
     def build_from_project(self, project: ProjectData):
         self.clear()
-        from app.core.serial_manager import serialManager
-        serialManager.disconnect()
-        serialManager.configure(project.serial)
+        from app.core.comm_manager import commHub
+        commHub.disconnect()
+        commHub.configure(project.serial)
         self._update_style()
         self.setFixedSize(project.canvas_width, project.canvas_height)
         self._asset_base_dir = (Path(project.file_path).expanduser().resolve().parent
@@ -132,9 +132,9 @@ class PreviewCanvas(QWidget):
     def _send_modbus_frame(props: dict, value: int = None):
         """Build and send a Modbus RTU frame from widget properties.
         If value is provided, it overrides mbValue from props."""
-        from app.core.serial_manager import serialManager
-        if not serialManager.is_connected:
-            signalBus.showNotification.emit("提示", "串口未连接，命令未发送", "警告", 2000)
+        from app.core.comm_manager import commHub
+        if not commHub.is_connected:
+            signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
         try:
             frame = command_modbus_frame(
@@ -146,21 +146,21 @@ class PreviewCanvas(QWidget):
         except ValueError as exc:
             PreviewCanvas._command_error(exc)
             return
-        serialManager.send(frame)
+        commHub.send(frame)
 
     @staticmethod
     def _send_serial_bytes(raw: bytes):
-        from app.core.serial_manager import serialManager
-        if not serialManager.is_connected:
-            signalBus.showNotification.emit("提示", "串口未连接，命令未发送", "警告", 2000)
+        from app.core.comm_manager import commHub
+        if not commHub.is_connected:
+            signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
-        serialManager.send(raw)
+        commHub.send(raw)
 
     @staticmethod
     def _send_command(cmd: str, mode: str, newline: str, props: dict):
-        from app.core.serial_manager import serialManager
-        if not serialManager.is_connected:
-            signalBus.showNotification.emit("提示", "串口未连接，命令未发送", "警告", 2000)
+        from app.core.comm_manager import commHub
+        if not commHub.is_connected:
+            signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
 
         if mode == "Modbus":
@@ -173,10 +173,10 @@ class PreviewCanvas(QWidget):
             except ValueError as exc:
                 PreviewCanvas._command_error(exc)
                 return
-            serialManager.send(frame)
+            commHub.send(frame)
         else:
             suffix = PreviewCanvas._NEWLINE_MAP.get(newline, "\r\n")
-            serialManager.send_text(cmd + suffix)
+            commHub.send_text(cmd + suffix)
 
     _STRUCT_FMT = {
         "uint8": ("B", int), "int8": ("b", int),
@@ -216,7 +216,7 @@ class PreviewCanvas(QWidget):
 
     @staticmethod
     def _wire_commands(widget: QWidget, type_name: str, props: dict):
-        """Connect command properties to serial sending."""
+        """Connect command properties to sending over the communication hub."""
         mode = props.get("commandMode", "文本")
         newline = props.get("commandNewline", "\\r\\n")
         tpl = props.get("commandTemplate", "{value}")
@@ -391,7 +391,7 @@ class NuitkaPackDialog(QDialog):
         def _has_nuitka(cmd: list) -> bool:
             try:
                 subprocess.check_output(
-                    cmd + ["-c", "import nuitka, ordered_set, PyQt5, qfluentwidgets, serial, pyqtgraph"
+                    cmd + ["-c", "import nuitka, ordered_set, PyQt5, qfluentwidgets, serial, pyqtgraph, paho.mqtt"
                            + (", imageio, PIL" if sys.platform == "darwin" else "")],
                     timeout=15, **_kw
                 )
@@ -533,7 +533,7 @@ class NuitkaPackDialog(QDialog):
         pip_args = list(py_cmd) + [
             "-m", "pip", "install",
             "nuitka>=4.0.7", "ordered-set",
-            "PyQt5", "PyQt-Fluent-Widgets", "pyserial", "pyqtgraph",
+            "PyQt5", "PyQt-Fluent-Widgets", "pyserial", "paho-mqtt", "pyqtgraph",
         ]
         if sys.platform == "darwin":
             pip_args.extend(["imageio", "Pillow"])
@@ -795,8 +795,8 @@ class PreviewInterface(QWidget):
         bindingEngine.clear()
 
         self._preview_canvas.setEnabled(False)
-        from app.core.serial_manager import serialManager
-        serialManager.disconnect()
+        from app.core.comm_manager import commHub
+        commHub.disconnect()
         self._preview_canvas.clear()
         self._placeholder.show()
         self._running = False

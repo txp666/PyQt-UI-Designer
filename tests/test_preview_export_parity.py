@@ -86,7 +86,7 @@ else:
     def exercise_export():
         app = QApplication.instance()
         window = next(w for w in app.topLevelWidgets() if hasattr(w, "widgets"))
-        result = exercise(window, window.widgets, window._serial_handler)
+        result = exercise(window, window.widgets, window._comm_hub.serial)
         assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
         return result
     with ExitStack() as stack:

@@ -19,8 +19,9 @@ from .signal_lifetime import SignalConnections
 class SerialConfigCard(CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port+baud+buttons), 单行 (single-line toolbar).
-    Buttons are wired to SerialManager so the card works in preview mode."""
+    Buttons drive the hub's serial link so the card works in preview mode."""
 
+    LINK = "serial"  # name of this card's link on a CommHub
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
 
@@ -157,6 +158,8 @@ class SerialConfigCard(CardWidget):
         self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_serial_handler(self, handler):
+        """Attach the serial link; a CommHub is resolved to its serial handler."""
+        handler = getattr(handler, self.LINK, handler)
         if handler is self._handler:
             return
         self._serial_connections.clear()

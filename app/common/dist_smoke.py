@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import platform
 import sys
+import time
 import traceback
 
 from PyQt5 import sip
@@ -95,8 +96,15 @@ class DistributionSmokeTest:
             if fixture == "registry":
                 self._steps.append(("load_registry", self._load_registry))
             for cycle in range(1, 4):
+                self._steps.append((f"{fixture}_start_{cycle}", self._start_preview))
+                if fixture == "registry" and cycle == 1:
+                    # Real sockets inside the compiled runtime: QtNetwork must be bundled.
+                    self._steps.extend([
+                        ("tcp_loopback_listen", self._tcp_loopback_listen),
+                        ("tcp_loopback_exchange", self._tcp_loopback_exchange),
+                        ("tcp_loopback_close", self._tcp_loopback_close),
+                    ])
                 self._steps.extend([
-                    (f"{fixture}_start_{cycle}", self._start_preview),
                     (f"{fixture}_receive_and_send_{cycle}", self._exercise_preview),
                     (f"{fixture}_theme_and_title_{cycle}", self._change_theme_and_title),
                     (f"{fixture}_stop_{cycle}", self._stop_preview),
@@ -159,7 +167,7 @@ class DistributionSmokeTest:
                              "w": 260, "h": 180},
             })
         self.result["widget_types"] = sorted(meta.type_name for meta in registry.all())
-        assert len(self.result["widget_types"]) == 27
+        assert len(self.result["widget_types"]) == 29
         path = self.report.with_suffix(".uidp")
         path.write_text(json.dumps(project.to_dict(), ensure_ascii=False), encoding="utf-8")
         self.window._project_mgr.load_to_scene(self.window.designer_interface.scene, str(path))
@@ -202,6 +210,54 @@ class DistributionSmokeTest:
             assert self.widgets["temperature"]._value_label.text() == "26.5"
             self.widgets["start"].click()
             assert self.port.sent == [b"START\r\n"], self.port.sent
+
+    def _wait_for(self, predicate, what):
+        deadline = time.monotonic() + 5
+        while not predicate() and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(0.01)
+        assert predicate(), f"Timed out waiting for {what}"
+
+    def _tcp_loopback_listen(self):
+        from app.core.comm_manager import commHub
+        from app.core.tcp_runtime import TcpHandler
+        self.hub = commHub
+        card = self.widgets["all_TcpConfigCard"]
+        assert card._handler is commHub.tcp
+        assert commHub.tcp.connect("127.0.0.1", 0, mode="服务端")
+        assert "监听中" in card._status.text(), card._status.text()
+        self.tcp_received = []
+        self.tcp_client = TcpHandler()
+        self.tcp_client.rawReceived.connect(self.tcp_received.append)
+        assert self.tcp_client.connect("127.0.0.1", commHub.tcp.port)
+
+    def _tcp_loopback_exchange(self):
+        card = self.widgets["all_TcpConfigCard"]
+        self._wait_for(lambda: self.tcp_client.is_connected and self.hub.tcp.peer_count == 1,
+                       "the loopback TCP client")
+        assert "1 客户端" in card._status.text(), card._status.text()
+        assert not card._connect_btn.isEnabled() and card._disconnect_btn.isEnabled()
+        assert self.tcp_client.send(b"tcp_temperature=31.5\n")
+        receive, log = self.widgets["all_DataRecvCard"], self.widgets["all_LogBox"]
+        self._wait_for(lambda: "tcp_temperature=31.5" in receive._output.toPlainText(),
+                       "a TCP frame to reach the receive card")
+        assert "tcp_temperature=31.5" in log._output.toPlainText()
+        # One command goes out over every connected link: the serial port and TCP.
+        assert self.hub.send(b"PING\n")
+        self._wait_for(lambda: b"".join(self.tcp_received).endswith(b"PING\n"),
+                       "the command to reach the TCP client")
+        assert self.port.sent == [b"PING\n"], self.port.sent
+        self.port.sent.clear()
+        self.result["tcp_loopback"] = True
+
+    def _tcp_loopback_close(self):
+        card = self.widgets["all_TcpConfigCard"]
+        self.tcp_client.disconnect()
+        self.tcp_client.deleteLater()
+        self.hub.tcp.disconnect()
+        assert not self.hub.tcp.is_active and self.hub.is_connected
+        assert card._connect_btn.isEnabled() and not card._disconnect_btn.isEnabled()
+        assert card._status.text() == "未连接", card._status.text()
 
     def _change_theme_and_title(self):
         from PyQt5.QtGui import QIcon

@@ -140,20 +140,21 @@ _STRUCT_FMT = {
 
 
 class DataBinding:
-    def __init__(self, ui, serial_handler):
+    """Wire the hub (serial, TCP and MQTT links) to bound widgets and command senders."""
+    def __init__(self, ui, hub):
         self.ui = ui
-        self.serial = serial_handler
+        self.hub = hub
         self._connections = SignalConnections(ui)
-        ui._serial_handler = serial_handler
+        ui._comm_hub = hub
         for w in ui.widgets.values():
             if hasattr(w, "set_serial_handler"):
-                w.set_serial_handler(serial_handler)
+                w.set_serial_handler(hub)  # connection cards pick their own link
             if isinstance(w, RealtimeLineChart):
                 w._serial_connections.clear()
-                w._serial_connections.connect(serial_handler.dataReceived, w.on_parsed)
-                w._serial_connections.connect(serial_handler.rawReceived, w.on_raw)
-                w._serial_connections.connect(serial_handler.disconnected, w.reset_stream)
-        self._connections.connect(self.serial.dataReceived, self._on_data)
+                w._serial_connections.connect(hub.dataReceived, w.on_parsed)
+                w._serial_connections.connect(hub.rawReceived, w.on_raw)
+                w._serial_connections.connect(hub.disconnected, w.reset_stream)
+        self._connections.connect(self.hub.dataReceived, self._on_data)
 
     def _on_data(self, data: dict):
         try:
