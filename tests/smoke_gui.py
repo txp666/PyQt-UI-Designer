@@ -1,4 +1,5 @@
 """Exercise real native windows; run on a logged-in macOS/Windows desktop."""
+import faulthandler
 import json
 from pathlib import Path
 import subprocess
@@ -6,6 +7,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+faulthandler.enable()  # a native crash, even during exit, still prints where Python was
 sys.path.insert(0, str(ROOT))
 
 from PyQt5.QtCore import QEvent, QEventLoop, QTimer
@@ -141,7 +143,14 @@ runpy.run_path('main.py', run_name='__main__')
 
 QTimer.singleShot(300, app.quit)
 app.exec()
+# Mirror main.py: the parentless design scene and its canvas widgets must go while
+# QApplication exists, not in interpreter finalization's arbitrary order.
+scene = window.designer_interface.scene
 window.deleteLater()
 theme_controller.deleteLater()
 app.sendPostedEvents(None, QEvent.DeferredDelete)
+scene.deleteLater()
+app.sendPostedEvents(None, QEvent.DeferredDelete)
+from PyQt5 import sip
+assert sip.isdeleted(scene)
 print(f"NATIVE_GUI_EXPORT_OK: {len(project.widgets)} widget types, Python {sys.version.split()[0]}")

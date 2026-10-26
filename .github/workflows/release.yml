@@ -67,6 +67,7 @@ jobs:
             nuitka-crash-report.xml
             build/*smoke*.png
             build/*.log
+            ~/Library/Logs/DiagnosticReports/*.ips
 
   publish:
     name: Publish verified release

@@ -4,6 +4,7 @@ import sys
 import ctypes
 from pathlib import Path
 
+from PyQt5 import sip
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
@@ -58,9 +59,15 @@ exit_code = app.exec()
 # Dispose the widget tree while QApplication still exists. Letting SIP tear
 # down these native objects during interpreter finalization is order-dependent.
 w.setting_interface.shutdown_update_check()
+# The design scene has no Qt parent by design, so deleting the window leaves it,
+# and the real widget behind every canvas item, alive until finalization.
+scene = w.designer_interface.scene
 w.deleteLater()
 theme_controller.deleteLater()
 app.sendPostedEvents(None, QEvent.DeferredDelete)
 if smoke_test is not None:
-    exit_code = smoke_test.finish(exit_code)
+    exit_code = smoke_test.finish(exit_code)  # checks, then disposes, the scene itself
+if not sip.isdeleted(scene):
+    scene.deleteLater()
+    app.sendPostedEvents(None, QEvent.DeferredDelete)
 sys.exit(exit_code)
