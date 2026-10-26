@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter, QFont
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QSizePolicy, QFrame, QTextEdit,
+    QSizePolicy,
 )
 from qfluentwidgets import (
     CardWidget, StrongBodyLabel, BodyLabel, CaptionLabel,
@@ -181,6 +181,7 @@ class DataRecvCard(CardWidget):
         # Received messages retain their semantic colors, so keep the terminal
         # background in both themes and register it with Fluent's style manager.
         setCustomStyleSheet(self._output, terminal_style, terminal_style)
+        terminal_scroll_bar(self._output)
         layout.addWidget(self._output, 1)
 
         self._count = 0
@@ -267,68 +268,19 @@ class DataRecvCard(CardWidget):
 # Log Display Box
 # ---------------------------------------------------------------------------
 
-class LogDisplayBox(QFrame):
-    """Scrolling log text display with dark terminal look.
-    Auto-wired to signalBus for serial events and data."""
+from app.core.log_runtime import LogDisplayBox as RuntimeLogBox, terminal_scroll_bar
+
+
+class LogDisplayBox(RuntimeLogBox):
+    """The shared log box, auto-wired to signalBus for serial events and data."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self._output = QTextEdit()
-        self._output.setReadOnly(True)
-        self._output.setStyleSheet(
-            "QTextEdit { font-family: Menlo, Consolas, 'Courier New', monospace; "
-            "font-size: 11px; background: #1a1a2e; color: #a8d8ea; "
-            "border: 1px solid #333; border-radius: 6px; padding: 6px; }"
-        )
-        layout.addWidget(self._output)
-        self._max_lines = 500
-
         from app.common.signal_bus import signalBus
-        self._serial_connections = SignalConnections(self)
         self._serial_connections.connect(signalBus.serialConnected, self._on_connected)
         self._serial_connections.connect(signalBus.serialDisconnected, self._on_disconnected)
         self._serial_connections.connect(signalBus.serialError, self._on_serial_error)
         self._serial_connections.connect(signalBus.serialDataReceived, self._on_parsed_data)
-
-    def _on_connected(self, port):
-        self.append_log(f"串口已连接: {port}", "ok")
-
-    def _on_disconnected(self):
-        self.append_log("串口已断开", "warn")
-
-    def _on_serial_error(self, message):
-        self.append_log(f"错误: {message}", "error")
-
-    def _on_parsed_data(self, data: dict):
-        parts = [f"{k}={v}" for k, v in data.items()]
-        self.append_log(", ".join(parts))
-
-    def append_log(self, text: str, level: str = "info"):
-        color_map = {"info": "#a8d8ea", "warn": "#FFD54F", "error": "#EF5350", "ok": "#81C784"}
-        color = color_map.get(level, "#a8d8ea")
-        from datetime import datetime
-        ts = datetime.now().strftime("%H:%M:%S")
-        self._output.append(f'<span style="color:#9399b2">[{ts}]</span> '
-                            f'<span style="color:{color}">{_log_html(text)}</span>')
-        self._trim()
-
-    def set_max_lines(self, n):
-        self._max_lines = max(50, n)
-        self._trim()
-    def clear_log(self): self._output.clear()
-
-    def _trim(self):
-        doc = self._output.document()
-        while doc.blockCount() > self._max_lines:
-            cursor = self._output.textCursor()
-            cursor.movePosition(cursor.Start)
-            cursor.select(cursor.BlockUnderCursor)
-            cursor.removeSelectedText()
-            cursor.deleteChar()
 
 
 # ---------------------------------------------------------------------------

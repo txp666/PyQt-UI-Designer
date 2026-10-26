@@ -4,7 +4,7 @@ from pathlib import Path
 
 RUNTIME_FILES = ("theme_runtime.py", "protocol_parser.py", "serial_runtime.py",
                  "chart_history.py", "chart_runtime.py", "gauge_runtime.py", "table_runtime.py",
-                 "serial_card.py",
+                 "log_runtime.py", "serial_card.py",
                  "binding_values.py", "command_runtime.py", "tab_geometry.py",
                  "signal_lifetime.py", "qt_window_lifetime.py")
 ROOT = Path(__file__).resolve().parents[2]
