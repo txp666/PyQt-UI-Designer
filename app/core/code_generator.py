@@ -760,6 +760,7 @@ def _extract_bindings(widgets: list) -> list:
                         "byteOrder": b.get("byteOrder", "大端(BE)"),
                         "expression": b.get("expression"),
                         "displayFormat": props.get("displayFormat", "自动"),
+                        "decimals": str(props.get("decimals", "自动")),
                         "frameHeader": b.get("frameHeader", ""),
                         "frameTail": b.get("frameTail", ""),
                         "mbRegIndex": int(b.get("mbRegIndex", 0)),
@@ -1008,6 +1009,9 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     need_format = dfmt != "自动" and wtype in ("Label", "LineEdit", "NumericDisplay")
     if need_format:
         lines.append(f"{indent}value = _format_display(value, {repr(dfmt)})")
+    places = b.get("decimals", "自动")
+    if not need_format and places != "自动" and wtype in ("Label", "NumericDisplay"):
+        lines.append(f"{indent}value = binding_decimals(value, {places!r})")
 
     lines.append(f"{indent}w = self.ui.widgets.get({wid!r})")
     lines.append(f"{indent}if w:")

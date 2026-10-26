@@ -69,6 +69,8 @@ LABEL_META = WidgetMeta(
                 options=["Left", "Center", "Right"]),
         PropDef("displayFormat", "显示格式", PropType.ENUM, "自动",
                 options=["自动", "十进制", "十六进制(HEX)", "二进制(BIN)"]),
+        PropDef("decimals", "小数位数", PropType.ENUM, "自动",
+                options=["自动", "0", "1", "2", "3", "4"]),
     ],
 )
 

@@ -15,7 +15,8 @@ from PyQt5.QtCore import QObject, QSignalBlocker
 from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
 from app.core.binding_values import (
-    binding_boolean, binding_float, binding_integer, binding_led, binding_register,
+    binding_boolean, binding_decimals, binding_float, binding_integer, binding_led,
+    binding_register,
 )
 
 _STRUCT_FMT = {
@@ -40,11 +41,13 @@ class BindingEntry:
                  mb_reg_index: int = 0, mb_slave_filter: int = -1,
                  mb_data_type: str = "uint16", mb_reg_order: str = "大端(AB CD)",
                  mb_fc_filter: int = -1,
-                 led_on_value: str = "1", led_off_value: str = "0"):
+                 led_on_value: str = "1", led_off_value: str = "0",
+                 decimals: str = "自动"):
         self.widget_id = widget_id
         self.prop_name = prop_name
         self.type_name = type_name
         self.display_format = display_format
+        self.decimals = decimals
         self.parse_mode = parse_mode
         self.key = key
         self.json_path = json_path
@@ -218,8 +221,10 @@ class BindingEntry:
             return raw_value
 
     def format_value(self, value) -> Any:
-        if self.display_format == "自动" or self.prop_name not in ("text", "value"):
+        if self.prop_name not in ("text", "value"):
             return value
+        if self.display_format == "自动":
+            return binding_decimals(value, self.decimals)
         try:
             num = int(float(value)) if not isinstance(value, int) else value
         except (ValueError, TypeError, OverflowError):
@@ -324,6 +329,7 @@ class DataBindingEngine(QObject):
                 mb_fc_filter=int(binding.get("mbFcFilter", -1)),
                 led_on_value=str(props.get("onValue", "1")),
                 led_off_value=str(props.get("offValue", "0")),
+                decimals=str(props.get("decimals", "自动")),
             )
             self._bindings.append(entry)
             self._walk_bindings(wd.get("children", []))

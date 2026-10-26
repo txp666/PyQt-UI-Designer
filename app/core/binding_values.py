@@ -36,6 +36,20 @@ def binding_boolean(value):
     return bool(binding_float(value))
 
 
+def binding_decimals(value, places="自动"):
+    """A number shown with a fixed count of decimal places; anything else (text, flags, NaN) as it came."""
+    if places in ("自动", "", None) or isinstance(value, bool):
+        return value
+    try:
+        number = float(value)
+        places = int(places)
+    except (TypeError, ValueError, OverflowError):
+        return value
+    if not math.isfinite(number):
+        return value
+    return f"{number:.{places}f}"
+
+
 def binding_led(value, on_value="1", off_value="0"):
     """Preserve custom LED states before falling back to boolean conversion."""
     text = str(value).strip()

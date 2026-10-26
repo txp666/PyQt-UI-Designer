@@ -263,6 +263,24 @@ class BindingResilienceTests(unittest.TestCase):
             assert text("odd") == text("even") == "44"
         """)
 
+    def test_decimal_places_round_converted_numbers(self):
+        self.run_both([
+            bound("NumericDisplay", "volts", {"key": "volts", "expression": "value * 3.3 / 4095"},
+                  properties={"decimals": "2"}),
+            bound("Label", "label", properties={"decimals": "1"}),
+            bound("NumericDisplay", "whole", properties={"decimals": "0"}),
+            bound("NumericDisplay", "auto"),
+            bound("NumericDisplay", "hex", properties={"displayFormat": "十六进制(HEX)", "decimals": "2"}),
+        ], """
+            emit_data({"volts": 2000, "label": "3.14159", "whole": 24.6, "auto": 1.25, "hex": 42})
+            assert text("volts") == "1.61", text("volts")
+            assert text("label") == "3.1" and text("whole") == "25"
+            assert text("auto") == "1.25"
+            assert text("hex") == "0x2A"  # a number format of its own wins
+            emit_data({"volts": "ERR", "label": float("nan"), "whole": True})
+            assert text("volts") == "ERR" and text("label") == "nan" and text("whole") == "True"
+        """)
+
     def test_nonfinite_display_formatting_does_not_stop_other_fields(self):
         self.run_both([
             bound("NumericDisplay", "display", properties={"displayFormat": "十六进制(HEX)"}),
