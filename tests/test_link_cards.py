@@ -23,7 +23,7 @@ class FakeClient:
         self.loop_running = False
         FakeClient.instances.append(self)
     def username_pw_set(self, username, password): self.calls.append(("auth", username, password))
-    def tls_set(self): self.calls.append(("tls",))
+    def tls_set_context(self, context): self.calls.append(("tls", type(context).__module__.split(".")[0]))
     def connect_async(self, host, port, keepalive): self.calls.append(("connect", host, port))
     def loop_start(self): self.loop_running = True
     def loop_stop(self): self.loop_running = False
@@ -229,7 +229,7 @@ class LinkCardTests(unittest.TestCase):
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             client = FakeClient.instances[-1]
             assert client.client_id == "panel-1"
-            assert client.calls == [("auth", "user", "secret"), ("tls",), ("connect", "broker.local", 8883)], client.calls
+            assert client.calls == [("auth", "user", "secret"), ("tls", "truststore"), ("connect", "broker.local", 8883)], client.calls
             assert "连接中" in card._status.text(), card._status.text()
             assert card._disconnect_btn.isEnabled() and not card._connect_btn.isEnabled()
             # 断开 cancels the attempt and stops paho's network loop.

@@ -301,6 +301,7 @@ PyQt-UI-Designer/
 - [pyqtgraph](https://github.com/pyqtgraph/pyqtgraph)：高性能实时图表
 - [pyserial](https://github.com/pyserial/pyserial)：串口通信
 - [paho-mqtt](https://github.com/eclipse-paho/paho.mqtt.python)：MQTT 客户端
+- [truststore](https://github.com/sethmlarson/truststore)：用操作系统的证书库校验 HTTPS 和 MQTT TLS 连接
 - [Nuitka](https://nuitka.net/)：把 Python 编译打包为 Windows exe / macOS `.app`
 
 ## 反馈与贡献

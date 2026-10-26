@@ -324,11 +324,20 @@ class DistributionSmokeTest:
 
         self.window.grab().save(str(self.report.with_suffix(".png")))
         original_urlopen, thread = update_checker.urlopen, None
+        contexts = []
+
+        def delayed_urlopen(*_args, **kwargs):
+            contexts.append(kwargs.get("context"))
+            return DelayedResponse()
+
         try:
-            update_checker.urlopen = lambda *_args, **_kwargs: DelayedResponse()
+            update_checker.urlopen = delayed_urlopen
             self.window.setting_interface._check_update()
             thread = self.window.setting_interface._update_thread
             assert entered.wait(5) and thread.isRunning(), "Update worker did not start"
+            # The bundled OpenSSL cannot find the build machine's CA files on a user's computer.
+            assert type(contexts[0]).__module__.startswith("truststore"), contexts
+            self.result["system_trust_store"] = True
             assert self.window.close(), "Normal window close was rejected"
             assert cancelled.is_set() and not thread.isRunning(), "Update worker survived window close"
             self.result["cancelled_update_check"] = True

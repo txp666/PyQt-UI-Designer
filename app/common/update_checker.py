@@ -7,6 +7,8 @@ from urllib.error import URLError, HTTPError
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
+from app.core.tls_runtime import system_ssl_context
+
 GITHUB_REPO = "txp666/PyQt-UI-Designer"
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 RELEASE_URL = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -36,7 +38,8 @@ class UpdateCheckThread(QThread):
             return
         try:
             req = Request(API_URL, headers={"Accept": "application/vnd.github.v3+json"})
-            with urlopen(req, timeout=15) as resp:
+            # A packaged app cannot rely on the build machine's OpenSSL certificate paths.
+            with urlopen(req, timeout=15, context=system_ssl_context()) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
 
             tag = data.get("tag_name", "")

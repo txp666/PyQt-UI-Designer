@@ -391,7 +391,7 @@ class NuitkaPackDialog(QDialog):
         def _has_nuitka(cmd: list) -> bool:
             try:
                 subprocess.check_output(
-                    cmd + ["-c", "import nuitka, ordered_set, PyQt5, qfluentwidgets, serial, pyqtgraph, paho.mqtt"
+                    cmd + ["-c", "import nuitka, ordered_set, PyQt5, qfluentwidgets, serial, pyqtgraph, paho.mqtt, truststore"
                            + (", imageio, PIL" if sys.platform == "darwin" else "")],
                     timeout=15, **_kw
                 )
@@ -533,7 +533,7 @@ class NuitkaPackDialog(QDialog):
         pip_args = list(py_cmd) + [
             "-m", "pip", "install",
             "nuitka>=4.0.7", "ordered-set",
-            "PyQt5", "PyQt-Fluent-Widgets", "pyserial", "paho-mqtt", "pyqtgraph",
+            "PyQt5", "PyQt-Fluent-Widgets", "pyserial", "paho-mqtt", "truststore", "pyqtgraph",
         ]
         if sys.platform == "darwin":
             pip_args.extend(["imageio", "Pillow"])

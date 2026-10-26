@@ -13,6 +13,7 @@ import uuid
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 
 from .protocol_parser import create_parser
+from .tls_runtime import system_ssl_context
 
 try:
     import paho.mqtt.client as mqtt
@@ -186,7 +187,7 @@ class MqttHandler(QObject):
                 client.username_pw_set(username, password or None)
             use_tls = bool(pick(tls, "tls"))
             if use_tls:
-                client.tls_set()
+                client.tls_set_context(system_ssl_context())
             client.on_connect = self._paho_connect
             client.on_connect_fail = self._paho_connect_fail
             client.on_disconnect = self._paho_disconnect

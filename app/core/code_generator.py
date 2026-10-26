@@ -31,7 +31,8 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None):
         "requirements.txt": (
             "PyQt5>=5.15.11,<5.16\n"
             'PyQt5-Qt5>=5.15.19; sys_platform == "darwin" and platform_machine == "arm64"\n'
-            "PyQt-Fluent-Widgets>=1.5.5\npyserial>=3.5\npaho-mqtt>=1.6\npyqtgraph>=0.13.3\n"
+            "PyQt-Fluent-Widgets>=1.5.5\npyserial>=3.5\npaho-mqtt>=1.6\ntruststore>=0.10\n"
+            "pyqtgraph>=0.13.3\n"
         ),
         "main.py": _gen_main(theme_mode),
         "theme_support.py": (runtime_source("signal_lifetime.py") + "\n"
@@ -768,8 +769,10 @@ def _gen_tcp_handler(serial_config: dict) -> str:
 
 def _gen_mqtt_handler(serial_config: dict) -> str:
     runtime = runtime_source("mqtt_runtime.py").replace(
-        "from .protocol_parser import create_parser", "from serial_handler import create_parser")
-    return runtime + f"\nMqttHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
+        "from .protocol_parser import create_parser", "from serial_handler import create_parser",
+    ).replace("from .tls_runtime import system_ssl_context", "")
+    return (runtime_source("tls_runtime.py") + "\n" + runtime
+            + f"\nMqttHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n")
 
 
 def _gen_comm_hub() -> str:

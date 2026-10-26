@@ -46,8 +46,8 @@ class FakeClient:
     def username_pw_set(self, username, password):
         self.calls.append(("auth", username, password))
 
-    def tls_set(self):
-        self.calls.append(("tls",))
+    def tls_set_context(self, context):
+        self.calls.append(("tls", type(context).__module__.split(".")[0]))
 
     def connect_async(self, host, port, keepalive):
         self.calls.append(("connect", host, port, keepalive))
@@ -170,7 +170,7 @@ class MqttLinkTests(unittest.TestCase):
                                   qos=1, tls=True, client_id="panel")
             self.assertEqual(client.api, "v2")
             self.assertEqual(client.client_id, "panel")
-            self.assertEqual(client.calls, [("auth", "user", "secret"), ("tls",),
+            self.assertEqual(client.calls, [("auth", "user", "secret"), ("tls", "truststore"),
                                             ("connect", "broker.local", 8883, 60)])
             self.assertEqual(client.subscriptions, [("s/1", 1), ("s/2", 1)])
             self.assertEqual(events, [("connected", "MQTT broker.local:8883")])

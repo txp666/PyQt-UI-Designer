@@ -1,3 +1,23 @@
+"""TLS contexts that trust what the operating system trusts.
+
+A Python runtime bundled into an application keeps OpenSSL's certificate paths from the
+machine that built it. On another computer those paths usually do not exist, so a default
+context trusts nothing and every HTTPS or MQTT-over-TLS connection fails with "unable to
+get local issuer certificate". truststore verifies through the operating system instead
+(the macOS keychain, the Windows certificate store), including certificates the user
+added there.
+"""
+import ssl
+
+
+def system_ssl_context():
+    """A client context that verifies servers against the operating system's trust store."""
+    try:
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except Exception:  # not installed, or the platform's certificate API is unavailable
+        return ssl.create_default_context()
+
 """MQTT link shared by the designer and standalone exports.
 
 paho-mqtt runs its network loop on its own thread and calls back from there. Every
@@ -13,6 +33,7 @@ import uuid
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 
 from serial_handler import create_parser
+
 
 try:
     import paho.mqtt.client as mqtt
@@ -186,7 +207,7 @@ class MqttHandler(QObject):
                 client.username_pw_set(username, password or None)
             use_tls = bool(pick(tls, "tls"))
             if use_tls:
-                client.tls_set()
+                client.tls_set_context(system_ssl_context())
             client.on_connect = self._paho_connect
             client.on_connect_fail = self._paho_connect_fail
             client.on_disconnect = self._paho_disconnect

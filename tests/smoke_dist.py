@@ -97,6 +97,7 @@ def main():
         assert report["cancelled_update_check"] and "cancelled_update_check" in report["steps"], report
         assert report["exported"] and "destroyed_window_signals" in report["steps"], report
         assert report["tcp_loopback"] and "tcp_loopback_exchange" in report["steps"], report
+        assert report["system_trust_store"], report
         assert not any(text in output for text in (
             "Traceback", "wrapped C/C++ object", "has been deleted", "Exception ignored",
         )), output

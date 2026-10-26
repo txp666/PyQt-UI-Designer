@@ -64,6 +64,7 @@ class DistributionLifecycleTests(unittest.TestCase):
         self.assertIn("registry_export", report["steps"])
         self.assertIn("tcp_loopback_exchange", report["steps"])
         self.assertTrue(report["tcp_loopback"])
+        self.assertTrue(report["system_trust_store"])
         self.assertEqual(report["selected_widget"], "all_Label")
         self.assertIn("destroyed_selected_scene", report["steps"])
         self.assertIn("destroyed_window_signals", report["steps"])
