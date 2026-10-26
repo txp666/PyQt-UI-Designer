@@ -91,7 +91,7 @@ with tempfile.TemporaryDirectory() as fixture_folder:
     app.processEvents()
     preview = window.preview_interface
     expected_ids = {item["id"] for item in project.widgets}
-    assert len(project.widgets) == len(registry.all()) == 27
+    assert len(project.widgets) == len(registry.all()) == 29
     assert preview._running
     assert len(preview._preview_canvas._widgets) == len(expected_ids)
     assert set(bindingEngine._widget_map) == expected_ids

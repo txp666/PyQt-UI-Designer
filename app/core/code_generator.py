@@ -31,7 +31,7 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None):
         "requirements.txt": (
             "PyQt5>=5.15.11,<5.16\n"
             'PyQt5-Qt5>=5.15.19; sys_platform == "darwin" and platform_machine == "arm64"\n'
-            "PyQt-Fluent-Widgets>=1.5.5\npyserial>=3.5\npyqtgraph>=0.13.3\n"
+            "PyQt-Fluent-Widgets>=1.5.5\npyserial>=3.5\npaho-mqtt>=1.6\npyqtgraph>=0.13.3\n"
         ),
         "main.py": _gen_main(theme_mode),
         "theme_support.py": (runtime_source("signal_lifetime.py") + "\n"
@@ -40,6 +40,9 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None):
         "ui.py": _gen_ui(widgets, project.canvas_width, project.canvas_height,
                         project.app_name),
         "serial_handler.py": _gen_serial_handler(project.serial),
+        "tcp_handler.py": _gen_tcp_handler(project.serial),
+        "mqtt_handler.py": _gen_mqtt_handler(project.serial),
+        "comm_hub.py": _gen_comm_hub(),
         "data_binding.py": _gen_data_binding(bindings, widget_types),
     }
     for name, source in files.items():
@@ -125,12 +128,12 @@ from theme_support import ThemeController
 theme_controller = ThemeController(app, _THEME_MODE_)
 
 from ui import MainUI
-from serial_handler import SerialHandler
+from comm_hub import CommHub
 from data_binding import DataBinding
 
 window = MainUI()
-serial_handler = SerialHandler()
-binding = DataBinding(window, serial_handler)
+comm_hub = CommHub()  # serial, TCP and MQTT links behind one set of signals
+binding = DataBinding(window, comm_hub)
 
 if sys.platform == "win32":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("pyqt.ui.app")
@@ -140,11 +143,11 @@ if _ico.exists():
     app.setWindowIcon(_icon)
     window.setWindowIcon(_icon)
 
-app.aboutToQuit.connect(serial_handler.disconnect)
+app.aboutToQuit.connect(comm_hub.disconnect)
 window.show()
 exit_code = app.exec()
 window.deleteLater()
-serial_handler.deleteLater()
+comm_hub.deleteLater()
 theme_controller.deleteLater()
 app.sendPostedEvents(None, QEvent.DeferredDelete)
 sys.exit(exit_code)
@@ -239,6 +242,12 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_log_display_class())
     if "SerialConfigCard" in widget_types:
         lines.append(_serial_config_card_class())
+    if widget_types & {"TcpConfigCard", "MqttConfigCard"}:
+        lines.append(_link_card_class())
+    if "TcpConfigCard" in widget_types:
+        lines.append(_tcp_config_card_class())
+    if "MqttConfigCard" in widget_types:
+        lines.append(_mqtt_config_card_class())
     if "DataSendCard" in widget_types:
         lines.append(_data_send_card_class())
     if "DataRecvCard" in widget_types:
@@ -333,38 +342,38 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
     if _has_commands(widgets):
         lines.append('''
     def _send_text_command(self, cmd, suffix="\\r\\n"):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
-            self._serial_handler.send_text(cmd + suffix)
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
+            self._comm_hub.send_text(cmd + suffix)
 
     def _command_error(self, error):
         InfoBar.error(title="提示", content=str(error), duration=2000, parent=self)
 
     def _send_hex_command(self, cmd, header="", tail=""):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 frame = command_hex_frame(cmd, header, tail)
             except ValueError as exc:
                 self._command_error(exc)
                 return
-            self._serial_handler.send(frame)
+            self._comm_hub.send(frame)
 
     def _send_modbus(self, slave, func, address, value=1):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 frame = command_modbus_frame(slave, func, address, value)
             except ValueError as exc:
                 self._command_error(exc)
                 return
-            self._serial_handler.send(frame)
+            self._comm_hub.send(frame)
 
     def _send_packed_value(self, value, fmt, cast=int, tpl="{value}", header="", tail=""):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 frame = command_packed_frame(value, fmt, cast, tpl, header, tail)
             except ValueError as exc:
                 self._command_error(exc)
                 return
-            self._serial_handler.send(frame)
+            self._comm_hub.send(frame)
 ''')
 
     return "\n".join(lines)
@@ -426,7 +435,7 @@ _FC_NAME_MAP = {
 
 
 def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
-    """Generate serial command connection lines for a widget."""
+    """Generate command connection lines for a widget (sent over the communication hub)."""
     mode = props.get("commandMode", "文本")
     newline = props.get("commandNewline", "\\r\\n")
     suffix = _NEWLINE_CODE_MAP.get(newline, "\r\n")
@@ -704,6 +713,14 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
         ):
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
         return "; ".join(code)
+    if wtype in ("TcpConfigCard", "MqttConfigCard"):
+        from app.core.tcp_card import TcpConfigCard
+        from app.core.mqtt_card import MqttConfigCard
+        card = TcpConfigCard if wtype == "TcpConfigCard" else MqttConfigCard
+        code = [f"self.widgets[{wid!r}] = {wtype}({pv})"]
+        for prop, method, default in card.PROPERTY_SETTERS:
+            code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
+        return "; ".join(code)
     if wtype == "DataSendCard":
         return (f"self.widgets[{wid!r}] = DataSendCard({pv}); "
                 f"self.widgets[{wid!r}].set_title({p('title', '数据发送')}); "
@@ -733,6 +750,34 @@ def _gen_serial_handler(serial_config: dict) -> str:
         "from .protocol_parser import BaseParser, create_parser", "")
     return (runtime_source("protocol_parser.py") + "\n" + runtime +
             f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
+
+
+def _link_config(serial_config: dict) -> dict:
+    """TCP and MQTT share the project's frame format; the port settings are serial-only."""
+    from app.core.comm_runtime import shared_link_config
+    return shared_link_config(serial_config)
+
+
+def _gen_tcp_handler(serial_config: dict) -> str:
+    runtime = runtime_source("tcp_runtime.py").replace(
+        "from .protocol_parser import create_parser", "from serial_handler import create_parser")
+    return runtime + f"\nTcpHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
+
+
+def _gen_mqtt_handler(serial_config: dict) -> str:
+    runtime = runtime_source("mqtt_runtime.py").replace(
+        "from .protocol_parser import create_parser", "from serial_handler import create_parser")
+    return runtime + f"\nMqttHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
+
+
+def _gen_comm_hub() -> str:
+    return runtime_source("comm_runtime.py").replace(
+        "from .serial_runtime import SerialHandler", "from serial_handler import SerialHandler",
+    ).replace(
+        "from .tcp_runtime import TcpHandler", "from tcp_handler import TcpHandler",
+    ).replace(
+        "from .mqtt_runtime import MqttHandler", "from mqtt_handler import MqttHandler",
+    )
 
 
 def _extract_bindings(widgets: list) -> list:
@@ -833,22 +878,23 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         '',
         '',
         'class DataBinding:',
-        '    def __init__(self, ui, serial_handler):',
+        '    """Wire the hub (serial, TCP and MQTT links) to bound widgets and command senders."""',
+        '    def __init__(self, ui, hub):',
         '        self.ui = ui',
-        '        self.serial = serial_handler',
+        '        self.hub = hub',
         '        self._connections = SignalConnections(ui)',
-        '        ui._serial_handler = serial_handler',
+        '        ui._comm_hub = hub',
         '        for w in ui.widgets.values():',
         '            if hasattr(w, "set_serial_handler"):',
-        '                w.set_serial_handler(serial_handler)',
+        '                w.set_serial_handler(hub)  # connection cards pick their own link',
     ]
     if has_chart:
         lines += [
             '            if isinstance(w, RealtimeLineChart):',
             '                w._serial_connections.clear()',
-            '                w._serial_connections.connect(serial_handler.dataReceived, w.on_parsed)',
-            '                w._serial_connections.connect(serial_handler.rawReceived, w.on_raw)',
-            '                w._serial_connections.connect(serial_handler.disconnected, w.reset_stream)',
+            '                w._serial_connections.connect(hub.dataReceived, w.on_parsed)',
+            '                w._serial_connections.connect(hub.rawReceived, w.on_raw)',
+            '                w._serial_connections.connect(hub.disconnected, w.reset_stream)',
         ]
 
     if has_hex:
@@ -861,10 +907,10 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
                 lines.append(f'        self._raw_frames[{binding["widget_id"]!r}] = '
                              f'RawFrameBuffer({header!r}, {footer!r})')
     if has_parsed:
-        lines.append('        self._connections.connect(self.serial.dataReceived, self._on_data)')
+        lines.append('        self._connections.connect(self.hub.dataReceived, self._on_data)')
     if has_hex:
-        lines.append('        self._connections.connect(self.serial.rawReceived, self._on_raw)')
-        lines.append('        self._connections.connect(self.serial.disconnected, self._reset_stream)')
+        lines.append('        self._connections.connect(self.hub.rawReceived, self._on_raw)')
+        lines.append('        self._connections.connect(self.hub.disconnected, self._reset_stream)')
     lines.append('')
 
     # -- _on_data for 键值匹配 / JSON路径 --
@@ -1269,6 +1315,21 @@ def _serial_config_card_class() -> str:
     ).replace("from .signal_lifetime import SignalConnections", "")
 
 
+def _link_card_class() -> str:
+    return runtime_source("link_card.py").replace(
+        "from .signal_lifetime import SignalConnections", "")
+
+
+def _tcp_config_card_class() -> str:
+    return runtime_source("tcp_card.py").replace(
+        "from .link_card import LinkConfigCard", "")
+
+
+def _mqtt_config_card_class() -> str:
+    return runtime_source("mqtt_card.py").replace(
+        "from .link_card import LinkConfigCard", "")
+
+
 def _data_send_card_class() -> str:
     return '''
 class DataSendCard(CardWidget):
@@ -1471,7 +1532,7 @@ class ModbusConfigCard(CardWidget):
         except: return d
     def _do_send(self):
         if not self._handler or not self._handler.is_connected:
-            self._status.setText("串口未连接"); return
+            self._status.setText("未连接"); return
         try:
             fc = self._FC.get(self._fc.currentText(), 3)
             frame = command_modbus_frame(
@@ -1480,7 +1541,7 @@ class ModbusConfigCard(CardWidget):
                 self._status.setText(f"已发送: {frame.hex(' ').upper()}")
             else:
                 self._stop_poll()
-                self._status.setText("发送失败，请检查串口连接")
+                self._status.setText("发送失败，请检查连接")
         except ValueError as exc:
             self._stop_poll()
             self._status.setText(str(exc))

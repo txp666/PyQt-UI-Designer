@@ -24,8 +24,8 @@ def terminal_scroll_bar(edit):
 
 
 class LogDisplayBox(QWidget):
-    """Scrolling, time-stamped log in a dark terminal look: every parsed frame, and the port's connect,
-    disconnect and error events."""
+    """Scrolling, time-stamped log in a dark terminal look: every parsed frame, and the connect,
+    disconnect and error events of every link (serial, TCP, MQTT)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -54,10 +54,10 @@ class LogDisplayBox(QWidget):
             self._serial_connections.connect(handler.dataReceived, self._on_parsed_data)
 
     def _on_connected(self, port):
-        self.append_log(f"串口已连接: {port}", "ok")
+        self.append_log(f"已连接: {port}", "ok")
 
     def _on_disconnected(self):
-        self.append_log("串口已断开", "warn")
+        self.append_log("已断开", "warn")
 
     def _on_serial_error(self, message):
         self.append_log(f"错误: {message}", "error")

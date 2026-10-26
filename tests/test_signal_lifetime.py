@@ -92,7 +92,10 @@ class SignalLifetimeTests(unittest.TestCase):
             from app.widgets.display import LEDIndicator, NumericDisplay, ImageDisplay
             from app.widgets.layout import (HBoxContainer, VBoxContainer, FlexContainer,
                                              GroupBoxContainer, TabContainer, CardContainer)
+            from app.core.comm_manager import commHub
+            from app.core.mqtt_card import MqttConfigCard
             from app.core.serial_card import SerialConfigCard
+            from app.core.tcp_card import TcpConfigCard
             from app.core.theme_runtime import ThemeController
             app = QApplication([])
             errors = []
@@ -100,7 +103,8 @@ class SignalLifetimeTests(unittest.TestCase):
             kinds = [DataRecvCard, LogDisplayBox, ModbusConfigCard, DataTableWidget,
                      RealtimeLineChart, GaugeMeter, LEDIndicator, NumericDisplay,
                      ImageDisplay, HBoxContainer, VBoxContainer, FlexContainer,
-                     GroupBoxContainer, TabContainer, CardContainer, SerialConfigCard]
+                     GroupBoxContainer, TabContainer, CardContainer, SerialConfigCard,
+                     TcpConfigCard, MqttConfigCard]
             signals = [signalBus.serialConnected, signalBus.serialDisconnected,
                        signalBus.serialDataReceived, signalBus.serialRawReceived,
                        signalBus.serialDataSent, signalBus.serialError]
@@ -110,8 +114,9 @@ class SignalLifetimeTests(unittest.TestCase):
                 chart = next(w for w in widgets if isinstance(w, RealtimeLineChart))
                 chart.start_listening()
                 chart._cursor_line.setPos(1)
-                card = widgets[-1]
-                card.set_serial_handler(serialManager)
+                for card in widgets[-3:]:
+                    card.set_serial_handler(commHub)
+                    assert card._handler is getattr(commHub, card.LINK)
                 controller = ThemeController(app, "Light")
                 groups = [group for w in widgets + [controller] for name, group in vars(w).items()
                           if name.endswith("_connections")]
@@ -152,7 +157,8 @@ class SignalLifetimeTests(unittest.TestCase):
             project.widgets = [{"id": kind, "type": kind, "properties": {},
                                 "geometry": {"x": 0, "y": 0, "w": 500, "h": 200}}
                                for kind in ("DataRecvCard", "LogBox", "ModbusConfigCard",
-                                            "SerialConfigCard", "DataTable", "RealtimeChart")]
+                                            "SerialConfigCard", "TcpConfigCard", "MqttConfigCard",
+                                            "DataTable", "RealtimeChart")]
             preview = PreviewInterface()
             preview.set_project_data(project)
             signals = [signalBus.serialConnected, signalBus.serialDisconnected,
@@ -189,6 +195,7 @@ class SignalLifetimeTests(unittest.TestCase):
             {"id": kind, "type": kind, "properties": {},
              "geometry": {"x": 0, "y": 0, "w": 300, "h": 150}}
             for kind in ("DataRecvCard", "LogBox", "ModbusConfigCard", "SerialConfigCard",
+                         "TcpConfigCard", "MqttConfigCard",
                          "DataTable", "RealtimeChart", "LEDIndicator", "NumericDisplay",
                          "GaugeMeter", "ImageDisplay", "CardContainer", "HBoxLayout")
         ]
@@ -210,7 +217,7 @@ class SignalLifetimeTests(unittest.TestCase):
                 def exercise():
                     app = QApplication.instance()
                     window = next(w for w in app.topLevelWidgets() if hasattr(w, "widgets"))
-                    handler = window._serial_handler
+                    handler = window._comm_hub
                     signals = [handler.connected, handler.disconnected, handler.error,
                                handler.dataReceived, handler.rawReceived, handler.dataSent]
                     handler.dataReceived.emit({"value": 42})
@@ -244,13 +251,13 @@ class SignalLifetimeTests(unittest.TestCase):
                             stack.enter_context(patch.object(MacFramelessWindow, name,
                                                              lambda *args, **kwargs: None))
                     from ui import MainUI
-                    from serial_handler import SerialHandler
+                    from comm_hub import CommHub
                     from data_binding import DataBinding
                     from theme_support import ThemeController
                     app = QApplication([])
                     theme = ThemeController(app, "Light")
                     window = MainUI()
-                    handler = SerialHandler()
+                    handler = CommHub()  # as the generated main.py does
                     binding = DataBinding(window, handler)
                     exercise()
                     theme.deleteLater()

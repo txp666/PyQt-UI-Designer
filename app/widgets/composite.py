@@ -1,5 +1,6 @@
 # coding: utf-8
-"""Composite card widgets: SerialConfigCard, DataSendCard, DataRecvCard, LogBox, ProgressRing."""
+"""Composite card widgets: connection cards (serial, TCP, MQTT), DataSendCard, DataRecvCard,
+LogBox, ProgressRing."""
 from html import escape as _escape
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter, QFont
@@ -39,8 +40,30 @@ from app.core.serial_card import SerialConfigCard as RuntimeSerialCard
 class SerialConfigCard(RuntimeSerialCard):
     def __init__(self, parent=None):
         super().__init__(parent)
-        from app.core.serial_manager import serialManager
-        self.set_serial_handler(serialManager)
+        from app.core.comm_manager import commHub
+        self.set_serial_handler(commHub.serial)
+
+
+# ---------------------------------------------------------------------------
+# TCP / MQTT Config Cards
+# ---------------------------------------------------------------------------
+
+from app.core.tcp_card import TcpConfigCard as RuntimeTcpCard
+from app.core.mqtt_card import MqttConfigCard as RuntimeMqttCard
+
+
+class TcpConfigCard(RuntimeTcpCard):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from app.core.comm_manager import commHub
+        self.set_serial_handler(commHub.tcp)
+
+
+class MqttConfigCard(RuntimeMqttCard):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from app.core.comm_manager import commHub
+        self.set_serial_handler(commHub.mqtt)
 
 
 # ---------------------------------------------------------------------------
@@ -48,8 +71,8 @@ class SerialConfigCard(RuntimeSerialCard):
 # ---------------------------------------------------------------------------
 
 class DataSendCard(CardWidget):
-    """Card with text input + send button for manual serial data sending.
-    Auto-wired to SerialManager. Supports HEX mode via checkbox."""
+    """Card with text input + send button for manual data sending over every connected
+    link. Auto-wired to the communication hub. Supports HEX mode via checkbox."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -95,9 +118,9 @@ class DataSendCard(CardWidget):
         if not text:
             self._flash_tip("请输入数据")
             return
-        from app.core.serial_manager import serialManager
-        if not serialManager.is_connected:
-            self._flash_tip("串口未连接")
+        from app.core.comm_manager import commHub
+        if not commHub.is_connected:
+            self._flash_tip("未连接")
             return
 
         newline_map = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
@@ -112,9 +135,9 @@ class DataSendCard(CardWidget):
             except ValueError:
                 self._flash_tip("HEX格式错误")
                 return
-            serialManager.send(raw)
+            commHub.send(raw)
         else:
-            serialManager.send_text(text + suffix)
+            commHub.send_text(text + suffix)
         self._input.selectAll()
 
     def _flash_tip(self, msg: str):
@@ -321,7 +344,7 @@ class ProgressRingDisplay(QWidget):
 
 class ModbusConfigCard(CardWidget):
     """Modbus RTU configuration card with read/write controls and response display.
-    Auto-wired to SerialManager."""
+    Auto-wired to the communication hub."""
 
     _FC_MAP = {
         "01 读线圈": 0x01, "02 读离散输入": 0x02,
@@ -432,10 +455,10 @@ class ModbusConfigCard(CardWidget):
             return default
 
     def _do_send(self):
-        from app.core.serial_manager import serialManager
+        from app.core.comm_manager import commHub
         from app.core.command_runtime import command_modbus_frame
-        if not serialManager.is_connected:
-            self._status.setText("串口未连接")
+        if not commHub.is_connected:
+            self._status.setText("未连接")
             return
         fc = self._FC_MAP.get(self._fc_combo.currentText(), 0x03)
         try:
@@ -445,11 +468,11 @@ class ModbusConfigCard(CardWidget):
             self._stop_poll()
             self._status.setText(str(exc))
             return
-        if serialManager.send(frame):
+        if commHub.send(frame):
             self._status.setText(f"已发送: {frame.hex(' ').upper()}")
         else:
             self._stop_poll()
-            self._status.setText("发送失败，请检查串口连接")
+            self._status.setText("发送失败，请检查连接")
 
     def _toggle_poll(self):
         if self._polling:
@@ -530,6 +553,51 @@ SERIAL_CONFIG_META = WidgetMeta(
     ],
 )
 
+TCP_CONFIG_META = WidgetMeta(
+    type_name="TcpConfigCard",
+    display_name="TCP 配置卡片",
+    category=WidgetCategory.COMPOSITE,
+    icon="GLOBE",
+    default_width=360, default_height=290,
+    min_width=240, min_height=50,
+    properties=[
+        PropDef("title", "标题", PropType.STRING, "TCP 配置"),
+        PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
+                options=["完整", "简洁"]),
+        PropDef("defaultMode", "默认模式", PropType.ENUM, "客户端",
+                options=["客户端", "服务端"]),
+        PropDef("defaultHost", "默认地址", PropType.STRING, "127.0.0.1"),
+        PropDef("defaultPort", "默认端口", PropType.INT, 8080, min_val=1, max_val=65535),
+        PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
+                options=["项目设置", "line", "hex", "modbus"]),
+    ],
+)
+
+MQTT_CONFIG_META = WidgetMeta(
+    type_name="MqttConfigCard",
+    display_name="MQTT 配置卡片",
+    category=WidgetCategory.COMPOSITE,
+    icon="CLOUD",
+    default_width=380, default_height=430,
+    min_width=260, min_height=50,
+    properties=[
+        PropDef("title", "标题", PropType.STRING, "MQTT 配置"),
+        PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
+                options=["完整", "简洁"]),
+        PropDef("defaultHost", "默认服务器", PropType.STRING, "127.0.0.1"),
+        PropDef("defaultPort", "默认端口", PropType.INT, 1883, min_val=1, max_val=65535),
+        PropDef("defaultClientId", "默认客户端ID", PropType.STRING, ""),
+        PropDef("defaultUsername", "默认用户名", PropType.STRING, ""),
+        PropDef("defaultPassword", "默认密码", PropType.STRING, ""),
+        PropDef("defaultSubscribe", "默认订阅主题", PropType.STRING, "device/data"),
+        PropDef("defaultPublish", "默认发布主题", PropType.STRING, "device/cmd"),
+        PropDef("defaultQos", "默认 QoS", PropType.ENUM, "0", options=["0", "1", "2"]),
+        PropDef("defaultTls", "默认启用 TLS", PropType.BOOL, False),
+        PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
+                options=["项目设置", "line", "hex", "modbus"]),
+    ],
+)
+
 DATA_SEND_META = WidgetMeta(
     type_name="DataSendCard",
     display_name="数据发送卡片",
@@ -583,9 +651,11 @@ PROGRESS_RING_META = WidgetMeta(
 )
 
 ALL_COMPOSITE = [
-    SERIAL_CONFIG_META, MODBUS_CONFIG_META, DATA_SEND_META,
-    DATA_RECV_META, LOG_BOX_META, PROGRESS_RING_META,
+    SERIAL_CONFIG_META, TCP_CONFIG_META, MQTT_CONFIG_META, MODBUS_CONFIG_META,
+    DATA_SEND_META, DATA_RECV_META, LOG_BOX_META, PROGRESS_RING_META,
 ]
+
+_LINK_CARDS = {"TcpConfigCard": TcpConfigCard, "MqttConfigCard": MqttConfigCard}
 
 
 def register_composite_widgets():
@@ -604,6 +674,11 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         w.set_default_stopbits(props.get("defaultStopbits", "1"))
         w.set_default_flow(props.get("defaultFlow", "无"))
         w.set_default_parser(props.get("defaultParser", "项目设置"))
+        return w
+    if type_name in _LINK_CARDS:
+        w = _LINK_CARDS[type_name](parent)
+        for prop, method, default in w.PROPERTY_SETTERS:
+            getattr(w, method)(props.get(prop, default))
         return w
     if type_name == "ModbusConfigCard":
         w = ModbusConfigCard(parent)
@@ -647,6 +722,10 @@ def apply_composite_property(widget, type_name: str, prop_name: str, value):
         elif prop_name == "defaultStopbits": widget.set_default_stopbits(value)
         elif prop_name == "defaultFlow": widget.set_default_flow(value)
         elif prop_name == "defaultParser": widget.set_default_parser(value)
+    elif type_name in _LINK_CARDS:
+        for prop, method, _default in widget.PROPERTY_SETTERS:
+            if prop == prop_name:
+                getattr(widget, method)(value)
     elif type_name == "ModbusConfigCard":
         if prop_name == "title": widget.set_title(value)
         elif prop_name == "defaultSlave": widget.set_default_slave(value)

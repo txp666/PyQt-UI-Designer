@@ -2,6 +2,7 @@ PyQt5>=5.15.11,<5.16
 PyQt5-Qt5>=5.15.19; sys_platform == "darwin" and platform_machine == "arm64"
 PyQt-Fluent-Widgets>=1.5.5
 pyserial>=3.5
+paho-mqtt>=1.6
 pyqtgraph>=0.13.3
 nuitka>=4.0.7
 ordered-set>=4.1

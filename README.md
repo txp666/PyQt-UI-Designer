@@ -26,7 +26,7 @@
 
 ---
 
-**PyQt UI Designer** 是一个零代码 / 低代码的桌面上位机设计器。拖拽控件、配置属性、绑定串口数据，就能生成可独立运行的 PyQt5 上位机程序，并在 Windows 打包为 exe、在 macOS 打包为 `.app`。不必再为每个硬件项目从零手写界面、串口收发和协议解析。
+**PyQt UI Designer** 是一个零代码 / 低代码的桌面上位机设计器。拖拽控件、配置属性、绑定串口、TCP 或 MQTT 数据，就能生成可独立运行的 PyQt5 上位机程序，并在 Windows 打包为 exe、在 macOS 打包为 `.app`。不必再为每个硬件项目从零手写界面、通信收发和协议解析。
 
 ## 演示视频
 
@@ -106,7 +106,7 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 - 深色 / 浅色主题切换，Windows 11 云母效果
 - 工程文件 `.uidp` 保存与加载
 
-### 27 种控件
+### 29 种控件
 
 | 分类 | 控件 |
 | --- | --- |
@@ -115,16 +115,19 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 | **显示控件** | LED 指示灯、数值显示、进度条、进度环、图片显示 |
 | **图表控件** | 实时曲线（多通道、游标、数据保存 / 加载）、仪表盘 |
 | **通信控件** | 数据表格 |
-| **复合控件** | 串口配置卡片、数据发送卡片、数据接收卡片、Modbus 配置卡片、日志显示框 |
+| **复合控件** | 串口配置卡片、TCP 配置卡片、MQTT 配置卡片、数据发送卡片、数据接收卡片、Modbus 配置卡片、日志显示框 |
 
 ### 数据接收与绑定
 
 - **串口管理**：自动扫描端口，可配置波特率、数据位、校验位、停止位和流控
+- **TCP 客户端 / 服务端**：客户端连接设备，或者监听端口让设备主动连入；服务端可同时接多个设备，每个连接独立切帧
+- **MQTT 订阅 / 发布**：连接 broker，订阅一个或多个主题（支持 `+`、`#` 通配符）接收数据，命令发布到指定主题；支持用户名密码、QoS 0/1/2 和 TLS
+- 三种链路共用同一套解析模式、数据绑定、曲线、表格和日志；命令会发往每一条已连接的链路
 - **键值匹配**：解析 `key1=value1,key2=value2`、JSON 顶层字段或 CSV（自动命名为 `ch0`、`ch1`…）
 - **JSON 路径**：解析 JSON 数据，支持嵌套路径
 - **HEX 字节提取**：从二进制帧中按偏移提取数据，支持多种数据类型
 - **Modbus RTU**：完整的寄存器解析，支持多种数据类型、字节序和功能码过滤，正常响应和异常响应都校验 CRC
-- 串口提供三种解析模式（行文本、HEX 帧、Modbus RTU），并能自动识别行协议格式
+- 串口、TCP、MQTT 都提供三种解析模式（行文本、HEX 帧、Modbus RTU），并能自动识别行协议格式
 
 ### 命令发送
 
@@ -135,7 +138,7 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 
 ### 导出与打包
 
-- 一键导出为可独立运行的 Python 项目（`main.py`、`ui.py`、`serial_handler.py`、`data_binding.py`、`theme_support.py`）
+- 一键导出为可独立运行的 Python 项目（`main.py`、`ui.py`、`comm_hub.py`、`serial_handler.py`、`tcp_handler.py`、`mqtt_handler.py`、`data_binding.py`、`theme_support.py`）
 - 内置 Nuitka 一键打包，实时显示编译输出；完成后自动清理编译缓存、重命名并压缩为 zip
 - 自定义上位机名称，会同步到窗口标题和打包产物
 
@@ -144,21 +147,21 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 | 协议 | 状态 | 说明 |
 | --- | --- | --- |
 | **串口（Serial）** | ✅ 已支持 | RS-232/485/TTL，支持行文本、HEX 帧、Modbus RTU 解析 |
-| **TCP Client/Server** | 🚧 开发中 | TCP Socket 通信 |
-| **MQTT** | 🚧 开发中 | MQTT 发布 / 订阅，适用于物联网场景 |
+| **TCP Client/Server** | ✅ 已支持 | TCP 客户端或服务端，服务端支持多个设备连入；解析模式与串口相同（Modbus 为 RTU over TCP，暂不支持 MBAP 的 Modbus TCP） |
+| **MQTT** | ✅ 已支持 | 订阅 / 发布，支持通配符主题、用户名密码、QoS 0/1/2 和 TLS；每条消息按一帧解析，纯数值载荷可按主题名绑定 |
 | **UDP** | 📋 计划中 | UDP 数据报通信 |
 | **Bluetooth** | 📋 计划中 | 蓝牙串口（SPP）/ BLE |
 
-通信部分采用模块化架构，方便扩展更多协议，欢迎贡献 PR。
+通信部分采用模块化架构：每条链路实现同一组信号，由 `CommHub` 汇总后供绑定、图表、表格和日志使用，方便扩展更多协议，欢迎贡献 PR。链路细节见 [docs/protocol.md](docs/protocol.md#六传输链路串口tcpmqtt)。
 
 ## 使用说明
 
 完整的图文说明见[官网使用说明](https://modusignal.cn/pyqt-ui-designer/guide/)，协议格式见 [docs/protocol.md](docs/protocol.md)。
 
 1. **设计界面**：从左侧控件面板把控件拖到画布上，在右侧属性编辑器里配置属性。
-2. **绑定数据**：选中显示类控件（数值显示、LED、进度条等），设置"绑定键"（串口数据中的字段名）和"解析模式"（键值匹配、JSON 路径、HEX 字节提取或 Modbus）。
+2. **绑定数据**：选中显示类控件（数值显示、LED、进度条等），设置"绑定键"（设备数据中的字段名）和"解析模式"（键值匹配、JSON 路径、HEX 字节提取或 Modbus）。
 3. **配置命令**：选中交互类控件（按钮、开关、滑块等），设置发送模式（文本、HEX 或 Modbus）、命令内容，以及可选的 `{value}` 命令模板。
-4. **预览运行**：切换到"预览运行"页面，点击"运行预览"，连接串口后即可实时测试。
+4. **预览运行**：切换到"预览运行"页面，点击"运行预览"，用串口、TCP 或 MQTT 配置卡片连接设备后即可实时测试。
 5. **导出与打包**：导出代码的快捷键在 Windows 上是 `Ctrl+Shift+E`，在 Mac 上是 `⌘⇧E`，也可以点击导航栏的"导出代码"；在预览页面点击"一键打包"，选择目录后会自动导出、用 Nuitka 编译并压缩。打包需要本机有 C/C++ 编译器：macOS 使用 Xcode Command Line Tools，Windows 使用 Nuitka 支持的编译器（Python 3.13+ 使用 MSVC）。
 
 <details>
@@ -168,7 +171,9 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 
 滑块、数值框、进度条、进度环和仪表盘会忽略无法转换的数据，其中整数控件拒绝超出 Qt 整数范围的值，仪表盘拒绝 NaN/Infinity；同帧其他绑定继续更新。开关支持明确的布尔文本和数值，未知文本不改变状态；LED 自定义亮灭值优先。预览与独立导出使用相同规则，HEX 帧头尾的奇数位十六进制文本自动在前面补零。
 
-串口配置卡片的"默认解析模式"可选 `line`、`hex`、`modbus` 或"项目设置"。"项目设置"使用 `.uidp` 的 `serial.parser` / `parserConfig`，默认是行文本。数据位、校验位、停止位、流控和解析模式在预览与导出程序中使用同一份实现。串口切换到其他解析模式时使用对应模式的配置，选择"项目设置"恢复工程配置。
+串口、TCP 和 MQTT 配置卡片的"默认解析模式"可选 `line`、`hex`、`modbus` 或"项目设置"。"项目设置"使用 `.uidp` 的 `serial.parser` / `parserConfig`，默认是行文本，三种链路共用这一份帧格式配置。数据位、校验位、停止位、流控和解析模式在预览与导出程序中使用同一份实现。切换到其他解析模式时使用对应模式的配置，选择"项目设置"恢复工程配置。
+
+TCP 服务端为每个连入的设备单独切帧，命令会写给所有已连接的设备。MQTT 把每条消息当作一帧：行文本模式下没有换行结尾的载荷也会解析；只有一个纯数值的载荷还会以主题名为键再给出一份，方便直接用主题名绑定；HEX 帧按主题各自缓存半包。多条链路同时连接时，命令会发往每一条已连接的链路。
 
 </details>
 
@@ -201,7 +206,7 @@ Modbus 按钮只使用当前可见的协议设置，非法地址、数量或数�
 <details>
 <summary><b>导出细节与主题</b></summary>
 
-导出会保留按钮禁用状态、输入框默认文本和只读状态、下拉框默认选项。发送、接收、表格、日志和 Modbus 卡片的自定义属性会保留到导出程序；表格和日志自动接收串口数据，接收区中的 `<`、`>` 等内容按原文显示。
+导出会保留按钮禁用状态、输入框默认文本和只读状态、下拉框默认选项。发送、接收、表格、日志、Modbus 以及串口 / TCP / MQTT 配置卡片的自定义属性会保留到导出程序；表格和日志自动接收所有链路的数据，接收区中的 `<`、`>` 等内容按原文显示。
 
 导出与打包继承设置页当前的浅色、深色或"跟随系统"模式。"跟随系统"会在独立程序启动及系统外观变化时更新。主题切换同步设计画布、运行预览、原生 Qt 控件及曲线配色，保留控件值、曲线历史、复选状态和自定义字号 / 颜色；接收与日志终端保持深色底以兼容已有彩色消息。
 
@@ -275,7 +280,7 @@ PyQt-UI-Designer/
 ├── requirements.txt     # 依赖清单
 ├── app/
 │   ├── common/          # 配置、版本信息、打包支持、更新检查
-│   ├── core/            # 工程读写、数据绑定、协议解析、串口运行时、代码生成
+│   ├── core/            # 工程读写、数据绑定、协议解析、串口 / TCP / MQTT 运行时、代码生成
 │   ├── designer/        # 设计画布、控件面板、属性编辑器、选择与对齐
 │   ├── view/            # 主窗口，以及设计器、预览运行、设置页面
 │   └── widgets/         # 控件定义：基础、布局、显示、图表、通信、复合
@@ -294,11 +299,12 @@ PyQt-UI-Designer/
 - [PyQt-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)：Fluent Design 风格控件库
 - [pyqtgraph](https://github.com/pyqtgraph/pyqtgraph)：高性能实时图表
 - [pyserial](https://github.com/pyserial/pyserial)：串口通信
+- [paho-mqtt](https://github.com/eclipse-paho/paho.mqtt.python)：MQTT 客户端
 - [Nuitka](https://nuitka.net/)：把 Python 编译打包为 Windows exe / macOS `.app`
 
 ## 反馈与贡献
 
-遇到问题或有功能建议，欢迎提交 [Issue](https://github.com/txp666/PyQt-UI-Designer/issues)。TCP、MQTT 等协议正在开发中，也欢迎提交 PR。
+遇到问题或有功能建议，欢迎提交 [Issue](https://github.com/txp666/PyQt-UI-Designer/issues)。UDP、蓝牙等协议在计划中，也欢迎提交 PR。
 
 ## 许可证
 

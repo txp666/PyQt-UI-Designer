@@ -1425,8 +1425,8 @@ def terminal_scroll_bar(edit):
 
 
 class LogDisplayBox(QWidget):
-    """Scrolling, time-stamped log in a dark terminal look: every parsed frame, and the port's connect,
-    disconnect and error events."""
+    """Scrolling, time-stamped log in a dark terminal look: every parsed frame, and the connect,
+    disconnect and error events of every link (serial, TCP, MQTT)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1455,10 +1455,10 @@ class LogDisplayBox(QWidget):
             self._serial_connections.connect(handler.dataReceived, self._on_parsed_data)
 
     def _on_connected(self, port):
-        self.append_log(f"串口已连接: {port}", "ok")
+        self.append_log(f"已连接: {port}", "ok")
 
     def _on_disconnected(self):
-        self.append_log("串口已断开", "warn")
+        self.append_log("已断开", "warn")
 
     def _on_serial_error(self, message):
         self.append_log(f"错误: {message}", "error")
@@ -1510,8 +1510,9 @@ from serial_handler import _list_all_ports
 class SerialConfigCard(CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port+baud+buttons), 单行 (single-line toolbar).
-    Buttons are wired to SerialManager so the card works in preview mode."""
+    Buttons drive the hub's serial link so the card works in preview mode."""
 
+    LINK = "serial"  # name of this card's link on a CommHub
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
 
@@ -1648,6 +1649,8 @@ class SerialConfigCard(CardWidget):
         self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_serial_handler(self, handler):
+        """Attach the serial link; a CommHub is resolved to its serial handler."""
+        handler = getattr(handler, self.LINK, handler)
         if handler is self._handler:
             return
         self._serial_connections.clear()
@@ -2124,35 +2127,35 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
 
 
     def _send_text_command(self, cmd, suffix="\r\n"):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
-            self._serial_handler.send_text(cmd + suffix)
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
+            self._comm_hub.send_text(cmd + suffix)
 
     def _command_error(self, error):
         InfoBar.error(title="提示", content=str(error), duration=2000, parent=self)
 
     def _send_hex_command(self, cmd, header="", tail=""):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 frame = command_hex_frame(cmd, header, tail)
             except ValueError as exc:
                 self._command_error(exc)
                 return
-            self._serial_handler.send(frame)
+            self._comm_hub.send(frame)
 
     def _send_modbus(self, slave, func, address, value=1):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 frame = command_modbus_frame(slave, func, address, value)
             except ValueError as exc:
                 self._command_error(exc)
                 return
-            self._serial_handler.send(frame)
+            self._comm_hub.send(frame)
 
     def _send_packed_value(self, value, fmt, cast=int, tpl="{value}", header="", tail=""):
-        if hasattr(self, '_serial_handler') and self._serial_handler.is_connected:
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 frame = command_packed_frame(value, fmt, cast, tpl, header, tail)
             except ValueError as exc:
                 self._command_error(exc)
                 return
-            self._serial_handler.send(frame)
+            self._comm_hub.send(frame)

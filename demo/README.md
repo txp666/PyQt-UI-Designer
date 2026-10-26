@@ -59,9 +59,12 @@ python main.py
 | 文件 | 用途 |
 | --- | --- |
 | `project.uidp` | 可用设计器「打开」继续编辑的源工程 |
-| `main.py` | 生成的真实串口程序入口 |
+| `main.py` | 生成的程序入口 |
 | `ui.py` | 生成的界面、图表和控件 |
+| `comm_hub.py` | 生成的通信汇总：串口、TCP、MQTT 三条链路共用一组信号 |
 | `serial_handler.py` | 生成的串口线程及协议解析器 |
+| `tcp_handler.py` | 生成的 TCP 客户端 / 服务端链路（本示例未放置 TCP 卡片，随导出一并生成） |
+| `mqtt_handler.py` | 生成的 MQTT 链路（同上） |
 | `data_binding.py` | 生成的数据绑定 |
 | `theme_support.py` | 生成的浅色、深色及跟随系统主题支持 |
 | `requirements.txt` | 独立运行依赖，不需要 Nuitka |

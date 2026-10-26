@@ -24,12 +24,12 @@ from theme_support import ThemeController
 theme_controller = ThemeController(app, 'Auto')
 
 from ui import MainUI
-from serial_handler import SerialHandler
+from comm_hub import CommHub
 from data_binding import DataBinding
 
 window = MainUI()
-serial_handler = SerialHandler()
-binding = DataBinding(window, serial_handler)
+comm_hub = CommHub()  # serial, TCP and MQTT links behind one set of signals
+binding = DataBinding(window, comm_hub)
 
 if sys.platform == "win32":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("pyqt.ui.app")
@@ -39,11 +39,11 @@ if _ico.exists():
     app.setWindowIcon(_icon)
     window.setWindowIcon(_icon)
 
-app.aboutToQuit.connect(serial_handler.disconnect)
+app.aboutToQuit.connect(comm_hub.disconnect)
 window.show()
 exit_code = app.exec()
 window.deleteLater()
-serial_handler.deleteLater()
+comm_hub.deleteLater()
 theme_controller.deleteLater()
 app.sendPostedEvents(None, QEvent.DeferredDelete)
 sys.exit(exit_code)

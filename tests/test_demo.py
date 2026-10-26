@@ -47,7 +47,7 @@ def exercise_application():
     app = QApplication.instance()
     window = next(w for w in app.topLevelWidgets() if hasattr(w, "widgets"))
     widgets = window.widgets
-    serial = window._serial_handler
+    serial = window._comm_hub.serial
     card = widgets["serial"]
     chart = widgets["chart"]
     receive = widgets["receive"]
@@ -61,7 +61,8 @@ def exercise_application():
     timer = QTimer(app)
     timer.setInterval(20)
 
-    for name in ("ui", "serial_handler", "data_binding", "theme_support"):
+    for name in ("ui", "serial_handler", "tcp_handler", "mqtt_handler", "comm_hub",
+                 "data_binding", "theme_support"):
         assert Path(sys.modules[name].__file__).resolve().parent == demo_path
     assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
     assert not serial.is_connected
@@ -306,7 +307,7 @@ class DemoTests(unittest.TestCase):
                         text=Mock(return_value="READ"),
                     )
                     handler = SimpleNamespace(is_connected=True, send_text=Mock())
-                    ui = SimpleNamespace(widgets={"send": widget}, _serial_handler=handler)
+                    ui = SimpleNamespace(widgets={"send": widget}, _comm_hub=handler)
                     ui._send_text_command = MethodType(namespace["_send_text_command"], ui)
                     properties = {"command": "READ", "sendOnEnter": True}
                     if selection is not None:
