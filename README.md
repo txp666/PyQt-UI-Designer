@@ -143,6 +143,10 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 - 内置 Nuitka 一键打包，实时显示编译输出；完成后自动清理编译缓存、重命名并压缩为 zip
 - 自定义上位机名称，会同步到窗口标题和打包产物
 
+### 让 AI 写工程
+
+`.uidp` 是 JSON 文件。把 [docs/uidp-format.md](docs/uidp-format.md) 和你的需求一起交给 Claude、Codex 等 AI，它就能直接写出工程文件；写完用 `python tools/check_uidp.py 工程.uidp` 检查（属性名、选项写错这种打开时不报错的问题也会指出来），再用设计器打开、预览和导出。说明里有一个完整的例子，以及由控件定义生成的全部控件属性。
+
 ## 通信协议支持
 
 | 协议 | 状态 | 说明 |
@@ -289,8 +293,10 @@ PyQt-UI-Designer/
 ├── examples/tutorials/  # 视频教程里搭建的工程（.uidp）及各自的数据格式
 ├── docs/
 │   ├── protocol.md      # 通信协议文档
+│   ├── uidp-format.md   # 工程格式说明，给手写工程和 AI 用
 │   └── release-notes/   # 各版本发布说明
 ├── images/              # README 图片
+├── tools/               # check_uidp.py 检查工程；uidp_reference.py 更新说明末尾的控件参考
 └── tests/               # 单元测试与冒烟测试
 ```
 

@@ -19,6 +19,19 @@ from app.core.binding_values import (
     binding_register,
 )
 
+# The property a binding writes into, per widget type (docs/uidp-format.md lists it with each widget).
+BIND_PROPERTIES = {
+    "Label": "text",
+    "LEDIndicator": "on",
+    "NumericDisplay": "value",
+    "ProgressBar": "value",
+    "ProgressRingDisplay": "value",
+    "GaugeMeter": "value",
+    "ToggleSwitch": "checked",
+    "Slider": "value",
+    "SpinBox": "value",
+}
+
 _STRUCT_FMT = {
     "uint8": ("B", 1), "int8": ("b", 1),
     "uint16": ("H", 2), "int16": ("h", 2),
@@ -336,18 +349,7 @@ class DataBindingEngine(QObject):
 
     @staticmethod
     def _default_bind_prop(type_name: str) -> str:
-        mapping = {
-            "Label": "text",
-            "LEDIndicator": "on",
-            "NumericDisplay": "value",
-            "ProgressBar": "value",
-            "ProgressRingDisplay": "value",
-            "GaugeMeter": "value",
-            "ToggleSwitch": "checked",
-            "Slider": "value",
-            "SpinBox": "value",
-        }
-        return mapping.get(type_name, "text")
+        return BIND_PROPERTIES.get(type_name, "text")
 
     # -- data handlers -------------------------------------------------------
 
