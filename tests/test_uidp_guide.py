@@ -1,5 +1,6 @@
-"""docs/uidp-format.md lets people and AI assistants write .uidp files by hand: its widget reference must match
-the widget definitions, and its complete example must load and use only real property names and options."""
+"""docs/uidp-format.md lets people and AI assistants write .uidp files by hand: its widget list and the widget
+reference in docs/uidp-widgets.md must match the widget definitions, and its complete example must load and use
+only real property names and options."""
 import json
 from pathlib import Path
 import re
@@ -13,16 +14,31 @@ import check_uidp  # noqa: E402
 import uidp_reference  # noqa: E402
 
 
+def _doc(name: str) -> str:
+    # A Windows checkout may turn the line endings into CRLF.
+    return (ROOT / "docs" / name).read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
 class UidpGuideTests(unittest.TestCase):
     def setUp(self):
-        # A Windows checkout may turn the line endings into CRLF.
-        self.document = (ROOT / "docs" / "uidp-format.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+        self.document = _doc("uidp-format.md")
 
-    def test_widget_reference_is_current(self):
-        updated = uidp_reference.with_widget_reference(self.document)
-        self.assertIsNotNone(updated, "docs/uidp-format.md has lost the marker line of its widget reference")
-        self.assertTrue(updated == self.document, "The widget reference in docs/uidp-format.md is out of date: "
-                                                  "run python tools/uidp_reference.py docs/uidp-format.md")
+    def test_generated_parts_are_current(self):
+        for name, generate in uidp_reference.GENERATED.items():
+            with self.subTest(name):
+                document = _doc(name)
+                updated = uidp_reference.with_generated(document, generate())
+                self.assertIsNotNone(updated, f"docs/{name} has lost the marker line of its generated part")
+                self.assertTrue(updated == document,
+                                f"docs/{name} is out of date: run python tools/uidp_reference.py docs")
+
+    def test_guide_fits_one_read(self):
+        # An AI assistant reads the guide with one command. In a test the 32 KB guide came back as "output too
+        # large", and the assistant cloned the whole repository to read it, which took several more steps; with
+        # the widget reference moved out, the 16 KB guide came back whole.
+        size = len(self.document.encode("utf-8"))
+        self.assertLess(size, 20000, f"docs/uidp-format.md is {size} bytes: keep it under 20 000, "
+                                     "details belong in uidp-widgets.md")
 
     def test_example_project_is_valid(self):
         # The example is what an AI copies from first, and a misspelt property or option would do nothing.

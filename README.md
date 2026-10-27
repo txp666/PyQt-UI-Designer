@@ -145,7 +145,13 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 
 ### 让 AI 写工程
 
-`.uidp` 是 JSON 文件。把 [docs/uidp-format.md](docs/uidp-format.md) 和你的需求一起交给 Claude、Codex 等 AI，它就能直接写出工程文件；写完用 `python tools/check_uidp.py 工程.uidp` 检查（属性名、选项写错这种打开时不报错的问题也会指出来），再用设计器打开、预览和导出。说明里有一个完整的例子，以及由控件定义生成的全部控件属性。
+`.uidp` 是 JSON 文件。把需求和下面这个链接一起交给 Claude、Codex 等 AI，它就能直接写出工程文件：
+
+```text
+https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.md
+```
+
+这是 [docs/uidp-format.md](docs/uidp-format.md) 的原始文本，AI 一次就能读完，不用打开网页或克隆仓库。说明里有规则、一个完整的例子和控件一览；每个控件的全部属性在 [docs/uidp-widgets.md](docs/uidp-widgets.md)，由控件定义生成，说明里有它的链接，用到时再读。写完用 `python tools/check_uidp.py 工程.uidp` 检查（属性名、选项写错这种打开时不报错的问题也会指出来），再用设计器打开、预览和导出。
 
 ## 通信协议支持
 
@@ -294,9 +300,10 @@ PyQt-UI-Designer/
 ├── docs/
 │   ├── protocol.md      # 通信协议文档
 │   ├── uidp-format.md   # 工程格式说明，给手写工程和 AI 用
+│   ├── uidp-widgets.md  # 每个控件的全部属性，由控件定义生成
 │   └── release-notes/   # 各版本发布说明
 ├── images/              # README 图片
-├── tools/               # check_uidp.py 检查工程；uidp_reference.py 更新说明末尾的控件参考
+├── tools/               # check_uidp.py 检查工程；uidp_reference.py 重新生成控件参考和控件一览
 └── tests/               # 单元测试与冒烟测试
 ```
 

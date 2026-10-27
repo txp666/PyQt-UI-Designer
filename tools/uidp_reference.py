@@ -1,9 +1,10 @@
 # coding: utf-8
-"""Regenerates the widget reference at the end of docs/uidp-format.md from the widget definitions. Run it after
-changing a widget's properties; tests/test_uidp_guide.py fails until the document is current.
+"""Regenerates the parts of the .uidp guide that come from the widget definitions: the widget reference in
+docs/uidp-widgets.md and the widget list that ends docs/uidp-format.md. Run it after changing a widget's
+properties; tests/test_uidp_guide.py fails until both are current.
 
-    python tools/uidp_reference.py docs/uidp-format.md   rewrite the document in place
-    python tools/uidp_reference.py                       print the reference
+    python tools/uidp_reference.py docs   rewrite both documents in place
+    python tools/uidp_reference.py        print the reference
 """
 import contextlib
 import io
@@ -24,7 +25,7 @@ with contextlib.redirect_stdout(io.StringIO()):  # qfluentwidgets prints an adve
     from app.widgets.display import ALL_DISPLAY
     from app.widgets.layout import ALL_LAYOUT
 
-# The line in docs/uidp-format.md after which the generated reference starts.
+# The line in docs/uidp-format.md and docs/uidp-widgets.md after which the generated part starts.
 MARKER = "<!-- 以下由 tools/uidp_reference.py 从控件定义生成，不要手改 -->"
 
 # In the order the main window registers them, which is the palette's order. Walking these lists rather than
@@ -44,6 +45,16 @@ def _json(value) -> str:
 
 def _number(value) -> str:
     return str(int(value)) if float(value).is_integer() else str(value)
+
+
+def widget_index() -> str:
+    """The widget list that ends docs/uidp-format.md, as Markdown: one line per category, each widget type with
+    its name and default size."""
+    lines = {}
+    for meta in WIDGETS:
+        lines.setdefault(meta.category.value, []).append(
+            f"`{meta.type_name}` {meta.display_name}（{meta.default_width}×{meta.default_height}）")
+    return "\n" + "".join(f"- {category}：{'、'.join(entries)}\n" for category, entries in lines.items())
 
 
 def widget_reference() -> str:
@@ -72,31 +83,39 @@ def widget_reference() -> str:
     return "".join(out)
 
 
-def with_widget_reference(document: str):
-    """``document`` with everything after the marker line replaced by the current reference, or None when the
-    marker is missing."""
+def with_generated(document: str, generated: str):
+    """``document`` with everything after the marker line replaced by ``generated``, or None when the marker is
+    missing."""
     at = document.find(MARKER)
     if at < 0:
         return None
-    return document[:at + len(MARKER)] + "\n" + widget_reference()
+    return document[:at + len(MARKER)] + "\n" + generated
+
+
+# Each generated document in docs/ and what follows its marker line.
+GENERATED = {"uidp-format.md": widget_index, "uidp-widgets.md": widget_reference}
+
+
+def update(path: Path, generated: str) -> bool:
+    document = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    updated = with_generated(document, generated)
+    if updated is None:
+        print(f"{path} has no line\n{MARKER}", file=sys.stderr)
+        return False
+    if updated == document:
+        print(f"{path} is current")
+        return True
+    path.write_text(updated, encoding="utf-8", newline="\n")
+    print(f"updated {path}")
+    return True
 
 
 def main(argv) -> int:
     if len(argv) < 2:
         sys.stdout.write(widget_reference())
         return 0
-    path = Path(argv[1])
-    document = path.read_text(encoding="utf-8").replace("\r\n", "\n")
-    updated = with_widget_reference(document)
-    if updated is None:
-        print(f"{path} has no line\n{MARKER}", file=sys.stderr)
-        return 1
-    if updated == document:
-        print(f"{path} is current")
-        return 0
-    path.write_text(updated, encoding="utf-8", newline="\n")
-    print(f"updated {path}")
-    return 0
+    results = [update(Path(argv[1]) / name, generate()) for name, generate in GENERATED.items()]
+    return 0 if all(results) else 1
 
 
 if __name__ == "__main__":
