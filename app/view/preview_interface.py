@@ -25,6 +25,7 @@ from app.widgets.basic import create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
 from app.core.signal_lifetime import SignalConnections
+from app.core.slider_release import SendOnRelease
 from app.core.command_runtime import (
     command_hex_frame, command_packed_frame, send_modbus_command,
 )
@@ -273,7 +274,10 @@ class PreviewCanvas(QWidget):
         elif type_name in ("Slider", "SpinBox") and (props.get("sendOnChange") or mode == "Modbus"):
             def _on_value_changed(val, _tpl=tpl, _m=mode, _n=newline, _p=props):
                 PreviewCanvas._apply_template(_tpl, str(val), _m, _n, _p)
-            widget.valueChanged.connect(_on_value_changed)
+            if type_name == "Slider":  # a drag sends once, when it lets go
+                SendOnRelease(widget, _on_value_changed)
+            else:
+                widget.valueChanged.connect(_on_value_changed)
 
     @staticmethod
     def _wire_notification(widget: QWidget, type_name: str, props: dict):

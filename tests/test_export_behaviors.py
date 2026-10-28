@@ -259,6 +259,48 @@ class ExportBehaviorTests(unittest.TestCase):
                 check_payloads([b"66\r\n"])
         """)
 
+    def test_slider_drag_sends_once_on_release(self):
+        # A drag sends one command when the mouse lets go, whether it starts on the handle or the groove.
+        self.run_export([
+            widget("speed", "Slider", {
+                "minimum": 0, "maximum": 3000, "value": 0, "sendOnChange": True,
+                "commandTemplate": "SPEED={value}", "commandNewline": "\\n",
+            }),
+        ], r"""
+            from PyQt5.QtCore import QEvent, QPoint, QPointF
+            from PyQt5.QtGui import QMouseEvent
+            def drag_to(x):  # offscreen, Qt 5's QTest.mouseMove only moves the cursor
+                app.sendEvent(slider, QMouseEvent(QEvent.MouseMove, QPointF(x, y), Qt.NoButton, Qt.LeftButton,
+                                                  Qt.NoModifier))
+            slider = widgets["speed"]
+            slider.resize(320, 36)
+            app.processEvents()
+            y = slider.height() // 2
+            handle = slider.handle
+            QTest.mousePress(handle, Qt.LeftButton, Qt.NoModifier, handle.rect().center())
+            for x in range(40, 260, 20):
+                drag_to(x)
+            app.processEvents()
+            assert slider.value() > 1000, slider.value()
+            check_payloads([])
+            QTest.mouseRelease(handle, Qt.LeftButton, Qt.NoModifier, handle.rect().center())
+            app.processEvents()
+            expected = [f"SPEED={slider.value()}\n".encode()]
+            check_payloads(expected)
+            QTest.mousePress(slider, Qt.LeftButton, Qt.NoModifier, QPoint(slider.width() - 30, y))
+            drag_to(slider.width() - 60)
+            app.processEvents()
+            check_payloads(expected)
+            QTest.mouseRelease(slider, Qt.LeftButton, Qt.NoModifier, QPoint(slider.width() - 60, y))
+            app.processEvents()
+            expected.append(f"SPEED={slider.value()}\n".encode())
+            check_payloads(expected)
+            QTest.keyClick(slider, Qt.Key_Right)
+            app.processEvents()
+            expected.append(f"SPEED={slider.value()}\n".encode())
+            check_payloads(expected)
+        """)
+
     def test_progress_ring_receives_key_json_hex_and_modbus_bindings(self):
         self.run_export([
             widget("key", "ProgressRingDisplay", {"maximum": 200, "value": 11},

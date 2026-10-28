@@ -296,6 +296,43 @@ def place_tab_child(tabs, child, x, y, width, height):
         tabs._designer_child_geometry = controller
     controller.register(child, (x, y, width, height))
 
+"""A slider's command, sent once when a drag lets go: shared by preview and standalone applications."""
+from PyQt5.QtCore import QEvent, QObject, Qt
+
+
+class SendOnRelease(QObject):
+    """Calls send(value) whenever a qfluentwidgets Slider's value changes, except while the mouse is down on
+    it: a drag sends once, when it lets go, instead of a command for every value the handle passes. Keys and
+    the wheel move in steps and send each one.
+
+    That Slider never sets QSlider.isSliderDown(), and a drag that starts on the groove emits no
+    pressed/released signals, so the mouse is watched on the slider and its handle."""
+
+    def __init__(self, slider, send):
+        super().__init__(slider)
+        self._slider, self._send = slider, send
+        self._held = False
+        self._press_value = slider.value()
+        slider.installEventFilter(self)
+        slider.handle.installEventFilter(self)
+        slider.valueChanged.connect(self._value_changed)
+
+    def _value_changed(self, value):
+        if not self._held:
+            self._send(value)
+
+    def eventFilter(self, watched, event):
+        kind = event.type()
+        if kind in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease) and event.button() == Qt.LeftButton:
+            if kind == QEvent.MouseButtonPress:
+                self._held = True
+                self._press_value = self._slider.value()  # before a press on the groove moves it
+            elif self._held:
+                self._held = False
+                if self._slider.value() != self._press_value:
+                    self._send(self._slider.value())
+        return False
+
 
 class LEDIndicator(QWidget):
     COLOR_MAP = {
@@ -2139,7 +2176,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self.widgets['setpoint_slider'] = Slider(Qt.Horizontal, self._page); self.widgets['setpoint_slider'].setRange(20, 80); self.widgets['setpoint_slider'].setValue(50)
         self.widgets['setpoint_slider'].setGeometry(140, 295, 300, 36)
         self.widgets['setpoint_slider'].show()
-        self.widgets['setpoint_slider'].valueChanged.connect(lambda v: self._send_text_command(str(v), '\r\n'))
+        SendOnRelease(self.widgets['setpoint_slider'], lambda v: self._send_text_command(str(v), '\r\n'))
 
         self.widgets['setpoint_spin'] = SpinBox(self._page); self.widgets['setpoint_spin'].setRange(20, 80); self.widgets['setpoint_spin'].setValue(50); self.widgets['setpoint_spin'].setSuffix(' kPa')
         self.widgets['setpoint_spin'].setGeometry(460, 295, 160, 36)

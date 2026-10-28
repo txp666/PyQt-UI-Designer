@@ -224,6 +224,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
 
     if "TabWidget" in widget_types:
         lines.append(runtime_source("tab_geometry.py"))
+    if "Slider" in widget_types:
+        lines.append(runtime_source("slider_release.py"))
     if "LEDIndicator" in widget_types:
         lines.append(_led_class())
     if "NumericDisplay" in widget_types:
@@ -531,14 +533,11 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
             f"if i >= 0 and {val_expr} else None)")
 
     elif wtype in ("Slider", "SpinBox") and (props.get("sendOnChange") or mode == "Modbus"):
-        if mode == "Modbus":
-            result.append(
-                f"        {w_ref}.valueChanged.connect("
-                f"lambda v: {_modbus_send('v')})")
+        send = _modbus_send('v') if mode == "Modbus" else _tpl_send('v')
+        if wtype == "Slider":  # a drag sends once, when it lets go (slider_release.py)
+            result.append(f"        SendOnRelease({w_ref}, lambda v: {send})")
         else:
-            result.append(
-                f"        {w_ref}.valueChanged.connect("
-                f"lambda v: {_tpl_send('v')})")
+            result.append(f"        {w_ref}.valueChanged.connect(lambda v: {send})")
 
     return result
 

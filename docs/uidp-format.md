@@ -173,7 +173,7 @@ python tools/check_uidp.py motor.uidp
 | --- | --- | --- |
 | `PushButton` | `command` | 点击 |
 | `ToggleSwitch` | 打开时 `onCommand`，关闭时 `offCommand` | 用户拨动 |
-| `Slider`、`SpinBox` | 当前数值 | `sendOnChange` 为 `true` 时每次数值变化都发（拖动滑块会连续发很多条）；文本和 HEX 模式不打开它就不发 |
+| `Slider`、`SpinBox` | 当前数值 | `sendOnChange` 为 `true` 时数值一变就发；拖动滑块时不发，松手发一次（键盘、滚轮每一步都发）；文本和 HEX 模式不打开它就不发 |
 | `LineEdit` | 输入的文字 | `sendOnEnter` 为 `true` 时按回车 |
 | `ComboBox` | `commands` 里和选项同一行的命令（多行文本，一行对应 `items` 的一项）；那一行是空的就发选项文字本身 | `sendOnSelect` 为 `true` 时选中 |
 
