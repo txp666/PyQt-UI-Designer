@@ -20,13 +20,16 @@
     <a href="#快速开始">快速开始</a> •
     <a href="#功能特性">功能特性</a> •
     <a href="docs/protocol.md">协议文档</a> •
-    <a href="#常见问题">常见问题</a>
+    <a href="#常见问题">常见问题</a> •
+    <a href="#c-版-fluenthmi-studio">C++ 版</a>
   </p>
 </p>
 
 ---
 
 **PyQt UI Designer** 是一个零代码 / 低代码的桌面上位机设计器。拖拽控件、配置属性、绑定串口、TCP 或 MQTT 数据，就能生成可独立运行的 PyQt5 上位机程序，并在 Windows 打包为 exe、在 macOS 打包为 `.app`。不必再为每个硬件项目从零手写界面、通信收发和协议解析。
+
+> **推荐试试 C++ 版 [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio)**：打开同一种 `.uidp` 工程，安装包更小、启动更快，导出应用不到一秒，不需要 Python 和编译器。详见下方 [C++ 版 FluentHMI Studio](#c-版-fluenthmi-studio)。
 
 ## 演示视频
 
@@ -43,6 +46,18 @@
 ### 预览运行
 
 ![预览运行](images/preview.png)
+
+## C++ 版 FluentHMI Studio
+
+[FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) 是本项目的 C++/Qt 6 重写版，界面基于 [FluentQtWidgets](https://github.com/txp666/FluentQtWidgets)，目前是 0.1.0。它直接读写同一种 `.uidp` 工程，控件、属性、解析模式、数据绑定和命令编码规则与本项目一一对应，在这里做好的工程可以直接用它打开、预览和导出。和本项目相比：
+
+- **导出不需要 Python 和编译器**：导出时复制预编译的运行器，再放入工程和图片，约 0.3 秒完成。本项目要先生成 Python 源码再用 Nuitka 编译，下载版要打包还得另装 Python 与编译工具。
+- **预览即成品**：预览和导出的应用是同一个运行器，预览里看到的就是导出后的效果。
+- **安装包更小**：Windows 16.7 MB（本项目 54.2 MB）；macOS 只有一个 universal 包，32.7 MB，Apple Silicon 和 Intel 通用，导出的应用同样是 universal（本项目两种架构各一个包，53.8 / 62.8 MB）。
+- **启动更快、内存更少**：在同一台 Mac 上，启动到出现窗口 0.7–1.1 秒（本项目 1.5–2.2 秒），启动后内存 71–85 MB（本项目 126–137 MB）。
+- **应用内更新**：在设置页或启动时检查新版本，下载并校验 SHA-256，重启或退出时自动换上新版本。
+
+它目前还没有的：导出可以继续修改的源码工程，以及实时曲线的游标和数据保存 / 加载；需要这些功能时请继续使用本项目。完整对比和测量方法见 FluentHMI Studio README 的[与 Python 版相比](https://github.com/txp666/FluentHMI-Studio#与-python-版相比)。
 
 ## 快速开始
 
