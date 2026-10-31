@@ -151,13 +151,16 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **HEX byte extraction**: extracts data from binary frames by offset, with several data types
 - **Modbus RTU**: full register parsing with several data types, byte orders and function code filtering; the CRC is checked on both normal and exception responses
 - **Modbus TCP**: frames by the MBAP header and outputs exactly the same dictionary as RTU, so the same binding settings work for both
-- Serial, TCP and MQTT all offer four parser modes (line text, HEX frame, Modbus RTU, Modbus TCP) and can detect the format of a line protocol automatically
+- **Modbus ASCII**: frames by `:` and `\r\n` and checks the LRC, with the same output as RTU; Modbus commands are framed as ASCII on a `modbus_ascii` link
+- **Binding by register address**: read requests sent from here are remembered, so the registers in a response are also named by address (holding register 100 is `hr100`) and a binding can pick a register table and an address; polling several address blocks of a PLC doesn't mix them up
+- Serial, TCP and MQTT all offer five parser modes (line text, binary HEX frame, Modbus RTU, Modbus TCP, Modbus ASCII) and can detect the format of a line protocol automatically; binary HEX frames are framed by header and footer, length field, checksum, fixed length or idle gap, set for the project or for each link card
 
 ### Sending commands
 
 - **Text mode**: optional line ending
 - **HEX mode**: frame header and trailer, and packing values by data type
-- **Modbus mode**: builds frames automatically and can poll; the frame format is chosen per link: links whose parser mode is `modbus_tcp` send MBAP frames, the others send RTU frames with a CRC
+- **Modbus mode**: builds frames automatically and can poll; the frame format is chosen per link: links whose parser mode is `modbus_tcp` send MBAP frames, `modbus_ascii` links send ASCII frames, the others send RTU frames with a CRC. FC16 write multiple registers writes int16, 32-bit integers and float32 values by data type
+- **Modbus poll table**: the Modbus card reads several address blocks from its poll table one request at a time, each waiting for its reply or the timeout, and shows missing replies and the exception codes a device returns
 - **Command templates**: insert a widget's current value with the `{value}` placeholder
 
 ### Export and packaging
@@ -201,13 +204,13 @@ The full illustrated guide is on the [website](https://modusignal.cn/pyqt-ui-des
 <details>
 <summary><b>Data parsing rules</b></summary>
 
-Line text must end with an actual LF (`\n`; CRLF works too). A partial packet waits for the next bytes, and several frames in one batch are all processed in order. An escaped `\n` inside a JSON string stays part of the content. The CRC is checked on both normal and exception Modbus responses, and a corrupted frame doesn't update any widget.
+Line text ends with the line terminator (LF `\n` by default, CRLF works too; the frame format can change it to `;` and so on), and JSON is split where its brackets close, without a terminator. A partial packet waits for the next bytes, and several frames in one batch are all processed in order. An escaped `\n` inside a JSON string stays part of the content. The CRC is checked on both normal and exception Modbus responses, and a corrupted frame doesn't update any widget.
 
 Sliders, spin boxes, progress bars, progress rings and gauges ignore data that can't be converted: integer widgets reject values outside Qt's integer range, and gauges reject NaN and Infinity, while the other bindings in the same frame keep updating. Switches accept explicit boolean text and numbers, and unknown text leaves their state unchanged; an LED's custom on and off values take precedence. The preview and standalone exports follow the same rules, and odd-length hex text in a HEX frame header or trailer gets a leading zero.
 
-The default parser mode (默认解析模式) of the serial, TCP and MQTT config cards can be `line`, `hex`, `modbus`, `modbus_tcp` or project settings (项目设置). Project settings uses `serial.parser` / `parserConfig` from the `.uidp`, which defaults to line text, and the three links share this one frame format configuration. Data bits, parity, stop bits, flow control and the parser mode use the same implementation in the preview and in exported programs. Switching to another parser mode uses that mode's configuration, and choosing project settings brings back the project's.
+The default parser mode (默认解析模式) of the serial, TCP and MQTT config cards can be `line`, `hex`, `modbus`, `modbus_tcp`, `modbus_ascii` or project settings (项目设置). Project settings uses `serial.parser` / `parserConfig` from the `.uidp`, which defaults to line text, and the three links share this one frame format configuration. Data bits, parity, stop bits, flow control and the parser mode use the same implementation in the preview and in exported programs. Switching to another parser mode uses that mode's configuration, and choosing project settings brings back the project's.
 
-The TCP server frames each connected device separately, and commands are written to every connected device. MQTT treats each message as one frame: in line text mode, payloads without a trailing newline are parsed too; a payload that is a single plain number is also given a second time with the topic name as its key, so you can bind to the topic name directly; HEX frames buffer partial packets per topic. When several links are connected at once, commands go to every connected link.
+The TCP server frames each connected device separately, and commands are written to every connected device. MQTT treats each message as one frame: in line text mode, payloads without a trailing line terminator are parsed too; a payload that is a single plain number is also given a second time with the topic name as its key, so you can bind to the topic name directly; HEX frames buffer partial packets per topic. When several links are connected at once, commands go to every connected link.
 
 </details>
 
@@ -216,7 +219,7 @@ The TCP server frames each connected device separately, and commands are written
 
 The live chart redraws in batches about every 33 ms, and its display buffer holds up to 10,000 points per channel. Every sample is also written to a temporary file, so Save (保存) exports the full history as CSV or JSON, including what no longer fits in the display buffer. Clearing the chart, stopping the preview or closing the widget releases the temporary record, so save the data you want to keep first. CSV is recommended for large files; loading CSV and exporting history are both streamed.
 
-Loading a history file keeps the current acquisition bindings, parser mode and channel check states. A chart that is already configured requires the file's channel names and count to match, though unique names may come in any order; if they don't match, it reports an error and keeps its data. A blank default chart that hasn't been configured can still import new channels.
+Loading a history file keeps the current acquisition bindings, parser mode and which curves are shown or hidden (click a curve's line in the chart legend to switch). A chart that is already configured requires the file's channel names and count to match, though unique names may come in any order; if they don't match, it reports an error and keeps its data. A blank default chart that hasn't been configured can still import new channels.
 
 An invalid value doesn't interrupt the other chart channels in the same frame, and isn't written to the history. History files containing non-finite or invalid values are rejected, and the current data stays as it was. When channel names are unique, JSON still uses an object that maps names to sample arrays; channels with duplicate names use an ordered array of `name` / `values` entries so that duplicate keys don't lose data, and the old format can still be read.
 
@@ -229,7 +232,7 @@ Switches, sliders and spin boxes can be updated from received data. Updates from
 
 Changing the design, opening another project or creating a new one stops the old preview and disconnects; running it again uses the current design, so old commands are never sent. Stopping the preview releases the widgets along with their timers and signal connections, so it can be started and stopped repeatedly.
 
-A Modbus button only uses the protocol settings currently visible, and an invalid address, quantity or value isn't sent. HEX content, frame headers and trailers and binary values use the same encoding rules in the preview and in exports. The Modbus card shows "sent" (已发送) only after the whole command has been written; a failed or short write reports a failure and stops polling, and "sent" doesn't mean the device has confirmed it. A Modbus switch sends an FC05 write single coil command in both the preview and exports.
+A Modbus button only uses the protocol settings currently visible, and an invalid address, quantity or value isn't sent. HEX content, frame headers and trailers and binary values use the same encoding rules in the preview and in exports. The Modbus card shows "sent" (已发送) only after the whole command has been written; a failed or short write reports a failure and stops polling. "Sent" doesn't mean the device has confirmed it: when a link parses `modbus` / `modbus_tcp` / `modbus_ascii`, the card shows "device replied" (设备已响应) or the exception code it returned once the device answers, and "no reply" (无响应) after the timeout. A Modbus switch sends an FC05 write single coil command in both the preview and exports.
 
 New, Open and Quit offer Save / Discard / Cancel. Cancelling the save, or a failed save, stops the switch. Projects are validated before saving and loading, and a failure keeps the current canvas and the existing file. Saving replaces the file atomically through a temporary file in the same folder, so an interrupted write can't corrupt the original. Resizing respects each widget's minimum width and height, and each tab page keeps its own layout and child widget positions.
 

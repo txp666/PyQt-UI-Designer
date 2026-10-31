@@ -15,7 +15,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 with contextlib.redirect_stdout(io.StringIO()):  # qfluentwidgets prints an advert when first imported
+    from app.core.binding_values import MODBUS_AREAS
     from app.core.chart_runtime import _DEFAULT_CURVE_CFG
+    from app.core.command_runtime import MODBUS_DATA_TYPES, MODBUS_ORDERS
+    from app.core.modbus_card import modbus_poll_table
     from app.core.data_binding import BIND_PROPERTIES
     from app.core.project import ProjectData
     from app.core.widget_registry import registry
@@ -28,6 +31,9 @@ with contextlib.redirect_stdout(io.StringIO()):  # qfluentwidgets prints an adve
     from app.widgets.layout import register_layout_widgets
 
 PARSE_MODES = ("键值匹配", "JSON路径", "HEX字节提取", "Modbus")
+# Modbus binding (and chart curve) fields that take one of a few values, and those values.
+MODBUS_BINDING_OPTIONS = {"mbArea": tuple(MODBUS_AREAS), "mbDataType": MODBUS_DATA_TYPES,
+                          "mbRegOrder": MODBUS_ORDERS}
 
 
 def _register_widgets():
@@ -57,6 +63,9 @@ def problems(data) -> list:
                         found.append(f"{name}: 曲线没有字段 {field}（{key}）")
                     elif field == "parseMode" and value not in PARSE_MODES:
                         found.append(f"{name}: {key} 不能是 {value!r}，可选 {'、'.join(PARSE_MODES)}")
+                    elif field in MODBUS_BINDING_OPTIONS and value not in MODBUS_BINDING_OPTIONS[field]:
+                        found.append(f"{name}: {key} 不能是 {value!r}，"
+                                     f"可选 {'、'.join(MODBUS_BINDING_OPTIONS[field])}")
                     continue
                 if kind == "TabWidget" and key.startswith("_tabLayout_") and key[11:].isdigit():
                     options = meta.get_prop_def("tabLayout").options  # one page's layout, see "容器" in the guide
@@ -68,6 +77,11 @@ def problems(data) -> list:
                     found.append(f"{name}: {kind} 没有属性 {key}")
                 elif prop.prop_type == PropType.ENUM and value not in prop.options:
                     found.append(f"{name}: {key} 不能是 {value!r}，可选 {'、'.join(prop.options)}")
+                elif kind == "ModbusConfigCard" and key == "pollList":
+                    try:
+                        modbus_poll_table(value)
+                    except ValueError as error:
+                        found.append(f"{name}: {error}")
             binding = item.get("binding")
             if binding:
                 if kind not in BIND_PROPERTIES:
@@ -75,6 +89,9 @@ def problems(data) -> list:
                 if binding.get("parseMode", "键值匹配") not in PARSE_MODES:
                     found.append(f"{name}: parseMode 不能是 {binding.get('parseMode')!r}，"
                                  f"可选 {'、'.join(PARSE_MODES)}")
+                for key, options in MODBUS_BINDING_OPTIONS.items():
+                    if key in binding and binding[key] not in options:
+                        found.append(f"{name}: binding 的 {key} 不能是 {binding[key]!r}，可选 {'、'.join(options)}")
             walk(item.get("children", []))
 
     walk(data.get("widgets", []))
@@ -82,6 +99,10 @@ def problems(data) -> list:
 
 
 def main(argv) -> int:
+    # A Windows pipe's code page has no Chinese: pipes get UTF-8, a console replaces what it cannot show.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(**({"errors": "replace"} if stream.isatty() else {"encoding": "utf-8"}))
     if len(argv) != 2:
         print(__doc__.strip(), file=sys.stderr)
         return 2

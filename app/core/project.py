@@ -15,6 +15,8 @@ from app.core.widget_registry import registry
 from PyQt5.QtCore import QSignalBlocker
 
 PROJECT_VERSION = "1.0"
+# Link cards that can carry their own frame format (properties.parserConfig).
+LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard")
 
 
 class ProjectData:
@@ -85,8 +87,20 @@ class ProjectData:
         if not isinstance(serial, dict):
             raise ValueError("串口配置必须是对象")
         from app.core.protocol_parser import create_parser
-        create_parser(serial.get("parser", "line"), serial.get("parserConfig"))
+        project_parser = serial.get("parser", "line")
+        create_parser(project_parser, serial.get("parserConfig"))
         ids = set()
+
+        def check_card_parser(item, props):
+            card = item.get("id") or ""
+            config = props["parserConfig"]
+            if not isinstance(config, dict):
+                raise ValueError(f"卡片 {card} 的 parserConfig 必须是对象")
+            mode = props.get("defaultParser", "项目设置")
+            try:
+                create_parser(project_parser if mode == "项目设置" else mode, config)
+            except ValueError as error:
+                raise ValueError(f"卡片 {card}: {error}") from None
 
         def walk(items, depth=0):
             if not isinstance(items, list) or depth > 64:
@@ -101,8 +115,11 @@ class ProjectData:
                     if not isinstance(wid, str) or not wid or wid in ids:
                         raise ValueError("控件 ID 无效或重复")
                     ids.add(wid)
-                if not isinstance(item.get("properties", {}), dict):
+                props = item.get("properties", {})
+                if not isinstance(props, dict):
                     raise ValueError("控件属性必须是对象")
+                if item["type"] in LINK_CARD_TYPES and "parserConfig" in props:
+                    check_card_parser(item, props)
                 if item.get("binding") is not None and not isinstance(item["binding"], dict):
                     raise ValueError("控件绑定必须是对象")
                 geo = item.get("geometry", {})

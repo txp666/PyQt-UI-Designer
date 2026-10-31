@@ -4,6 +4,7 @@ from typing import Optional
 
 from PyQt5 import sip
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFormLayout,
     QSizePolicy, QFrame, QFileDialog,
@@ -11,13 +12,20 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import (
     ScrollArea, StrongBodyLabel, BodyLabel, CardWidget,
     LineEdit, SpinBox, DoubleSpinBox, SwitchButton,
-    ComboBox, TextEdit, CaptionLabel, ToolButton,
+    ComboBox, EditableComboBox, TextEdit, CaptionLabel, ToolButton,
 )
 from qfluentwidgets import FluentIcon as FIF
 
 from app.common.signal_bus import signalBus
 from app.core.signal_lifetime import SignalConnections
 from app.core.widget_registry import registry
+from app.core.binding_values import MODBUS_AREAS
+from app.core.data_binding import BIND_PROPERTIES
+from app.core.project import LINK_CARD_TYPES
+from app.core.protocol_parser import (
+    HEX_CHECKSUMS, HEX_ENDIANS, HEX_LENGTH_COVERS, LINE_ENCODINGS, LINE_KV_SEPARATORS, PARSER_TYPES,
+    hex_field,
+)
 from app.widgets.base import PropType, PropDef, WidgetMeta
 from app.designer.canvas_item import CanvasItem
 
@@ -26,12 +34,12 @@ _MODE_VISIBILITY = {
     "文本":   {"command", "onCommand", "offCommand", "commandNewline", "commandTemplate"},
     "HEX":    {"command", "onCommand", "offCommand", "commandTemplate",
                "frameHeader", "frameTail", "dataType", "byteOrder"},
-    "Modbus": {"mbSlave", "mbFunc", "mbAddress", "mbValue"},
+    "Modbus": {"mbSlave", "mbFunc", "mbAddress", "mbValue", "mbDataType", "mbRegOrder"},
 }
 _MODE_FIELDS = {
     "command", "onCommand", "offCommand", "commandNewline", "commandTemplate",
     "frameHeader", "frameTail", "dataType", "byteOrder",
-    "mbSlave", "mbFunc", "mbAddress", "mbValue",
+    "mbSlave", "mbFunc", "mbAddress", "mbValue", "mbDataType", "mbRegOrder",
 }
 
 _SEND_TOGGLE_FIELDS = {"commandMode", "commands"}
@@ -43,11 +51,79 @@ _CHART_PARSE_VIS = {
     "HEX字节提取": {"curveByteOffset", "curveDataType", "curveByteOrder",
                       "curveFrameHeader", "curveFrameTail"},
     "Modbus":     {"curveRegIndex", "curveMbDataType", "curveMbRegOrder",
-                   "curveMbFcFilter", "curveMbSlaveFilter"},
+                   "curveMbFcFilter", "curveMbSlaveFilter", "curveMbArea"},
 }
 _CHART_PARSE_ALL = set()
 for _v in _CHART_PARSE_VIS.values():
     _CHART_PARSE_ALL |= _v
+
+
+# The frame-format rows each parsing mode shows, by parserConfig key; 解析模式 always shows.
+_FRAME_KEYS = {
+    "line": ("separator", "terminator", "kvSeparator", "encoding"),
+    "hex": ("header", "footer", "lengthOffset", "lengthSize", "lengthEndian", "lengthCovers",
+            "fixedLength", "checksum", "checksumStart", "checksumEndian", "idleTimeout", "fields"),
+}
+
+
+# The 行结束符 row shows a terminator with backslash escapes, as people write one.
+_TERMINATOR_ESCAPES = {"n": "\n", "r": "\r", "t": "\t", "\\": "\\"}
+TERMINATOR_CHOICES = ("\\n", "\\r\\n", "\\r", ";")
+
+
+def terminator_text(value) -> str:
+    """A line terminator as the 行结束符 row shows it: "\\r\\n" for CR LF, "\\\\" for a backslash."""
+    if not isinstance(value, str):
+        return str(value)
+    return (value.replace("\\", "\\\\").replace("\n", "\\n")
+            .replace("\r", "\\r").replace("\t", "\\t"))
+
+
+def terminator_from_text(text: str) -> str:
+    """The terminator typed text stands for: \\n \\r \\t and \\\\ are escapes; any other
+    character, a backslash before anything else included, stands for itself."""
+    out, index = [], 0
+    while index < len(text):
+        pair = text[index:index + 2]
+        if pair[:1] == "\\" and pair[1:] in _TERMINATOR_ESCAPES:
+            out.append(_TERMINATOR_ESCAPES[pair[1:]])
+            index += 2
+        else:
+            out.append(text[index])
+            index += 1
+    return "".join(out)
+
+
+def hex_fields_text(fields) -> str:
+    """A hex field table as the text the 字段表 row edits: one 名字,偏移,长度,类型[,字节序] per line."""
+    if not isinstance(fields, list):
+        return ""
+    return "\n".join(",".join(str(part) for part in item)
+                     for item in fields if isinstance(item, (list, tuple)))
+
+
+def hex_fields_from_text(text: str):
+    """(fields, None) for a valid table, or (None, the number of its first bad line). Lines starting
+    with # are comments, and a full-width comma separates as well, as in a Modbus card's 轮询表."""
+    fields = []
+    for number, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [part.strip() for part in line.replace("，", ",").split(",")]
+        try:
+            if len(parts) not in (4, 5) or not parts[0]:
+                raise ValueError(line)
+            field = [parts[0], int(parts[1]), int(parts[2]), *parts[3:]]
+            hex_field(field)  # the parser's own check: type, size and byte order
+        except ValueError:
+            return None, number
+        fields.append(field)
+    return fields, None
+
+
+def _int_setting(value, default):
+    return value if isinstance(value, int) and not isinstance(value, bool) else default
 
 
 class _TabNamesEdit(TextEdit):
@@ -81,6 +157,10 @@ class PropertyEditor(ScrollArea):
         self._editors = {}  # prop_name -> editor widget
         self._prop_rows = {}  # prop_name -> (label_widget, editor_widget)
         self._updating = False  # prevent feedback loops
+        self._project_source = None  # returns the open ProjectData; saving replaces it
+        self._project_frame_rows = {}  # parserConfig key -> (label, editor) of 默认帧格式
+        self._card_frame_section = None  # a link card's 帧格式 card, and its rows
+        self._card_frame_rows = {}
 
         self._empty_label = BodyLabel("选择一个控件以编辑属性")
         self._empty_label.setAlignment(Qt.AlignCenter)
@@ -93,6 +173,8 @@ class PropertyEditor(ScrollArea):
             signalBus.widgetDeselected, self._on_deselected)
         self._external_connections.connect(
             signalBus.projectSaved, self._sync_saved_image_path)
+        for replaced in (signalBus.projectLoaded, signalBus.projectNew):
+            self._external_connections.connect(replaced, self._on_project_replaced)
         self._scene_connections = SignalConnections(self)
 
         self.setStyleSheet(
@@ -115,6 +197,19 @@ class PropertyEditor(ScrollArea):
     def _on_deselected(self):
         self._clear()
 
+    def set_project_source(self, source):
+        """``source()`` is the open project, whose frame format shows while nothing is selected."""
+        self._project_source = source
+        if self._current_item is None:
+            self._clear()
+
+    def _project(self):
+        return self._project_source() if self._project_source is not None else None
+
+    def _on_project_replaced(self, *_args):
+        if self._current_item is None:
+            self._clear()
+
     def _sync_saved_image_path(self, _path):
         item = self._current_item
         if item is None or sip.isdeleted(item) or item.type_name != "ImageDisplay":
@@ -131,6 +226,7 @@ class PropertyEditor(ScrollArea):
         self.commit_pending_edits()
         self._current_item = None
         self._editors.clear()
+        self._forget_frame_sections()
         while self._layout.count():
             child = self._layout.takeAt(0)
             if child.widget():
@@ -138,12 +234,22 @@ class PropertyEditor(ScrollArea):
         self._empty_label = BodyLabel("选择一个控件以编辑属性")
         self._empty_label.setAlignment(Qt.AlignCenter)
         self._layout.addWidget(self._empty_label)
+        project = self._project()
+        if project is not None:
+            serial = project.serial
+            config = serial.get("parserConfig")
+            section, self._project_frame_rows = self._frame_format_section(
+                "默认帧格式", serial.get("parser", "line"),
+                config if isinstance(config, dict) else {},
+                self._write_project_frame, with_mode=True)
+            self._layout.addWidget(section)
 
     def _load_item(self, item: CanvasItem):
         self.commit_pending_edits()
         self._current_item = item
         self._editors.clear()
         self._prop_rows.clear()
+        self._forget_frame_sections()
 
         while self._layout.count():
             child = self._layout.takeAt(0)
@@ -199,7 +305,7 @@ class PropertyEditor(ScrollArea):
                 editor = self._create_editor(prop_def, item.properties.get(prop_def.name, prop_def.default))
                 if editor:
                     label = BodyLabel(prop_def.label)
-                    if prop_def.bindable:
+                    if BIND_PROPERTIES.get(item.type_name) == prop_def.name:
                         label.setText(f"{prop_def.label} ⚡")
                         label.setToolTip("可绑定到串口数据")
                     props_layout.addRow(label, editor)
@@ -207,6 +313,10 @@ class PropertyEditor(ScrollArea):
                     self._prop_rows[prop_def.name] = (label, editor)
 
             self._layout.addWidget(props_card)
+
+            if item.type_name in LINK_CARD_TYPES:
+                self._card_frame_section = self._card_frame_format()
+                self._layout.addWidget(self._card_frame_section)
 
             cur_mode = item.properties.get("commandMode", "文本")
             self._apply_mode_visibility(cur_mode)
@@ -232,9 +342,8 @@ class PropertyEditor(ScrollArea):
                     "键值匹配")
                 self._apply_chart_parse_visibility(pm)
 
-        # binding card — only for widgets that have bindable properties
-        has_bindable = any(p.bindable for p in meta.properties)
-        if has_bindable:
+        # binding card — for the widgets the runtime binds (data_binding.BIND_PROPERTIES)
+        if item.type_name in BIND_PROPERTIES:
             binding_card = CardWidget()
             binding_layout = QFormLayout(binding_card)
             binding_layout.setContentsMargins(12, 8, 12, 8)
@@ -304,12 +413,20 @@ class PropertyEditor(ScrollArea):
             self._bind_tail_label = BodyLabel("帧尾(HEX)")
             binding_layout.addRow(self._bind_tail_label, self._bind_tail_edit)
 
+            self._bind_mb_area_combo = ComboBox()
+            self._bind_mb_area_combo.addItems(list(MODBUS_AREAS))
+            self._bind_mb_area_combo.setCurrentText(bd.get("mbArea", "响应内序号"))
+            self._bind_mb_area_combo.currentTextChanged.connect(self._on_mb_area_changed)
+            self._bind_mb_area_label = BodyLabel("寄存器区")
+            binding_layout.addRow(self._bind_mb_area_label, self._bind_mb_area_combo)
+
             self._bind_mb_reg_spin = SpinBox()
-            self._bind_mb_reg_spin.setRange(0, 255)
+            self._bind_mb_reg_spin.setRange(0, 65535)
             self._bind_mb_reg_spin.setValue(int(bd.get("mbRegIndex", 0)))
             self._bind_mb_reg_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_mb_reg_label = BodyLabel("寄存器索引")
             binding_layout.addRow(self._bind_mb_reg_label, self._bind_mb_reg_spin)
+            self._show_mb_area(self._bind_mb_area_combo.currentText())
 
             self._bind_mb_dtype_combo = ComboBox()
             self._bind_mb_dtype_combo.addItems([
@@ -350,6 +467,172 @@ class PropertyEditor(ScrollArea):
             self._apply_bind_mode_visibility(cur_pm)
 
         self._layout.addStretch()
+
+    # ---- frame format: the project's 默认帧格式 and a link card's 帧格式 ----
+
+    def _forget_frame_sections(self):
+        self._project_frame_rows = {}
+        self._card_frame_section = None
+        self._card_frame_rows = {}
+
+    def _frame_format_section(self, title, mode, config, write, with_mode=False):
+        """A card with the frame-format rows for ``config``, showing those of ``mode``.
+
+        ``write(key, value)`` stores one edited key. ``with_mode`` adds the 解析模式 row,
+        written under the key ``parser``; a link card has its own 默认解析模式 property instead.
+        """
+        card = CardWidget()
+        form = QFormLayout(card)
+        form.setContentsMargins(12, 8, 12, 8)
+        form.setSpacing(6)
+        form.addRow(StrongBodyLabel(title))
+        rows = {}
+
+        def add(key, text, editor, tip=""):
+            label = BodyLabel(text)
+            if tip:
+                label.setToolTip(tip)
+                editor.setToolTip(tip)
+            form.addRow(label, editor)
+            rows[key] = (label, editor)
+
+        def combo(key, options, default, convert=str, normal=str):
+            editor = ComboBox()
+            editor.addItems(options)
+            current = normal(config.get(key, default))
+            if current in options:
+                editor.setCurrentText(current)
+            editor.currentTextChanged.connect(lambda value: write(key, convert(value)))
+            return editor
+
+        def spin(key, low, high, default):
+            editor = SpinBox()
+            editor.setRange(low, high)
+            editor.setValue(max(low, min(high, _int_setting(config.get(key), default))))
+            editor.valueChanged.connect(lambda value: write(key, value))
+            return editor
+
+        def line_edit(key, default, placeholder):
+            editor = LineEdit()
+            value = config.get(key, default)
+            editor.setText(value if isinstance(value, str) else str(value))
+            editor.setPlaceholderText(placeholder)
+            editor.textChanged.connect(lambda value: write(key, value.strip()))
+            return editor
+
+        if with_mode:
+            def on_mode(value):
+                write("parser", value)
+                self._show_frame_rows(rows, value)
+            editor = ComboBox()
+            editor.addItems(list(PARSER_TYPES))
+            if mode in PARSER_TYPES:
+                editor.setCurrentText(mode)
+            editor.currentTextChanged.connect(on_mode)
+            add("parser", "解析模式", editor)
+        add("separator", "分隔符", line_edit("separator", ",", "如 , 或 ;"))
+        terminator = EditableComboBox()
+        terminator.addItems(list(TERMINATOR_CHOICES))
+        terminator.setText(terminator_text(config.get("terminator", "\n")))
+        # An emptied box is a terminator still being typed, not one to store.
+        terminator.currentTextChanged.connect(
+            lambda text: text and write("terminator", terminator_from_text(text)))
+        add("terminator", "行结束符", terminator, "一条记录的结尾；\\n 换行，\\r 回车，\\t 制表符，\\\\ 反斜杠")
+        add("kvSeparator", "键值分隔符", combo("kvSeparator", list(LINE_KV_SEPARATORS), "="))
+        add("encoding", "编码", combo("encoding", list(LINE_ENCODINGS), LINE_ENCODINGS[0],
+                                      normal=lambda value: str(value).lower()))
+        add("header", "帧头(HEX)", line_edit("header", "AA55", "如 AA 55，留空表示没有帧头"))
+        add("footer", "帧尾(HEX)", line_edit("footer", "55AA", "如 0D 0A，留空表示没有帧尾"))
+        add("lengthOffset", "长度字段偏移", spin("lengthOffset", -1, 65535, -1), "-1 = 没有长度字段")
+        add("lengthSize", "长度字节数", combo("lengthSize", ["1", "2"], 1, int))
+        add("lengthEndian", "长度字节序", combo("lengthEndian", list(HEX_ENDIANS), HEX_ENDIANS[0]))
+        add("lengthCovers", "长度含义", combo("lengthCovers", list(HEX_LENGTH_COVERS), HEX_LENGTH_COVERS[0]))
+        add("fixedLength", "固定帧长", spin("fixedLength", 0, 65536, 0), "0 = 不固定")
+        add("checksum", "校验", combo("checksum", list(HEX_CHECKSUMS), "无"))
+        add("checksumStart", "校验起点", spin("checksumStart", 0, 65535, 0))
+        add("checksumEndian", "校验字节序", combo("checksumEndian", list(HEX_ENDIANS), HEX_ENDIANS[0]))
+        add("idleTimeout", "空闲超时(ms)", spin("idleTimeout", 0, 60000, 0))
+        add("fields", "字段表", self._fields_editor(config.get("fields", []), write))
+        self._show_frame_rows(rows, mode)
+        return card, rows
+
+    def _fields_editor(self, fields, write):
+        """The 字段表 row: the table as text, and under it the first line that does not parse."""
+        box = QWidget()
+        column = QVBoxLayout(box)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(2)
+        box.text_edit = TextEdit()
+        box.text_edit.setPlainText(hex_fields_text(fields))
+        box.text_edit.setPlaceholderText("一行一个：名字,偏移,长度,类型[,字节序]")
+        box.text_edit.setMaximumHeight(110)
+        box.hint = CaptionLabel()
+        box.hint.setTextColor(QColor("#c62828"), QColor("#ff8a80"))
+        box.hint.hide()
+        column.addWidget(box.text_edit)
+        column.addWidget(box.hint)
+        stored = [fields]
+
+        def changed():
+            parsed, bad = hex_fields_from_text(box.text_edit.toPlainText())
+            box.hint.setVisible(bad is not None)
+            if bad is not None:
+                box.hint.setText(f"第 {bad} 行格式错误")  # the stored table stays as it was
+            elif parsed != stored[0]:
+                stored[0] = parsed
+                write("fields", parsed)
+
+        box.text_edit.textChanged.connect(changed)
+        return box
+
+    @staticmethod
+    def _show_frame_rows(rows, mode):
+        shown = _FRAME_KEYS.get(mode, ())
+        for key, (label, editor) in rows.items():
+            visible = key == "parser" or key in shown
+            label.setVisible(visible)
+            editor.setVisible(visible)
+
+    def _write_project_frame(self, key, value):
+        project = self._project()
+        if project is None:
+            return
+        serial = project.serial
+        if key == "parser":
+            serial["parser"] = value
+        else:
+            config = serial.get("parserConfig")
+            serial["parserConfig"] = {**(config if isinstance(config, dict) else {}), key: value}
+        signalBus.canvasChanged.emit()
+
+    def _card_effective_frame(self):
+        """The mode a link card parses with and the frame format it gets, by the links' rule: its own
+        parserConfig, else the project's when the modes match, else the defaults."""
+        props = self._current_item.properties
+        mode = props.get("defaultParser", "项目设置")
+        own = props.get("parserConfig")
+        own = own if isinstance(own, dict) else {}
+        project = self._project()
+        if own or project is None or mode != project.serial.get("parser", "line"):
+            return mode, own
+        shared = project.serial.get("parserConfig")
+        return mode, dict(shared) if isinstance(shared, dict) else {}
+
+    def _card_frame_format(self):
+        """The 帧格式 card of the selected link card; hidden while it uses the project's settings.
+        A Modbus mode has nothing to set, and shows the title alone."""
+        mode, config = self._card_effective_frame()
+        section, self._card_frame_rows = self._frame_format_section(
+            "帧格式", mode, config, self._write_card_frame)
+        section.setVisible(mode != "项目设置")
+        return section
+
+    def _write_card_frame(self, key, value):
+        if self._updating or not self._current_item:
+            return
+        # The first edit copies what the card showed, so its other rows keep their values.
+        _mode, config = self._card_effective_frame()
+        self._on_prop_changed("parserConfig", {**config, key: value})
 
     def _create_file_picker(self, prop_def: PropDef, current_value) -> QWidget:
         container = QWidget()
@@ -446,9 +729,11 @@ class PropertyEditor(ScrollArea):
                 editor.setVisible(show)
 
     def _apply_send_toggle_visibility(self, enabled: bool):
-        """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles."""
+        """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles.
+        A Modbus-mode control sends whether or not the toggle is on, so its fields stay visible."""
         all_fields = _SEND_TOGGLE_FIELDS | _MODE_FIELDS
-        if not enabled:
+        mode = self._current_item.properties.get("commandMode", "文本") if self._current_item else "文本"
+        if not enabled and mode != "Modbus":
             for name in all_fields:
                 if name in self._prop_rows:
                     label, editor = self._prop_rows[name]
@@ -460,7 +745,6 @@ class PropertyEditor(ScrollArea):
                     label, editor = self._prop_rows[name]
                     label.setVisible(True)
                     editor.setVisible(True)
-            mode = self._current_item.properties.get("commandMode", "文本") if self._current_item else "文本"
             self._apply_mode_visibility(mode)
 
     def _apply_chart_parse_visibility(self, mode: str):
@@ -552,8 +836,18 @@ class PropertyEditor(ScrollArea):
             self._updating = False
         elif prop_name == "commandMode":
             self._apply_mode_visibility(value)
+            toggles = [name for name in ("sendOnEnter", "sendOnSelect", "sendOnChange") if name in self._prop_rows]
+            if toggles:
+                self._apply_send_toggle_visibility(any(self._current_item.properties.get(n, False) for n in toggles))
         elif prop_name in ("sendOnEnter", "sendOnSelect", "sendOnChange"):
             self._apply_send_toggle_visibility(bool(value))
+        elif (prop_name == "defaultParser" and self._card_frame_section is not None
+              and self._current_item.type_name in LINK_CARD_TYPES):
+            # Another mode shows other rows, and possibly the project's values.
+            section = self._card_frame_format()
+            self._layout.replaceWidget(self._card_frame_section, section)
+            self._card_frame_section.deleteLater()
+            self._card_frame_section = section
         elif (prop_name in ("currentTab", "tabNames")
               and self._current_item
               and self._current_item.type_name == "TabWidget"):
@@ -627,12 +921,21 @@ class PropertyEditor(ScrollArea):
                   self._bind_header_label, self._bind_header_edit,
                   self._bind_tail_label, self._bind_tail_edit):
             w.setVisible(is_hex)
-        for w in (self._bind_mb_reg_label, self._bind_mb_reg_spin,
+        for w in (self._bind_mb_area_label, self._bind_mb_area_combo,
+                  self._bind_mb_reg_label, self._bind_mb_reg_spin,
                   self._bind_mb_dtype_label, self._bind_mb_dtype_combo,
                   self._bind_mb_regorder_label, self._bind_mb_regorder_combo,
                   self._bind_mb_fc_label, self._bind_mb_fc_spin,
                   self._bind_mb_slave_label, self._bind_mb_slave_spin):
             w.setVisible(is_mb)
+
+    def _show_mb_area(self, area: str):
+        # 响应内序号 counts registers within one response; a register table takes an address.
+        self._bind_mb_reg_label.setText("寄存器索引" if area == "响应内序号" else "寄存器地址")
+
+    def _on_mb_area_changed(self, area: str):
+        self._show_mb_area(area)
+        self._on_binding_changed()
 
     def _on_bind_mode_changed(self, mode: str):
         self._apply_bind_mode_visibility(mode)
@@ -670,6 +973,7 @@ class PropertyEditor(ScrollArea):
                 "mbRegOrder": self._bind_mb_regorder_combo.currentText(),
                 "mbFcFilter": self._bind_mb_fc_spin.value(),
                 "mbSlaveFilter": self._bind_mb_slave_spin.value(),
+                "mbArea": self._bind_mb_area_combo.currentText(),
             }
         else:
             self._current_item.binding = None

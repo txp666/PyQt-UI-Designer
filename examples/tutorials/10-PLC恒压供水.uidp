@@ -1,0 +1,325 @@
+{
+  "version": "1.0",
+  "appName": "恒压供水泵站监控",
+  "canvas": {
+    "width": 960,
+    "height": 710,
+    "gridSize": 10
+  },
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  },
+  "widgets": [
+    {
+      "id": "title",
+      "type": "Label",
+      "properties": {
+        "text": "恒压供水泵站监控",
+        "fontSize": 20,
+        "bold": true
+      },
+      "geometry": {
+        "x": 20,
+        "y": 10,
+        "w": 420,
+        "h": 34
+      }
+    },
+    {
+      "id": "plc_link",
+      "type": "TcpConfigCard",
+      "properties": {
+        "title": "PLC 连接",
+        "defaultHost": "127.0.0.1",
+        "defaultPort": 1502,
+        "defaultParser": "modbus_tcp"
+      },
+      "geometry": {
+        "x": 20,
+        "y": 60,
+        "w": 380,
+        "h": 290
+      }
+    },
+    {
+      "id": "poller",
+      "type": "ModbusConfigCard",
+      "properties": {
+        "title": "轮询 PLC",
+        "defaultSlave": 1,
+        "defaultFunc": "03 读保持寄存器",
+        "defaultAddr": 100,
+        "defaultValue": 6,
+        "defaultPoll": 500,
+        "timeout": 1000,
+        "pollList": "# 实时数据：保持寄存器 100–105\n1,3,100,6\n# 设定参数：保持寄存器 200–201\n1,3,200,2\n# 状态：线圈 0–3\n1,1,0,4"
+      },
+      "geometry": {
+        "x": 20,
+        "y": 360,
+        "w": 380,
+        "h": 180
+      }
+    },
+    {
+      "id": "setpoint_label",
+      "type": "Label",
+      "properties": {
+        "text": "目标压力",
+        "fontSize": 14
+      },
+      "geometry": {
+        "x": 20,
+        "y": 556,
+        "w": 90,
+        "h": 32
+      }
+    },
+    {
+      "id": "setpoint",
+      "type": "LineEdit",
+      "properties": {
+        "placeholderText": "单位 MPa，如 0.45，回车写入",
+        "sendOnEnter": true,
+        "commandMode": "Modbus",
+        "mbSlave": 1,
+        "mbFunc": "16 写多个寄存器",
+        "mbAddress": 200,
+        "mbDataType": "float32"
+      },
+      "geometry": {
+        "x": 110,
+        "y": 556,
+        "w": 290,
+        "h": 33
+      }
+    },
+    {
+      "id": "pressure",
+      "type": "NumericDisplay",
+      "properties": {
+        "title": "出水压力",
+        "unit": "MPa",
+        "decimals": "2"
+      },
+      "geometry": {
+        "x": 420,
+        "y": 60,
+        "w": 166,
+        "h": 90
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 100,
+        "mbDataType": "float32"
+      }
+    },
+    {
+      "id": "flow",
+      "type": "NumericDisplay",
+      "properties": {
+        "title": "瞬时流量",
+        "unit": "m³/h",
+        "decimals": "1"
+      },
+      "geometry": {
+        "x": 597,
+        "y": 60,
+        "w": 166,
+        "h": 90
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 102,
+        "mbDataType": "float32"
+      }
+    },
+    {
+      "id": "target",
+      "type": "NumericDisplay",
+      "properties": {
+        "title": "目标压力",
+        "unit": "MPa",
+        "decimals": "2"
+      },
+      "geometry": {
+        "x": 774,
+        "y": 60,
+        "w": 166,
+        "h": 90
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 200,
+        "mbDataType": "float32"
+      }
+    },
+    {
+      "id": "frequency",
+      "type": "GaugeMeter",
+      "properties": {
+        "title": "水泵频率",
+        "unit": "Hz",
+        "minimum": 0.0,
+        "maximum": 50.0
+      },
+      "geometry": {
+        "x": 420,
+        "y": 165,
+        "w": 180,
+        "h": 180
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 104,
+        "expression": "value * 0.1"
+      }
+    },
+    {
+      "id": "level",
+      "type": "ProgressRingDisplay",
+      "properties": {
+        "label": "水箱液位"
+      },
+      "geometry": {
+        "x": 615,
+        "y": 180,
+        "w": 120,
+        "h": 130
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 105
+      }
+    },
+    {
+      "id": "pump1",
+      "type": "LEDIndicator",
+      "properties": {
+        "label": "1 号泵运行",
+        "color": "green",
+        "on": false
+      },
+      "geometry": {
+        "x": 750,
+        "y": 170,
+        "w": 190,
+        "h": 30
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "线圈",
+        "mbRegIndex": 0
+      }
+    },
+    {
+      "id": "pump2",
+      "type": "LEDIndicator",
+      "properties": {
+        "label": "2 号泵运行",
+        "color": "green",
+        "on": false
+      },
+      "geometry": {
+        "x": 750,
+        "y": 205,
+        "w": 190,
+        "h": 30
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "线圈",
+        "mbRegIndex": 1
+      }
+    },
+    {
+      "id": "fault",
+      "type": "LEDIndicator",
+      "properties": {
+        "label": "故障报警",
+        "color": "red",
+        "on": false
+      },
+      "geometry": {
+        "x": 750,
+        "y": 240,
+        "w": 190,
+        "h": 30
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "线圈",
+        "mbRegIndex": 2
+      }
+    },
+    {
+      "id": "run",
+      "type": "ToggleSwitch",
+      "properties": {
+        "label": "系统启停",
+        "commandMode": "Modbus",
+        "mbSlave": 1,
+        "mbAddress": 3
+      },
+      "geometry": {
+        "x": 750,
+        "y": 285,
+        "w": 190,
+        "h": 30
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "线圈",
+        "mbRegIndex": 3
+      }
+    },
+    {
+      "id": "trend",
+      "type": "RealtimeChart",
+      "properties": {
+        "title": "压力曲线",
+        "displayPoints": 300,
+        "curveCount": 2,
+        "_curve_0_name": "出水压力",
+        "_curve_0_parseMode": "Modbus",
+        "_curve_0_mbArea": "保持寄存器",
+        "_curve_0_regIndex": 100,
+        "_curve_0_mbDataType": "float32",
+        "_curve_0_mbSlaveFilter": 1,
+        "_curve_1_name": "目标压力",
+        "_curve_1_parseMode": "Modbus",
+        "_curve_1_mbArea": "保持寄存器",
+        "_curve_1_regIndex": 200,
+        "_curve_1_mbDataType": "float32",
+        "_curve_1_mbSlaveFilter": 1
+      },
+      "geometry": {
+        "x": 420,
+        "y": 360,
+        "w": 520,
+        "h": 330
+      }
+    }
+  ]
+}

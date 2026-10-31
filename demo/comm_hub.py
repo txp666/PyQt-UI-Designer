@@ -4,6 +4,8 @@ The serial, TCP and MQTT links expose the same signals. The hub forwards all of 
 one surface, so bindings, charts, tables and log boxes never need to know which link a
 frame came from, and a command goes out over every link that is currently connected.
 """
+from functools import partial
+
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from serial_handler import SerialHandler
@@ -32,9 +34,10 @@ class CommHub(QObject):
         self.serial = SerialHandler(self)
         self.tcp = TcpHandler(self)
         self.mqtt = MqttHandler(self)
+        self.raw_encoding = "utf-8"  # of the bytes rawReceived is carrying right now
         for link in self.links:
             link.dataReceived.connect(self.dataReceived)
-            link.rawReceived.connect(self.rawReceived)
+            link.rawReceived.connect(partial(self._forward_raw, link))
             link.dataSent.connect(self.dataSent)
             link.connected.connect(self.connected)
             link.disconnected.connect(self.disconnected)
@@ -42,6 +45,15 @@ class CommHub(QObject):
             link.connectionChanged.connect(self._on_link_state)
         if config:
             self.configure(config)
+
+    def _forward_raw(self, link, data):
+        # Raw bytes carry no link, so the encoding of the link they came from rides alongside.
+        self.raw_encoding = link.text_encoding
+        self.rawReceived.emit(data)
+
+    def decode_raw(self, data):
+        """The text of bytes just published by rawReceived, in their link's encoding."""
+        return data.decode(self.raw_encoding, errors="replace")
 
     @property
     def links(self):

@@ -1,9 +1,10 @@
 # coding: utf-8
 """Serial runtime shared by the designer and standalone exports."""
 import sys
+import time
 from typing import List, Dict
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QObject
-from .protocol_parser import BaseParser, create_parser
+from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding
 
 try:
     import serial
@@ -56,7 +57,12 @@ def _list_all_ports() -> List[Dict[str, str]]:
 
 
 class SerialReaderThread(QThread):
-    """Background thread continuously reading from serial port."""
+    """Background thread continuously reading from serial port.
+
+    Each raw unit the parser cuts is published before the messages read from it. A parser
+    that frames by silence is flushed once the port has been quiet for its idle timeout,
+    timed here, since this thread has no event loop for a timer.
+    """
 
     rawReceived = pyqtSignal(bytes)
     parsedReceived = pyqtSignal(dict)
@@ -69,19 +75,31 @@ class SerialReaderThread(QThread):
         self._running = True
 
     def run(self):
+        idle = self._parser.idle_timeout / 1000
+        last_read = None  # when data last arrived, while the parser may hold a frame for flush()
         while self._running:
             try:
                 if self._port.in_waiting > 0:
                     data = self._port.read(self._port.in_waiting)
-                    self.rawReceived.emit(data)
-                    for parsed in self._parser.feed(data):
-                        self.parsedReceived.emit(parsed)
+                    self._publish(self._parser.frames(data))
+                    if idle and data:
+                        last_read = time.monotonic()
                 else:
-                    self.msleep(10)
+                    if last_read is not None and time.monotonic() - last_read >= idle:
+                        last_read = None
+                        self._publish(self._parser.flush())
+                    # A short idle timeout needs a finer poll, or two bursts read as one.
+                    self.msleep(10 if last_read is None else min(10, self._parser.idle_timeout))
             except Exception as e:
                 if self._running:
                     self.errorOccurred.emit(str(e))
                 break
+
+    def _publish(self, units):
+        for unit in units:
+            self.rawReceived.emit(unit)
+            for parsed in self._parser.parse(unit):
+                self.parsedReceived.emit(parsed)
 
     def stop(self):
         self._running = False
@@ -90,6 +108,7 @@ class SerialReaderThread(QThread):
 
 
 class SerialHandler(QObject):
+    text_encoding = "utf-8"  # of the text this link receives, for the receive log
     dataReceived = pyqtSignal(dict)
     rawReceived = pyqtSignal(bytes)
     dataSent = pyqtSignal(bytes)
@@ -104,6 +123,7 @@ class SerialHandler(QObject):
         self._port = None
         self._thread = None
         self._parser = None
+        self.modbus_requests = ModbusRequests()  # names responses by register address
         self.configure(config or self.DEFAULT_CONFIG)
 
     def configure(self, config):
@@ -135,7 +155,7 @@ class SerialHandler(QObject):
             selected_config = parser_config
             if selected_config is None:
                 selected_config = cfg["parserConfig"] if selected_parser == cfg["parser"] else {}
-            parser = create_parser(selected_parser, selected_config)
+            parser = create_parser(selected_parser, selected_config, self.modbus_requests)
             if self._thread or self._port:
                 self.disconnect()
             port_obj = serial.Serial(
@@ -151,6 +171,7 @@ class SerialHandler(QObject):
         self._port = port_obj
         self._parser = parser
         self.parser_type = selected_parser
+        self.text_encoding = text_encoding(selected_parser, selected_config)
         self._thread = SerialReaderThread(port_obj, parser, self)
         self._thread.rawReceived.connect(self._on_raw)
         self._thread.parsedReceived.connect(self._on_parsed)
@@ -183,6 +204,7 @@ class SerialHandler(QObject):
         """Return success only after the port accepts the entire payload."""
         if not self.is_connected:
             return False
+        self.modbus_requests.note_frame(data, self.parser_type)  # before a fast reply can arrive
         try:
             written = self._port.write(data)
             if written != len(data):

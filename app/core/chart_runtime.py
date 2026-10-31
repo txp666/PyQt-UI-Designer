@@ -11,14 +11,13 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLab
 
 from qfluentwidgets import (
     LineEdit as FluentLineEdit, PushButton as FluentPushButton,
-    CheckBox as FluentCheckBox, BodyLabel, isDarkTheme, qconfig,
-    setCustomStyleSheet,
+    BodyLabel, isDarkTheme, qconfig, setCustomStyleSheet,
 )
 
 
 from .chart_history import ChartHistory
 from .protocol_parser import RawFrameBuffer
-from .binding_values import binding_register
+from .binding_values import modbus_value
 from .signal_lifetime import SignalConnections
 
 try:
@@ -55,7 +54,7 @@ _DEFAULT_CURVE_CFG = {
     "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",
     "frameHeader": "", "frameTail": "",
     "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",
-    "mbFcFilter": -1, "mbSlaveFilter": -1,
+    "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "响应内序号",
 }
 
 # Virtual prop name -> per-curve storage suffix
@@ -67,6 +66,7 @@ _CURVE_FIELD_MAP = {
     "curveFrameTail": "frameTail", "curveRegIndex": "regIndex",
     "curveMbDataType": "mbDataType", "curveMbRegOrder": "mbRegOrder",
     "curveMbFcFilter": "mbFcFilter", "curveMbSlaveFilter": "mbSlaveFilter",
+    "curveMbArea": "mbArea",
 }
 
 
@@ -137,7 +137,6 @@ class RealtimeLineChart(QWidget):
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.timeout.connect(self._refresh_all)
         self.destroyed.connect(lambda _=None, histories=self._data: [h.close() for h in histories])
-        self._checkboxes: list = []
         # a loaded recording laid over the live curves: [(name, values)], their dashed curves and table rows
         self._refs: list = []
         self._ref_curves: list = []
@@ -153,6 +152,11 @@ class RealtimeLineChart(QWidget):
         if HAS_PYQTGRAPH:
             self._plot = pg.PlotWidget()
             self._plot.showGrid(x=True, y=True, alpha=0.3)
+            # One row across the top of the plot; clicking a curve's sample hides or shows that curve.
+            self._legend = self._plot.addLegend(offset=None, labelTextSize="9pt")
+            self._legend.anchor(itemPos=(0.5, 0), parentPos=(0.5, 0), offset=(0, 2))
+            # The plot area gets its size after this widget does, so follow the view box itself.
+            self._plot.getViewBox().sigResized.connect(self._fit_legend)
             main_h.addWidget(self._plot, 1)
 
             self._cursor_line = pg.InfiniteLine(
@@ -169,6 +173,7 @@ class RealtimeLineChart(QWidget):
             self._missing_label.setAlignment(Qt.AlignCenter)
             main_h.addWidget(self._missing_label, 1)
             self._plot = None
+            self._legend = None
             self._cursor_line = None
 
         # right panel: mode label + value labels
@@ -215,10 +220,6 @@ class RealtimeLineChart(QWidget):
         tb.addWidget(self._clear_ref_btn)
         self._root.addLayout(tb)
 
-        self._cb_row = QHBoxLayout()
-        self._cb_row.setContentsMargins(4, 0, 4, 2)
-        self._root.addLayout(self._cb_row)
-
         self._rebuild_curves()
         self._external_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
 
@@ -242,6 +243,11 @@ class RealtimeLineChart(QWidget):
                 axis = self._plot.getAxis(name)
                 axis.setPen(pg.mkPen(muted))
                 axis.setTextPen(pg.mkPen(foreground))
+            self._legend.setLabelTextColor(foreground)
+            # A backing in the plot's colour keeps the names readable where a curve runs under them.
+            self._legend.setBrush((37, 37, 37, 210) if dark else (255, 255, 255, 210))
+            for _, label in self._legend.items:
+                label.setText(label.text)  # the new color only reaches a label when it is drawn again
             for index, curve in enumerate(self._curves):
                 if curve:
                     curve.setPen(pg.mkPen(self._curve_color(index), width=2))
@@ -337,15 +343,10 @@ class RealtimeLineChart(QWidget):
         while len(self._data) < count:
             self._data.append(ChartHistory(self.HISTORY_LIMIT))
 
-        while self._cb_row.count():
-            item = self._cb_row.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self._checkboxes.clear()
-
         while self._val_panel.count():
             it = self._val_panel.takeAt(0)
             if it.widget():
+                it.widget().hide()  # gone at once: a snapshot taken before the deletion runs must not show it
                 it.widget().deleteLater()
         self._val_labels.clear()
 
@@ -360,32 +361,32 @@ class RealtimeLineChart(QWidget):
             else:
                 self._curves.append(None)
 
-            cb = FluentCheckBox(name)
-            cb.setChecked(True)
-            light_color = _CURVE_COLORS[i % len(_CURVE_COLORS)]
-            dark_color = _DARK_CURVE_COLORS[i % len(_DARK_CURVE_COLORS)]
-            setCustomStyleSheet(
-                cb,
-                f"QCheckBox {{ color: rgb{light_color}; font-size: 11px; }}",
-                f"QCheckBox {{ color: rgb{dark_color}; font-size: 11px; }}",
-            )
-            idx = i
-            cb.toggled.connect(lambda checked, ci=idx: self._toggle(ci, checked))
-            self._checkboxes.append(cb)
-            self._cb_row.addWidget(cb)
-
             # sized for a typical reading up front; apply_theme then shows the real values
             vl = QLabel(f"<b style='color:rgb{color}'>{name}</b>  {self._SAMPLE_READING}")
             vl.setStyleSheet("font-size: 11px; padding: 1px 2px;")
             self._val_panel.addWidget(vl)
             self._val_labels.append(vl)
 
-        self._cb_row.addStretch()
+        self._fit_legend()
         self._cursor_mode = False
         self._mode_label.setText("实时")
         self._side.setMinimumWidth(0)
         self._hold_side_width()
         self.apply_theme()
+
+    def _fit_legend(self, *_):
+        """One row of curve names across the top of the plot, or as many columns as fit when
+        the names are wider than the plot, so none is cut off."""
+        if self._legend is None or not self._curves:
+            return
+        count = len(self._curves)
+        self._legend.setColumnCount(count)
+        self._legend.updateSize()
+        available = self._plot.getViewBox().width()
+        width = self._legend.boundingRect().width()
+        if available > 0 and width > available:
+            self._legend.setColumnCount(max(1, int(count * available / width)))
+            self._legend.updateSize()
 
     def _hold_side_width(self):
         """Let the value table widen but never narrow back. A reading that gets shorter (99.82 -> 100) would
@@ -398,10 +399,6 @@ class RealtimeLineChart(QWidget):
         need += margins.left() + margins.right()
         if need > self._side.minimumWidth():
             self._side.setMinimumWidth(need)
-
-    def _toggle(self, index: int, visible: bool):
-        if index < len(self._curves) and self._curves[index]:
-            self._curves[index].setVisible(visible)
 
     # -- comparison overlay ---------------------------------------------------
 
@@ -432,6 +429,7 @@ class RealtimeLineChart(QWidget):
                 self._plot.removeItem(curve)
         for label in self._ref_labels:
             self._val_panel.removeWidget(label)
+            label.hide()
             label.deleteLater()
         self._refs, self._ref_curves, self._ref_labels = [], [], []
         self._clear_ref_btn.hide()
@@ -707,41 +705,10 @@ class RealtimeLineChart(QWidget):
 
     @staticmethod
     def _extract_modbus(cfg: dict, data: dict):
-        sf = int(cfg.get("mbSlaveFilter", -1))
-        if sf >= 0 and data.get("slave") != sf:
-            return None
-        fc = data.get("fc", 0)
-        fcf = int(cfg.get("mbFcFilter", -1))
-        if fcf >= 0 and fc != fcf:
-            return None
-        idx = int(cfg.get("regIndex", 0))
-        if fc in (0x01, 0x02):
-            return data.get(f"coil{idx}")
-        r0 = data.get(f"reg{idx}")
-        if r0 is None:
-            return None
-        r0 = binding_register(r0)
-        dt = cfg.get("mbDataType", "uint16")
-        if dt == "uint16":
-            return r0
-        if dt == "int16":
-            return r0 - 65536 if r0 > 32767 else r0
-        r1 = data.get(f"reg{idx + 1}")
-        if r1 is None:
-            return None
-        r1 = binding_register(r1)
-        if cfg.get("mbRegOrder", "大端(AB CD)") == "大端(AB CD)":
-            hi, lo = r0, r1
-        else:
-            hi, lo = r1, r0
-        raw_b = hi.to_bytes(2, "big") + lo.to_bytes(2, "big")
-        if dt == "uint32":
-            return int.from_bytes(raw_b, "big")
-        if dt == "int32":
-            return int.from_bytes(raw_b, "big", signed=True)
-        if dt == "float32":
-            return struct.unpack(">f", raw_b)[0]
-        return r0
+        return modbus_value(
+            data, int(cfg.get("regIndex", 0)), cfg.get("mbDataType", "uint16"),
+            cfg.get("mbRegOrder", "大端(AB CD)"), int(cfg.get("mbFcFilter", -1)),
+            int(cfg.get("mbSlaveFilter", -1)), cfg.get("mbArea", "响应内序号"))
 
     @staticmethod
     def _strip_frame(raw: bytes, cfg: dict):

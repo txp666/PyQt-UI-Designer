@@ -1,5 +1,6 @@
 # coding: utf-8
 """Base class and metadata definitions for all designable widgets."""
+import copy
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -30,6 +31,7 @@ class PropType(Enum):
     ENUM = "enum"
     TEXT = "text"       # multiline string
     COMMAND = "command"  # serial command string
+    OBJECT = "object"   # JSON object with its own editor section; gets no ordinary row
 
 
 @dataclass
@@ -42,7 +44,7 @@ class PropDef:
     options: Optional[List[str]] = None  # for ENUM type
     min_val: Optional[float] = None
     max_val: Optional[float] = None
-    bindable: bool = False  # can be bound to serial data
+    description: str = ""  # what the widget reference says about it, when the label is not enough
 
 
 class WidgetCategory(Enum):
@@ -69,7 +71,8 @@ class WidgetMeta:
     min_height: int = 20
 
     def get_default_props(self) -> Dict[str, Any]:
-        return {p.name: p.default for p in self.properties}
+        # A copy each, so editing one widget's object property cannot change the default.
+        return {p.name: copy.deepcopy(p.default) for p in self.properties}
 
     def get_prop_def(self, name: str) -> Optional[PropDef]:
         for p in self.properties:

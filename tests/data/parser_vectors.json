@@ -1,0 +1,8437 @@
+[
+ {
+  "name": "A one frame whole",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550401f6ff3c35"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "aa550401f6ff3c35",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A one frame bytes",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "35"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c35",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A one frame random",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa5504"
+   },
+   {
+    "feed": "01f6"
+   },
+   {
+    "feed": "ff3c35"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c35",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A two frames glued",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550401f6ff3c35aa5504021000283d"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "aa550401f6ff3c35",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    },
+    {
+     "frame": "aa5504021000283d",
+     "messages": [
+      {
+       "cmd": 2,
+       "temp": 16,
+       "hum": 40
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A noise before",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "1234aa550401f6ff3c35"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "aa550401f6ff3c35",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A bad checksum then good",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "550401f6ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "30aa"
+   },
+   {
+    "feed": "5504"
+   },
+   {
+    "feed": "02100028"
+   },
+   {
+    "feed": "3d"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa5504021000283d",
+     "messages": [
+      {
+       "cmd": 2,
+       "temp": 16,
+       "hum": 40
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A header inside data",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "05"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "02"
+   },
+   {
+    "feed": "09"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550503aa55010209",
+     "messages": [
+      {
+       "cmd": 3,
+       "temp": 21930,
+       "hum": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A huge length resyncs",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 2,
+   "lengthCovers": "长度字段之后",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa55"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "ff01aa5500"
+   },
+   {
+    "feed": "0501f6ff3c"
+   },
+   {
+    "feed": "36"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa55000501f6ff3c36",
+     "messages": [
+      {
+       "cmd": 5,
+       "temp": -2559,
+       "hum": 255
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A lengthCovers 数据",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "35"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c35",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A lengthCovers 长度字段之后",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "长度字段之后",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "05"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "36"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550501f6ff3c36",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A lengthCovers 整帧",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "整帧",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "08"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "39"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550801f6ff3c39",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A length with footer ok",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "0D0A",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa5504"
+   },
+   {
+    "feed": "01f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c35"
+   },
+   {
+    "feed": "0d0a"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c350d0a",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A length with wrong footer then ok",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "0D0A",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "35"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0b"
+   },
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "35"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c350d0a",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum 和校验 大端(BE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "大端(BE)"
+  },
+  "steps": [
+   {
+    "feed": "aa550401"
+   },
+   {
+    "feed": "f6ff"
+   },
+   {
+    "feed": "3c36"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c36",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum 和校验 小端(LE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "小端(LE)"
+  },
+  "steps": [
+   {
+    "feed": "aa5504"
+   },
+   {
+    "feed": "01f6ff3c36"
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c36",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum 异或 大端(BE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "异或",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "大端(BE)"
+  },
+  "steps": [
+   {
+    "feed": "aa55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6ff3c30"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c30",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum 异或 小端(LE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "异或",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "小端(LE)"
+  },
+  "steps": [
+   {
+    "feed": "aa55"
+   },
+   {
+    "feed": "0401f6ff"
+   },
+   {
+    "feed": "3c30"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c30",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum CRC8 大端(BE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "CRC8",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "大端(BE)"
+  },
+  "steps": [
+   {
+    "feed": "aa550401f6"
+   },
+   {
+    "feed": "ff3ceb"
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3ceb",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum CRC8 小端(LE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "CRC8",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "小端(LE)"
+  },
+  "steps": [
+   {
+    "feed": "aa550401"
+   },
+   {
+    "feed": "f6ff3c"
+   },
+   {
+    "feed": "eb"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3ceb",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum CRC16-Modbus 大端(BE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "CRC16-Modbus",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "大端(BE)"
+  },
+  "steps": [
+   {
+    "feed": "aa5504"
+   },
+   {
+    "feed": "01f6ff3c"
+   },
+   {
+    "feed": "ef75"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3cef75",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum CRC16-Modbus 小端(LE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "CRC16-Modbus",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "小端(LE)"
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "550401f6ff"
+   },
+   {
+    "feed": "3c75ef"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c75ef",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum CRC16-CCITT 大端(BE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "CRC16-CCITT",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "大端(BE)"
+  },
+  "steps": [
+   {
+    "feed": "aa55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01f6ff3c"
+   },
+   {
+    "feed": "4b"
+   },
+   {
+    "feed": "6c"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c4b6c",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A checksum CRC16-CCITT 小端(LE)",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "CRC16-CCITT",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumEndian": "小端(LE)"
+  },
+  "steps": [
+   {
+    "feed": "aa550401"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff3c6c4b"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c6c4b",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "A no checksum",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "无",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   },
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "f6"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "3c"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "B fixed two frames",
+  "type": "hex",
+  "config": {
+   "header": "",
+   "footer": "",
+   "fixedLength": 4,
+   "checksum": "异或",
+   "fields": [
+    [
+     "v",
+     0,
+     2,
+     "uint16"
+    ],
+    [
+     "f",
+     2,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "0010"
+   },
+   {
+    "feed": "0111"
+   },
+   {
+    "feed": "0020"
+   },
+   {
+    "feed": "02"
+   },
+   {
+    "feed": "22"
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "00100111",
+     "messages": [
+      {
+       "v": 16,
+       "f": 1
+      }
+     ]
+    }
+   ],
+   [],
+   [],
+   [
+    {
+     "frame": "00200222",
+     "messages": [
+      {
+       "v": 32,
+       "f": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "B fixed bad xor resyncs by a byte",
+  "type": "hex",
+  "config": {
+   "header": "",
+   "footer": "",
+   "fixedLength": 4,
+   "checksum": "异或",
+   "fields": [
+    [
+     "v",
+     0,
+     2,
+     "uint16"
+    ],
+    [
+     "f",
+     2,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "10"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "99"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "02"
+   },
+   {
+    "feed": "22"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "00200222",
+     "messages": [
+      {
+       "v": 32,
+       "f": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "B fixed with header",
+  "type": "hex",
+  "config": {
+   "header": "7E",
+   "footer": "",
+   "fixedLength": 5,
+   "checksum": "异或",
+   "fields": [
+    [
+     "v",
+     0,
+     2,
+     "uint16"
+    ],
+    [
+     "f",
+     2,
+     1,
+     "uint8"
+    ]
+   ],
+   "checksumStart": 1
+  },
+  "steps": [
+   {
+    "feed": "7e"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "10"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "11"
+   },
+   {
+    "feed": "7e"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "02"
+   },
+   {
+    "feed": "22"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "7e00100111",
+     "messages": [
+      {
+       "v": 16,
+       "f": 1
+      }
+     ]
+    }
+   ],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "7e00200222",
+     "messages": [
+      {
+       "v": 32,
+       "f": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "C idle flush",
+  "type": "hex",
+  "config": {
+   "header": "7E",
+   "footer": "",
+   "idleTimeout": 20,
+   "fields": [
+    [
+     "a",
+     0,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "7e0102"
+   },
+   {
+    "flush": true
+   },
+   {
+    "flush": true
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "7e0102",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ],
+   []
+  ]
+ },
+ {
+  "name": "C idle two bursts",
+  "type": "hex",
+  "config": {
+   "header": "7E",
+   "footer": "",
+   "idleTimeout": 20,
+   "fields": [
+    [
+     "a",
+     0,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "7e01"
+   },
+   {
+    "flush": true
+   },
+   {
+    "feed": "7e"
+   },
+   {
+    "feed": "0203"
+   },
+   {
+    "flush": true
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "7e01",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ],
+   [],
+   [],
+   [
+    {
+     "frame": "7e0203",
+     "messages": [
+      {
+       "a": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "C idle stray bytes",
+  "type": "hex",
+  "config": {
+   "header": "7E",
+   "footer": "",
+   "idleTimeout": 20,
+   "fields": [
+    [
+     "a",
+     0,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "7e"
+   },
+   {
+    "flush": true
+   },
+   {
+    "feed": "0102"
+   },
+   {
+    "flush": true
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "7e",
+     "messages": []
+    }
+   ],
+   [],
+   []
+  ]
+ },
+ {
+  "name": "no header idle only",
+  "type": "hex",
+  "config": {
+   "header": "",
+   "footer": "",
+   "idleTimeout": 5,
+   "fields": [
+    [
+     "a",
+     0,
+     1,
+     "uint8"
+    ],
+    [
+     "b",
+     1,
+     1,
+     "uint8"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "0102"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "flush": true
+   },
+   {
+    "flush": true
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "010203",
+     "messages": [
+      {
+       "a": 1,
+       "b": 2
+      }
+     ]
+    }
+   ],
+   []
+  ]
+ },
+ {
+  "name": "A idle drops partial",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 1,
+   "lengthCovers": "数据",
+   "checksum": "和校验",
+   "checksumStart": 0,
+   "fields": [
+    [
+     "cmd",
+     1,
+     1,
+     "uint8"
+    ],
+    [
+     "temp",
+     2,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "hum",
+     4,
+     1,
+     "uint8"
+    ]
+   ],
+   "idleTimeout": 10
+  },
+  "steps": [
+   {
+    "feed": "aa5504"
+   },
+   {
+    "flush": true
+   },
+   {
+    "feed": "aa550401f6ff3c35"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [
+    {
+     "frame": "aa550401f6ff3c35",
+     "messages": [
+      {
+       "cmd": 1,
+       "temp": -10,
+       "hum": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "D crc16 modbus LE",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "0D0A",
+   "checksum": "CRC16-Modbus",
+   "checksumEndian": "小端(LE)",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "t",
+     0,
+     4,
+     "float32"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa55"
+   },
+   {
+    "feed": "41"
+   },
+   {
+    "feed": "ca66"
+   },
+   {
+    "feed": "669fac0d0a"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa5541ca66669fac0d0a",
+     "messages": [
+      {
+       "t": 25.299999237060547
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "D crc16 modbus LE bad then good",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "0D0A",
+   "checksum": "CRC16-Modbus",
+   "checksumEndian": "小端(LE)",
+   "checksumStart": 2,
+   "fields": [
+    [
+     "t",
+     0,
+     4,
+     "float32"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "41"
+   },
+   {
+    "feed": "ca"
+   },
+   {
+    "feed": "66"
+   },
+   {
+    "feed": "66"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "41"
+   },
+   {
+    "feed": "ca"
+   },
+   {
+    "feed": "66"
+   },
+   {
+    "feed": "66"
+   },
+   {
+    "feed": "9f"
+   },
+   {
+    "feed": "ac"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa5541ca66669fac0d0a",
+     "messages": [
+      {
+       "t": 25.299999237060547
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "E legacy",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "temp",
+     0,
+     2,
+     "int16"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa55"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "38"
+   },
+   {
+    "feed": "55aa"
+   },
+   {
+    "feed": "aa5500"
+   },
+   {
+    "feed": "1955aa"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa55ff3855aa",
+     "messages": [
+      {
+       "temp": -200
+      }
+     ]
+    }
+   ],
+   [],
+   [
+    {
+     "frame": "aa55001955aa",
+     "messages": [
+      {
+       "temp": 25
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "E legacy noise and partial",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "temp",
+     0,
+     2,
+     "int16"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "38"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "aa"
+   },
+   {
+    "feed": "55"
+   },
+   {
+    "feed": "00"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "aa55ff3855aa",
+     "messages": [
+      {
+       "temp": -200
+      }
+     ]
+    }
+   ],
+   [],
+   [],
+   []
+  ]
+ },
+ {
+  "name": "E legacy defaults",
+  "type": "hex",
+  "config": {},
+  "steps": [
+   {
+    "feed": "aa55010255aa"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "aa55010255aa",
+     "messages": []
+    }
+   ]
+  ]
+ },
+ {
+  "name": "F all field types",
+  "type": "hex",
+  "config": {
+   "header": "A5",
+   "footer": "",
+   "lengthOffset": 1,
+   "lengthSize": 2,
+   "lengthEndian": "小端(LE)",
+   "lengthCovers": "数据",
+   "fields": [
+    [
+     "u8",
+     2,
+     1,
+     "uint8"
+    ],
+    [
+     "i8",
+     3,
+     1,
+     "int8"
+    ],
+    [
+     "u16",
+     4,
+     2,
+     "uint16"
+    ],
+    [
+     "i16",
+     4,
+     2,
+     "int16",
+     "小端(LE)"
+    ],
+    [
+     "u32",
+     6,
+     4,
+     "uint32",
+     "小端(LE)"
+    ],
+    [
+     "i32",
+     6,
+     4,
+     "int32"
+    ],
+    [
+     "f32",
+     10,
+     4,
+     "float32"
+    ],
+    [
+     "f64",
+     14,
+     8,
+     "float64",
+     "小端(LE)"
+    ],
+    [
+     "s",
+     22,
+     4,
+     "ASCII"
+    ],
+    [
+     "x",
+     26,
+     3,
+     "HEX"
+    ],
+    [
+     "beyond",
+     29,
+     2,
+     "uint16"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "a51b00fefe"
+   },
+   {
+    "feed": "8001ffffff"
+   },
+   {
+    "feed": "7fbf"
+   },
+   {
+    "feed": "c0"
+   },
+   {
+    "feed": "000000"
+   },
+   {
+    "feed": "0000000000"
+   },
+   {
+    "feed": "0a40616200"
+   },
+   {
+    "feed": "7a0a"
+   },
+   {
+    "feed": "0b0c"
+   }
+  ],
+  "expect": [
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    {
+     "frame": "a51b00fefe8001ffffff7fbfc000000000000000000a406162007a0a0b0c",
+     "messages": [
+      {
+       "u8": 254,
+       "i8": -2,
+       "u16": 32769,
+       "i16": 384,
+       "u32": 2147483647,
+       "i32": -129,
+       "f32": -1.5,
+       "f64": 3.25,
+       "s": "ab",
+       "x": "0a0b0c"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "G footer only ccitt",
+  "type": "hex",
+  "config": {
+   "header": "",
+   "footer": "0D0A",
+   "checksum": "CRC16-CCITT",
+   "fields": [
+    [
+     "n",
+     0,
+     2,
+     "uint16"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "12340ec9"
+   },
+   {
+    "feed": "0d0a1234"
+   },
+   {
+    "feed": "0ec90d0a"
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "12340ec90d0a",
+     "messages": [
+      {
+       "n": 4660
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "12340ec90d0a",
+     "messages": [
+      {
+       "n": 4660
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "line kv",
+  "type": "line",
+  "config": {
+   "separator": ","
+  },
+  "steps": [
+   {
+    "feed": "74656d703d32352e332c68756d3d36300a7b2261223a317d0a78"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "74656d703d32352e332c68756d3d36300a7b2261223a317d0a78",
+     "messages": [
+      {
+       "temp": 25.3,
+       "hum": 60
+      },
+      {
+       "a": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "line csv split",
+  "type": "line",
+  "config": {
+   "separator": ";"
+  },
+  "steps": [
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "3b"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "3b"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "ch0": 1,
+       "ch1": 2,
+       "ch2": 3
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "modbus rtu",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "010304006400c8ba7a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "010304006400c8ba7a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 100,
+       "reg1": 200
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "modbus tcp",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000100000005010302012c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000100000005010302012c",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "ERR no framing rule",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": ""
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧"
+ },
+ {
+  "name": "ERR bad hex header",
+  "type": "hex",
+  "config": {
+   "header": "AAG5",
+   "footer": "55AA"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 帧头或帧尾不是十六进制"
+ },
+ {
+  "name": "ERR odd hex footer",
+  "type": "hex",
+  "config": {
+   "header": "",
+   "footer": "55A"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 帧头或帧尾不是十六进制"
+ },
+ {
+  "name": "ERR spaces are fine",
+  "type": "hex",
+  "config": {
+   "header": "A A 55",
+   "footer": "0D 0A"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "expect": [
+   []
+  ]
+ },
+ {
+  "name": "ERR footer of spaces",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "  "
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧"
+ },
+ {
+  "name": "ERR fixed and length",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "fixedLength": 8,
+   "lengthOffset": 2
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "固定帧长和长度字段只能选一个"
+ },
+ {
+  "name": "ERR length size 3",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthSize": 3
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 长度字段设置无效"
+ },
+ {
+  "name": "ERR length covers typo",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2,
+   "lengthCovers": "全部"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 长度字段设置无效"
+ },
+ {
+  "name": "ERR length offset -2",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": -2
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧"
+ },
+ {
+  "name": "ERR fixed negative",
+  "type": "hex",
+  "config": {
+   "header": "",
+   "footer": "",
+   "fixedLength": -1
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 固定帧长无效"
+ },
+ {
+  "name": "ERR fixed too big",
+  "type": "hex",
+  "config": {
+   "header": "",
+   "footer": "",
+   "fixedLength": 65537
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 固定帧长无效"
+ },
+ {
+  "name": "ERR checksum typo",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "checksum": "CRC32"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 校验设置无效"
+ },
+ {
+  "name": "ERR checksum start negative",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "checksumStart": -1
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 校验设置无效"
+ },
+ {
+  "name": "ERR checksum endian typo",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "checksumEndian": "BE"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 校验设置无效"
+ },
+ {
+  "name": "ERR idle negative",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "idleTimeout": -5
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 空闲超时无效"
+ },
+ {
+  "name": "ERR idle too long",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "idleTimeout": 60001
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 空闲超时无效"
+ },
+ {
+  "name": "ERR field three items",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "t",
+     0,
+     2
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "无效 HEX 字段: t"
+ },
+ {
+  "name": "ERR field bad type",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "t",
+     0,
+     2,
+     "int24"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "无效 HEX 字段: t"
+ },
+ {
+  "name": "ERR field wrong length",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "t",
+     0,
+     3,
+     "int16"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "无效 HEX 字段: t"
+ },
+ {
+  "name": "ERR field bad endian",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "t",
+     0,
+     2,
+     "int16",
+     "LE"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "无效 HEX 字段: t"
+ },
+ {
+  "name": "ERR field negative offset",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "t",
+     -1,
+     2,
+     "int16"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "无效 HEX 字段: t"
+ },
+ {
+  "name": "ERR field zero length ascii",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "s",
+     0,
+     0,
+     "ASCII"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "无效 HEX 字段: s"
+ },
+ {
+  "name": "ERR field not a list",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": "t,0,2,int16"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "无效 HEX 字段: "
+ },
+ {
+  "name": "ERR fields null",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": null
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "expect": [
+   []
+  ]
+ },
+ {
+  "name": "ERR header not a string",
+  "type": "hex",
+  "config": {
+   "header": 170,
+   "footer": "55AA"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 帧头或帧尾不是十六进制"
+ },
+ {
+  "name": "ERR length offset string",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": "2"
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 长度字段设置无效"
+ },
+ {
+  "name": "ERR length offset float",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": 2.0
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "aa550102",
+     "messages": []
+    }
+   ]
+  ]
+ },
+ {
+  "name": "ERR length offset bool",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "",
+   "lengthOffset": true
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "HEX 长度字段设置无效"
+ },
+ {
+  "name": "ERR ok float64 field",
+  "type": "hex",
+  "config": {
+   "header": "AA55",
+   "footer": "55AA",
+   "fields": [
+    [
+     "d",
+     0,
+     8,
+     "float64",
+     "小端(LE)"
+    ]
+   ]
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "expect": [
+   []
+  ]
+ },
+ {
+  "name": "ERR line empty separator",
+  "type": "line",
+  "config": {
+   "separator": ""
+  },
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "行分隔符不能为空"
+ },
+ {
+  "name": "ERR unknown type",
+  "type": "nosuch",
+  "config": {},
+  "steps": [
+   {
+    "feed": "aa550102"
+   }
+  ],
+  "error": "未知解析模式: nosuch"
+ },
+ {
+  "name": "L crlf default",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "61"
+   },
+   {
+    "feed": "3d"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "62"
+   },
+   {
+    "feed": "3d"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "61",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "62",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "b": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L terminator semicolon",
+  "type": "line",
+  "config": {
+   "terminator": ";"
+  },
+  "steps": [
+   {
+    "feed": "613d"
+   },
+   {
+    "feed": "313b623d32"
+   },
+   {
+    "feed": "3b0d0a633d"
+   },
+   {
+    "feed": "333b"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "613d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "313b623d32",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "3b0d0a633d",
+     "messages": [
+      {
+       "b": 2
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "333b",
+     "messages": [
+      {
+       "c": 3
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L terminator cr",
+  "type": "line",
+  "config": {
+   "terminator": "\r"
+  },
+  "steps": [
+   {
+    "feed": "61"
+   },
+   {
+    "feed": "3d"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "62"
+   },
+   {
+    "feed": "3d"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "0d"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "61",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "62",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": [
+      {
+       "b": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L terminator multi char",
+  "type": "line",
+  "config": {
+   "terminator": "END"
+  },
+  "steps": [
+   {
+    "feed": "78"
+   },
+   {
+    "feed": "3d31454e"
+   },
+   {
+    "feed": "4479"
+   },
+   {
+    "feed": "3d"
+   },
+   {
+    "feed": "32454e"
+   },
+   {
+    "feed": "44"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "78",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3d31454e",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "4479",
+     "messages": [
+      {
+       "x": 1
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "3d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32454e",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "44",
+     "messages": [
+      {
+       "y": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L kv colon",
+  "type": "line",
+  "config": {
+   "kvSeparator": ":"
+  },
+  "steps": [
+   {
+    "feed": "74656d703a32352e352c68756d3a36300a74656d703d310a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "74656d703a32352e352c68756d3a36300a74656d703d310a",
+     "messages": [
+      {
+       "temp": 25.5,
+       "hum": 60
+      },
+      {
+       "ch0": "temp=1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L kv equals keeps colon text",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "74656d703a32352e350a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "74656d703a32352e350a",
+     "messages": [
+      {
+       "ch0": "temp:25.5"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L gbk",
+  "type": "line",
+  "config": {
+   "encoding": "gbk"
+  },
+  "steps": [
+   {
+    "feed": "ce"
+   },
+   {
+    "feed": "c2"
+   },
+   {
+    "feed": "b6"
+   },
+   {
+    "feed": "c8"
+   },
+   {
+    "feed": "3d3235"
+   },
+   {
+    "feed": "0aca"
+   },
+   {
+    "feed": "d0b6c8"
+   },
+   {
+    "feed": "3d36"
+   },
+   {
+    "feed": "300a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "ce",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "c2",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "b6",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "c8",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3d3235",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0aca",
+     "messages": [
+      {
+       "温度": 25
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "d0b6c8",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3d36",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "300a",
+     "messages": [
+      {
+       "市度": 60
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L gbk bad byte",
+  "type": "line",
+  "config": {
+   "encoding": "gbk"
+  },
+  "steps": [
+   {
+    "feed": "613d810a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "613d810a",
+     "messages": [
+      {
+       "a": "�"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L ascii high byte",
+  "type": "line",
+  "config": {
+   "encoding": "ascii"
+  },
+  "steps": [
+   {
+    "feed": "6e3de9780a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "6e3de9780a",
+     "messages": [
+      {
+       "n": "�x"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L utf8 bad byte",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "6b3dff760a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "6b3dff760a",
+     "messages": [
+      {
+       "k": "�v"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L nmea ok",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "244750"
+   },
+   {
+    "feed": "474741"
+   },
+   {
+    "feed": "2c31"
+   },
+   {
+    "feed": "323335"
+   },
+   {
+    "feed": "3139"
+   },
+   {
+    "feed": "2c34383037"
+   },
+   {
+    "feed": "2e3033"
+   },
+   {
+    "feed": "382c4e2a32"
+   },
+   {
+    "feed": "370a24"
+   },
+   {
+    "feed": "4750"
+   },
+   {
+    "feed": "524d432c"
+   },
+   {
+    "feed": "312c412a"
+   },
+   {
+    "feed": "33420a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "244750",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "474741",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "323335",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3139",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c34383037",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2e3033",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "382c4e2a32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "370a24",
+     "messages": [
+      {
+       "ch0": "GPGGA",
+       "ch1": 123519,
+       "ch2": 4807.038,
+       "ch3": "N"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "4750",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "524d432c",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "312c412a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33420a",
+     "messages": [
+      {
+       "ch0": "GPRMC",
+       "ch1": 1,
+       "ch2": "A"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L nmea bad",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "24"
+   },
+   {
+    "feed": "47"
+   },
+   {
+    "feed": "50"
+   },
+   {
+    "feed": "47"
+   },
+   {
+    "feed": "47"
+   },
+   {
+    "feed": "41"
+   },
+   {
+    "feed": "2c"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "2c"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "2a"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "24"
+   },
+   {
+    "feed": "47"
+   },
+   {
+    "feed": "50"
+   },
+   {
+    "feed": "56"
+   },
+   {
+    "feed": "54"
+   },
+   {
+    "feed": "47"
+   },
+   {
+    "feed": "2c"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "2a"
+   },
+   {
+    "feed": "34"
+   },
+   {
+    "feed": "44"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "24",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "47",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "50",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "47",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "47",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "41",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "24",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "47",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "50",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "56",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "54",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "47",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "34",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "44",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "ch0": "GPVTG",
+       "ch1": 3
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L nmea no checksum",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "2447504747412c312c320a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "2447504747412c312c320a",
+     "messages": [
+      {
+       "ch0": "$GPGGA",
+       "ch1": 1,
+       "ch2": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L nmea bang",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "21414956444d2c312c312a35370a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "21414956444d2c312c312a35370a",
+     "messages": [
+      {
+       "ch0": "AIVDM",
+       "ch1": 1,
+       "ch2": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json one line",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "61"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "2c"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "62"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "7b"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "63"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "5b"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "2c"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "5d"
+   },
+   {
+    "feed": "7d"
+   },
+   {
+    "feed": "7d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "61",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "20",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "20",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "62",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "20",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "63",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "20",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "5b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "20",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "5d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7d",
+     "messages": [
+      {
+       "a": 1,
+       "b": {
+        "c": [
+         1,
+         2
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json pretty",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "20"
+   },
+   {
+    "feed": "202261"
+   },
+   {
+    "feed": "223a20312c"
+   },
+   {
+    "feed": "0a202022"
+   },
+   {
+    "feed": "73223a2022"
+   },
+   {
+    "feed": "785c227d7b"
+   },
+   {
+    "feed": "79220a"
+   },
+   {
+    "feed": "7d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "20",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "202261",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "223a20312c",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a202022",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "73223a2022",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "785c227d7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "79220a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7d",
+     "messages": [
+      {
+       "a": 1,
+       "s": "x\"}{y"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json concatenated",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "61"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "7d"
+   },
+   {
+    "feed": "7b"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "61"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "7d"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "7b"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "61"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "7d"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "61",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7d",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "61",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7d",
+     "messages": [
+      {
+       "a": 2
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "61",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7d",
+     "messages": [
+      {
+       "a": 3
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json array",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "5b312c20322e352c202278222c207b226b223a20747275657d5d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "5b312c20322e352c202278222c207b226b223a20747275657d5d0a",
+     "messages": [
+      {
+       "0": 1,
+       "1": 2.5,
+       "2": "x",
+       "3": {
+        "k": true
+       }
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json then text",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b2261223a317d78797a0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b2261223a317d78797a0a",
+     "messages": [
+      {
+       "a": 1
+      },
+      {
+       "ch0": "xyz"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json empty object",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b7d0a5b5d0a713d310a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b7d0a5b5d0a713d310a",
+     "messages": [
+      {
+       "q": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json broken",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b2261223a0a313d320a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b2261223a0a313d320a",
+     "messages": []
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json nested arrays",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "5b5b312c325d2c5b335d5d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "5b5b312c325d2c5b335d5d0a",
+     "messages": [
+      {
+       "0": [
+        1,
+        2
+       ],
+       "1": [
+        3
+       ]
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json no terminator ever",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "61"
+   },
+   {
+    "feed": "22"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "7d"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "61",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "22",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7d",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json partial waits",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b2261223a"
+   },
+   {
+    "feed": "317d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b2261223a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "317d0a",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L text leading ws",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "20200d0a2020613d3120200a0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "20200d0a2020613d3120200a0a",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L csv auto index",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "312c322e352c780a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "312c322e352c780a",
+     "messages": [
+      {
+       "ch0": 1,
+       "ch1": 2.5,
+       "ch2": "x"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "ERR line terminator empty",
+  "type": "line",
+  "config": {
+   "terminator": ""
+  },
+  "steps": [
+   {
+    "feed": "613d310a"
+   }
+  ],
+  "error": "行结束符不能为空"
+ },
+ {
+  "name": "ERR line terminator number",
+  "type": "line",
+  "config": {
+   "terminator": 5
+  },
+  "steps": [
+   {
+    "feed": "613d310a"
+   }
+  ],
+  "error": "行结束符不能为空"
+ },
+ {
+  "name": "ERR line kv bad",
+  "type": "line",
+  "config": {
+   "kvSeparator": ";"
+  },
+  "steps": [
+   {
+    "feed": "613d310a"
+   }
+  ],
+  "error": "键值分隔符只能是 = 或 :"
+ },
+ {
+  "name": "ERR line encoding bad",
+  "type": "line",
+  "config": {
+   "encoding": "latin1"
+  },
+  "steps": [
+   {
+    "feed": "613d310a"
+   }
+  ],
+  "error": "编码只能是 utf-8、gbk 或 ascii"
+ },
+ {
+  "name": "ERR line encoding upper",
+  "type": "line",
+  "config": {
+   "encoding": "GBK"
+  },
+  "steps": [
+   {
+    "feed": "613d310a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "613d310a",
+     "messages": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA fc03",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "44"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "44",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA two frames lower hex",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a30313033"
+   },
+   {
+    "feed": "3032"
+   },
+   {
+    "feed": "3031326363"
+   },
+   {
+    "feed": "640d0a3a30"
+   },
+   {
+    "feed": "313031"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "3130444630"
+   },
+   {
+    "feed": "0d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a30313033",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3032",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3031326363",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "640d0a3a30",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "313031",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3130444630",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 1,
+       "coil0": 1,
+       "coil1": 0,
+       "coil2": 1,
+       "coil3": 1,
+       "coil4": 0,
+       "coil5": 0,
+       "coil6": 0,
+       "coil7": 0
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA bad lrc then good",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "44"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "44",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA odd digits",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a303130"
+   },
+   {
+    "feed": "333032"
+   },
+   {
+    "feed": "30313243"
+   },
+   {
+    "feed": "430d"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "3a30313036"
+   },
+   {
+    "feed": "3030304130"
+   },
+   {
+    "feed": "303031"
+   },
+   {
+    "feed": "45450d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a303130",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "333032",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30313243",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "430d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a30313036",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3030304130",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "303031",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "45450d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 6,
+       "address": 10,
+       "value": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA noise and no colon",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "68656c6c6f0d0a3a30313833303237410d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "68656c6c6f0d0a3a30313833303237410d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 131,
+       "error": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA extra byte in body",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a30313033303230313243303043440d0a3a3031303330323031324343440d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a30313033303230313243303043440d0a3a3031303330323031324343440d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA short body",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a303130333032303146390d0a3a3031303330323031324343440d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a303130333032303146390d0a3a3031303330323031324343440d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA colon inside segment",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "7a"
+   },
+   {
+    "feed": "7a"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "33"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "32"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "43"
+   },
+   {
+    "feed": "44"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "33",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "32",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "44",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA slave 0",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a3030303330323031324343450d0a3a3031303330323031324343440d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a3030303330323031324343450d0a3a3031303330323031324343440d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp unit 0",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000100000005000302012c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000100000005000302012c",
+     "messages": [
+      {
+       "slave": 0,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu slave 0",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000302012c85c9010302012cb809"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000302012c85c9010302012cb809",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "MA named by request",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "note": "3a30313033303036343030303239360d0a"
+   },
+   {
+    "feed": "3a303130333034303030413030304245330d0a"
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "3a303130333034303030413030304245330d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 10,
+       "reg1": 11,
+       "start": 100,
+       "hr100": 10,
+       "hr101": 11
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc07",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "07"
+   },
+   {
+    "feed": "6d"
+   },
+   {
+    "feed": "e3"
+   },
+   {
+    "feed": "dd"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "07",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "6d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "e3",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "dd",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 7,
+       "status": 109
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp fc07",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "07"
+   },
+   {
+    "feed": "6d"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "03",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "07",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "6d",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 7,
+       "status": 109
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC ascii fc07",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a30"
+   },
+   {
+    "feed": "31303736"
+   },
+   {
+    "feed": "4438"
+   },
+   {
+    "feed": "42"
+   },
+   {
+    "feed": "0d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31303736",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "4438",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "42",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 7,
+       "status": 109
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc08",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "08"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "a5"
+   },
+   {
+    "feed": "37"
+   },
+   {
+    "feed": "da"
+   },
+   {
+    "feed": "8d"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "08",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "a5",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "37",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "da",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "8d",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 8,
+       "subfunction": 0,
+       "data": 42295
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp fc08",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "06"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "08"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "a5"
+   },
+   {
+    "feed": "37"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "06",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "08",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "a5",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "37",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 8,
+       "subfunction": 0,
+       "data": 42295
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC ascii fc08",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a3031"
+   },
+   {
+    "feed": "30383030"
+   },
+   {
+    "feed": "3030413533"
+   },
+   {
+    "feed": "373142"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a3031",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30383030",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3030413533",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "373142",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 8,
+       "subfunction": 0,
+       "data": 42295
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc11",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "11"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "feed": "a1"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "05"
+   },
+   {
+    "feed": "2d"
+   },
+   {
+    "feed": "9c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "11",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "03",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "a1",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "ff",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "05",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "9c",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 17,
+       "id": 161,
+       "run": 1,
+       "extra": "05"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp fc11",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "06"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "11"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "feed": "a1"
+   },
+   {
+    "feed": "ff"
+   },
+   {
+    "feed": "05"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "06",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "11",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "03",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "a1",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "ff",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "05",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 17,
+       "id": 161,
+       "run": 1,
+       "extra": "05"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC ascii fc11",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a303131"
+   },
+   {
+    "feed": "313033"
+   },
+   {
+    "feed": "4131"
+   },
+   {
+    "feed": "464630"
+   },
+   {
+    "feed": "3534360d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a303131",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "313033",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "4131",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "464630",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3534360d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 17,
+       "id": 161,
+       "run": 1,
+       "extra": "05"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc16",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "16"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "f2"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "25"
+   },
+   {
+    "feed": "67"
+   },
+   {
+    "feed": "ee"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "16",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "04",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "f2",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "25",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "67",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "ee",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 22,
+       "address": 4,
+       "andMask": 242,
+       "orMask": 37
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp fc16",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "08"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "16"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "f2"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "25"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "08",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "16",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "04",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "f2",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "25",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 22,
+       "address": 4,
+       "andMask": 242,
+       "orMask": 37
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC ascii fc16",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "3031"
+   },
+   {
+    "feed": "3136303030"
+   },
+   {
+    "feed": "34"
+   },
+   {
+    "feed": "3030"
+   },
+   {
+    "feed": "463230"
+   },
+   {
+    "feed": "3032"
+   },
+   {
+    "feed": "35"
+   },
+   {
+    "feed": "43450d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3031",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3136303030",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "34",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3030",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "463230",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3032",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "35",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43450d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 22,
+       "address": 4,
+       "andMask": 242,
+       "orMask": 37
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc17",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "17"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "0b"
+   },
+   {
+    "feed": "98"
+   },
+   {
+    "feed": "e2"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "17",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "04",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "98",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "e2",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 23,
+       "reg0": 10,
+       "reg1": 11
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp fc17",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "07"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "17"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "0a"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "0b"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "07",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "17",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "04",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0b",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 23,
+       "reg0": 10,
+       "reg1": 11
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC ascii fc17",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a3031"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "373034"
+   },
+   {
+    "feed": "3030304130"
+   },
+   {
+    "feed": "303042"
+   },
+   {
+    "feed": "43460d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a3031",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "373034",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3030304130",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "303042",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "43460d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 23,
+       "reg0": 10,
+       "reg1": 11
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu exc97",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "97"
+   },
+   {
+    "feed": "02"
+   },
+   {
+    "feed": "cf"
+   },
+   {
+    "feed": "f1"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "97",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "02",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "cf",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "f1",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 151,
+       "error": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp exc97",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "97"
+   },
+   {
+    "feed": "02"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "03",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "97",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "02",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 151,
+       "error": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC ascii exc97",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a30"
+   },
+   {
+    "feed": "313937"
+   },
+   {
+    "feed": "30"
+   },
+   {
+    "feed": "3236"
+   },
+   {
+    "feed": "360d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "313937",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3236",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "360d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 151,
+       "error": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu exc88",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "88"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "47"
+   },
+   {
+    "feed": "c3"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "88",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "04",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "47",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "c3",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 136,
+       "error": 4
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp exc88",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "88"
+   },
+   {
+    "feed": "04"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "03",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "88",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "04",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 136,
+       "error": 4
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC ascii exc88",
+  "type": "modbus_ascii",
+  "config": {},
+  "steps": [
+   {
+    "feed": "3a30313838"
+   },
+   {
+    "feed": "3034"
+   },
+   {
+    "feed": "3733"
+   },
+   {
+    "feed": "0d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "3a30313838",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3034",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3733",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d0a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 136,
+       "error": 4
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc17 named",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "note": "01170064000200c80001020005869b"
+   },
+   {
+    "feed": "011704000a000b98e2"
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "011704000a000b98e2",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 23,
+       "reg0": 10,
+       "reg1": 11,
+       "start": 100,
+       "hr100": 10,
+       "hr101": 11
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp fc17 named",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "note": "00070000000d01170064000200c80001020005"
+   },
+   {
+    "feed": "000700000007011704000a000b"
+   }
+  ],
+  "expect": [
+   [],
+   [
+    {
+     "frame": "000700000007011704000a000b",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 23,
+       "reg0": 10,
+       "reg1": 11,
+       "start": 100,
+       "hr100": 10,
+       "hr101": 11
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc11 empty extra",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "0111020100bcac"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "0111020100bcac",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 17,
+       "id": 1,
+       "run": 0,
+       "extra": ""
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu fc17 odd count resyncs",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "0117030a0b0c52ba01076de3dd"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "0117030a0b0c52ba01076de3dd",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 7,
+       "status": 109
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu old fc03 still",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "01"
+   },
+   {
+    "feed": "03"
+   },
+   {
+    "feed": "04"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "64"
+   },
+   {
+    "feed": "00"
+   },
+   {
+    "feed": "c8"
+   },
+   {
+    "feed": "ba"
+   },
+   {
+    "feed": "7a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "01",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "03",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "04",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "64",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "00",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "c8",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "ba",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "7a",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 100,
+       "reg1": 200
+      }
+     ]
+    }
+   ]
+  ]
+ }
+]

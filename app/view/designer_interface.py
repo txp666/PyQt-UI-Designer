@@ -120,6 +120,10 @@ class DesignerInterface(QWidget):
     def populate_palette(self):
         self._palette.populate()
 
+    def set_project_source(self, source):
+        """Where the property panel finds the open project, for its 默认帧格式 section."""
+        self._prop_editor.set_project_source(source)
+
     @property
     def scene(self) -> DesignScene:
         return self._scene

@@ -18,6 +18,7 @@ from qfluentwidgets import (
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
+from app.core.command_runtime import MODBUS_DATA_TYPES, MODBUS_FUNCTIONS, MODBUS_ORDERS
 
 try:
     import serial.tools.list_ports
@@ -185,6 +186,9 @@ class DataRecvCard(CardWidget):
         self._hex_check.setChecked(False)
         self._autoscroll_check = CheckBox("自动滚动")
         self._autoscroll_check.setChecked(True)
+        for check in (self._hex_check, self._autoscroll_check):
+            # macOS lays a check box out by the native style's smaller rect; this one paints all of itself.
+            check.setAttribute(Qt.WA_LayoutUsesWidgetRect)
         self._clear_btn = PushButton("清空")
         self._clear_btn.setFixedWidth(60)
         self._clear_btn.clicked.connect(self._clear)
@@ -229,7 +233,8 @@ class DataRecvCard(CardWidget):
         if self._hex_check.isChecked():
             text = " ".join(f"{b:02X}" for b in data)
         else:
-            text = data.decode("utf-8", errors="replace").rstrip("\r\n")
+            from app.core.comm_manager import commHub
+            text = commHub.decode_raw(data).rstrip("\r\n")
             if not text:
                 return
         self._output.append(
@@ -342,175 +347,14 @@ class ProgressRingDisplay(QWidget):
 # Modbus Config Card
 # ---------------------------------------------------------------------------
 
-def modbus_sent_status(frames):
-    """Status text for frames just sent: the first frame, and how many links got one."""
-    text = f"已发送: {frames[0].hex(' ').upper()}"
-    if len(frames) > 1:
-        text += f"（{len(frames)} 条链路）"
-    return text
+from app.core.modbus_card import ModbusConfigCard as RuntimeModbusCard
 
 
-class ModbusConfigCard(CardWidget):
-    """Modbus configuration card with read/write controls and response display.
-    Requests go out over every connected link, as RTU or Modbus TCP to match that
-    link's parser. Auto-wired to the communication hub."""
-
-    _FC_MAP = {
-        "01 读线圈": 0x01, "02 读离散输入": 0x02,
-        "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
-        "05 写单线圈": 0x05, "06 写单寄存器": 0x06,
-    }
-    _FC_LIST = list(_FC_MAP.keys())
-
+class ModbusConfigCard(RuntimeModbusCard):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._poll_timer = QTimer(self)
-        self._poll_timer.timeout.connect(self._do_send)
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(16, 12, 16, 12)
-        root.setSpacing(8)
-
-        LW = 56
-
-        # title
-        title_row = QHBoxLayout()
-        self._title = StrongBodyLabel("Modbus 配置")
-        self._status = CaptionLabel("就绪")
-        self._status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
-        title_row.addWidget(self._title)
-        title_row.addStretch()
-        title_row.addWidget(self._status)
-        root.addLayout(title_row)
-
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(8)
-
-        lbl_slave = BodyLabel("从站"); lbl_slave.setFixedWidth(LW)
-        self._slave_edit = LineEdit(); self._slave_edit.setText("1")
-        self._slave_edit.setPlaceholderText("1")
-        grid.addWidget(lbl_slave, 0, 0)
-        grid.addWidget(self._slave_edit, 0, 1)
-
-        lbl_fc = BodyLabel("功能码"); lbl_fc.setFixedWidth(LW)
-        self._fc_combo = ComboBox()
-        self._fc_combo.addItems(self._FC_LIST)
-        self._fc_combo.setCurrentIndex(2)
-        self._fc_combo.currentTextChanged.connect(self._on_fc_changed)
-        grid.addWidget(lbl_fc, 0, 2)
-        grid.addWidget(self._fc_combo, 0, 3)
-
-        lbl_addr = BodyLabel("地址"); lbl_addr.setFixedWidth(LW)
-        self._addr_edit = LineEdit(); self._addr_edit.setText("0")
-        self._addr_edit.setPlaceholderText("0")
-        grid.addWidget(lbl_addr, 1, 0)
-        grid.addWidget(self._addr_edit, 1, 1)
-
-        self._val_label = BodyLabel("数量"); self._val_label.setFixedWidth(LW)
-        self._val_edit = LineEdit(); self._val_edit.setText("1")
-        self._val_edit.setPlaceholderText("1")
-        grid.addWidget(self._val_label, 1, 2)
-        grid.addWidget(self._val_edit, 1, 3)
-
-        lbl_poll = BodyLabel("轮询ms"); lbl_poll.setFixedWidth(LW)
-        self._poll_edit = LineEdit(); self._poll_edit.setText("0")
-        self._poll_edit.setPlaceholderText("0=不轮询")
-        grid.addWidget(lbl_poll, 2, 0)
-        grid.addWidget(self._poll_edit, 2, 1)
-
-        btn_row = QHBoxLayout()
-        self._send_btn = PrimaryPushButton("发送")
-        self._send_btn.clicked.connect(self._on_send_clicked)
-        self._poll_btn = PushButton("轮询")
-        self._poll_btn.clicked.connect(self._toggle_poll)
-        btn_row.addWidget(self._send_btn, 1)
-        btn_row.addWidget(self._poll_btn, 1)
-        grid.addLayout(btn_row, 2, 2, 1, 2)
-
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(3, 1)
-        root.addLayout(grid)
-
-        self._polling = False
-
-        from app.common.signal_bus import signalBus
-        self._serial_connections = SignalConnections(self)
-        self._serial_connections.connect(signalBus.serialConnected, self._on_connected)
-        self._serial_connections.connect(signalBus.serialDisconnected, self._on_disconnected)
-
-    def _on_connected(self, port):
-        self._status.setText(f"已连接: {port}")
-
-    def _on_disconnected(self):
-        self._stop_poll()
-        self._status.setText("未连接")
-
-    def _on_fc_changed(self, text: str):
-        fc = self._FC_MAP.get(text, 0x03)
-        if fc in (0x05, 0x06):
-            self._val_label.setText("写入值")
-        else:
-            self._val_label.setText("数量")
-
-    def _on_send_clicked(self):
-        self._do_send()
-
-    def _int_val(self, edit, default=0):
-        try:
-            return int(edit.text().strip())
-        except (ValueError, AttributeError):
-            return default
-
-    def _do_send(self):
         from app.core.comm_manager import commHub
-        from app.core.command_runtime import send_modbus_command
-        if not commHub.is_connected:
-            self._status.setText("未连接")
-            return
-        fc = self._FC_MAP.get(self._fc_combo.currentText(), 0x03)
-        try:
-            frames = send_modbus_command(
-                commHub, self._slave_edit.text(), fc, self._addr_edit.text(), self._val_edit.text())
-        except ValueError as exc:
-            self._stop_poll()
-            self._status.setText(str(exc))
-            return
-        if frames:
-            self._status.setText(modbus_sent_status(frames))
-        else:
-            self._stop_poll()
-            self._status.setText("发送失败，请检查连接")
-
-    def _toggle_poll(self):
-        if self._polling:
-            self._stop_poll()
-        else:
-            interval = self._int_val(self._poll_edit, 0)
-            if not 1 <= interval <= 60000:
-                self._status.setText("轮询间隔应为 1–60000 ms")
-                return
-            self._poll_timer.start(interval)
-            self._polling = True
-            self._poll_btn.setText("停止")
-            self._send_btn.setEnabled(False)
-
-    def _stop_poll(self):
-        self._poll_timer.stop()
-        self._polling = False
-        self._poll_btn.setText("轮询")
-        self._send_btn.setEnabled(True)
-
-    def set_title(self, t): self._title.setText(t)
-    def set_default_slave(self, v): self._slave_edit.setText(str(int(v)))
-    def set_default_fc(self, v):
-        idx = self._fc_combo.findText(v)
-        if idx >= 0:
-            self._fc_combo.setCurrentIndex(idx)
-    def set_default_addr(self, v): self._addr_edit.setText(str(int(v)))
-    def set_default_value(self, v): self._val_edit.setText(str(int(v)))
-    def set_default_poll(self, v): self._poll_edit.setText(str(int(v)))
+        self.set_serial_handler(commHub)
 
 
 # ---------------------------------------------------------------------------
@@ -528,13 +372,24 @@ MODBUS_CONFIG_META = WidgetMeta(
         PropDef("title", "标题", PropType.STRING, "Modbus 配置"),
         PropDef("defaultSlave", "默认从站", PropType.INT, 1, min_val=1, max_val=247),
         PropDef("defaultFunc", "默认功能码", PropType.ENUM, "03 读保持寄存器",
-                options=["01 读线圈", "02 读离散输入", "03 读保持寄存器",
-                         "04 读输入寄存器", "05 写单线圈", "06 写单寄存器"]),
+                options=list(MODBUS_FUNCTIONS)),
         PropDef("defaultAddr", "默认地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("defaultValue", "默认值/数量", PropType.INT, 1, min_val=0, max_val=65535),
+        PropDef("defaultValue", "默认值/数量", PropType.STRING, "1"),  # what the card writes, or a count
         PropDef("defaultPoll", "默认轮询(ms)", PropType.INT, 0, min_val=0, max_val=60000),
+        PropDef("mbDataType", "写入数据类型", PropType.ENUM, "uint16",
+                options=list(MODBUS_DATA_TYPES)),
+        PropDef("mbRegOrder", "写入寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+                options=list(MODBUS_ORDERS)),
+        PropDef("timeout", "响应超时(ms)", PropType.INT, 1000, min_val=10, max_val=60000),
+        PropDef("pollList", "轮询表", PropType.TEXT, ""),
     ],
 )
+
+# A link card's own frame format, edited in the property panel's 帧格式 section.
+PARSER_CONFIG_PROP = PropDef(
+    "parserConfig", "帧格式", PropType.OBJECT, {},
+    description="帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，"
+                "空对象表示沿用工程设置（模式相同时）或默认值")
 
 SERIAL_CONFIG_META = WidgetMeta(
     type_name="SerialConfigCard",
@@ -548,7 +403,8 @@ SERIAL_CONFIG_META = WidgetMeta(
         PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
                 options=["完整", "简洁", "单行"]),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus", "modbus_tcp"]),
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        PARSER_CONFIG_PROP,
         PropDef("defaultBaud", "默认波特率", PropType.ENUM, "115200",
                 options=["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]),
         PropDef("defaultDatabits", "默认数据位", PropType.ENUM, "8",
@@ -578,7 +434,8 @@ TCP_CONFIG_META = WidgetMeta(
         PropDef("defaultHost", "默认地址", PropType.STRING, "127.0.0.1"),
         PropDef("defaultPort", "默认端口", PropType.INT, 8080, min_val=1, max_val=65535),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus", "modbus_tcp"]),
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        PARSER_CONFIG_PROP,
     ],
 )
 
@@ -603,7 +460,8 @@ MQTT_CONFIG_META = WidgetMeta(
         PropDef("defaultQos", "默认 QoS", PropType.ENUM, "0", options=["0", "1", "2"]),
         PropDef("defaultTls", "默认启用 TLS", PropType.BOOL, False),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus", "modbus_tcp"]),
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        PARSER_CONFIG_PROP,
     ],
 )
 
@@ -654,7 +512,7 @@ PROGRESS_RING_META = WidgetMeta(
     min_width=80, min_height=80,
     properties=[
         PropDef("label", "标签", PropType.STRING, "进度"),
-        PropDef("value", "当前值", PropType.INT, 0, min_val=0, max_val=100, bindable=True),
+        PropDef("value", "当前值", PropType.INT, 0, min_val=0, max_val=100),
         PropDef("maximum", "最大值", PropType.INT, 100, min_val=1, max_val=99999),
     ],
 )
@@ -664,7 +522,9 @@ ALL_COMPOSITE = [
     DATA_SEND_META, DATA_RECV_META, LOG_BOX_META, PROGRESS_RING_META,
 ]
 
-_LINK_CARDS = {"TcpConfigCard": TcpConfigCard, "MqttConfigCard": MqttConfigCard}
+# Cards shared with exported applications, configured through their PROPERTY_SETTERS.
+_RUNTIME_CARDS = {"TcpConfigCard": TcpConfigCard, "MqttConfigCard": MqttConfigCard,
+                  "ModbusConfigCard": ModbusConfigCard}
 
 
 def register_composite_widgets():
@@ -683,20 +543,12 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         w.set_default_stopbits(props.get("defaultStopbits", "1"))
         w.set_default_flow(props.get("defaultFlow", "无"))
         w.set_default_parser(props.get("defaultParser", "项目设置"))
+        w.set_parser_config(props.get("parserConfig", {}))
         return w
-    if type_name in _LINK_CARDS:
-        w = _LINK_CARDS[type_name](parent)
+    if type_name in _RUNTIME_CARDS:
+        w = _RUNTIME_CARDS[type_name](parent)
         for prop, method, default in w.PROPERTY_SETTERS:
             getattr(w, method)(props.get(prop, default))
-        return w
-    if type_name == "ModbusConfigCard":
-        w = ModbusConfigCard(parent)
-        w.set_title(props.get("title", "Modbus 配置"))
-        w.set_default_slave(props.get("defaultSlave", 1))
-        w.set_default_fc(props.get("defaultFunc", "03 读保持寄存器"))
-        w.set_default_addr(props.get("defaultAddr", 0))
-        w.set_default_value(props.get("defaultValue", 1))
-        w.set_default_poll(props.get("defaultPoll", 0))
         return w
     if type_name == "DataSendCard":
         w = DataSendCard(parent)
@@ -731,17 +583,11 @@ def apply_composite_property(widget, type_name: str, prop_name: str, value):
         elif prop_name == "defaultStopbits": widget.set_default_stopbits(value)
         elif prop_name == "defaultFlow": widget.set_default_flow(value)
         elif prop_name == "defaultParser": widget.set_default_parser(value)
-    elif type_name in _LINK_CARDS:
+        elif prop_name == "parserConfig": widget.set_parser_config(value)
+    elif type_name in _RUNTIME_CARDS:
         for prop, method, _default in widget.PROPERTY_SETTERS:
             if prop == prop_name:
                 getattr(widget, method)(value)
-    elif type_name == "ModbusConfigCard":
-        if prop_name == "title": widget.set_title(value)
-        elif prop_name == "defaultSlave": widget.set_default_slave(value)
-        elif prop_name == "defaultFunc": widget.set_default_fc(value)
-        elif prop_name == "defaultAddr": widget.set_default_addr(value)
-        elif prop_name == "defaultValue": widget.set_default_value(value)
-        elif prop_name == "defaultPoll": widget.set_default_poll(value)
     elif type_name == "DataSendCard":
         if prop_name == "title": widget.set_title(value)
         elif prop_name == "placeholder": widget.set_placeholder(value)
