@@ -34,6 +34,7 @@ import uuid
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 
 from serial_handler import ModbusRequests, create_parser, text_encoding
+from serial_handler import ModbusMaster
 
 
 try:
@@ -122,6 +123,7 @@ class MqttHandler(QObject):
         self._parser_setup = ("line", {})
         self._parsers = {}
         self.modbus_requests = ModbusRequests()  # shared by every topic's parser
+        self.modbus_master = ModbusMaster(self)  # one Modbus request at a time
         self._description = ""
         self._connectResult.connect(self._on_connect_result, Qt.QueuedConnection)
         self._connectionLost.connect(self._on_connection_lost, Qt.QueuedConnection)

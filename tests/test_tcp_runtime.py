@@ -12,6 +12,7 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication
 
 from app.core import protocol_parser as protocol
+from app.core.modbus_master import ModbusMaster
 from app.core import tcp_runtime
 from app.core.code_generator import _gen_tcp_handler
 from app.core.command_runtime import send_modbus_command
@@ -36,7 +37,7 @@ class TcpLinkTests(unittest.TestCase):
         exported = {}
         with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
                 create_parser=protocol.create_parser, text_encoding=protocol.text_encoding,
-                ModbusRequests=protocol.ModbusRequests)}):
+                ModbusRequests=protocol.ModbusRequests, ModbusMaster=ModbusMaster)}):
             exec(_gen_tcp_handler(config or {}), exported)
         return vars(tcp_runtime), exported
 

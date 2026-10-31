@@ -219,7 +219,8 @@ class LinkCardTests(unittest.TestCase):
             request = b":01030064000296\r\n"  # LRC 96: -(01+03+00+64+00+02)
             wait_for(lambda: peer.bytesAvailable() >= len(request), "the ASCII request")
             assert bytes(peer.readAll()) == request
-            assert bus._waiting is not None and bus._reply_timer.isActive()
+            master = card._handler.modbus_master
+            assert master.busy() and master._timer.isActive()
             received = []
             card._handler.dataReceived.connect(received.append)
             peer.write(b":01030400190001DE\r\n")
@@ -230,8 +231,8 @@ class LinkCardTests(unittest.TestCase):
             assert bus._status.text() == "设备已响应", bus._status.text()
             # No reply: the card says so once the timeout has passed, which the test decides.
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            assert bus._reply_timer.isActive()
-            bus._reply_timer.timeout.emit()
+            assert master.busy()
+            master._timer.timeout.emit()
             assert bus._status.text() == "无响应（60000 ms 超时）", bus._status.text()
             QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
         ''')

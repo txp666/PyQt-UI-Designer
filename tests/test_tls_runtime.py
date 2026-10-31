@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from app.common import update_checker
-from app.core import mqtt_runtime, protocol_parser
+from app.core import modbus_master, mqtt_runtime, protocol_parser
 from app.core.code_generator import _gen_mqtt_handler
 from app.core.tls_runtime import system_ssl_context
 
@@ -56,7 +56,7 @@ class TlsRuntimeTests(unittest.TestCase):
         namespace = {}
         with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
                 create_parser=protocol_parser.create_parser, text_encoding=protocol_parser.text_encoding,
-                ModbusRequests=protocol_parser.ModbusRequests)}):
+                ModbusRequests=protocol_parser.ModbusRequests, ModbusMaster=modbus_master.ModbusMaster)}):
             exec(_gen_mqtt_handler({}), namespace)
         self.assertIn("system_ssl_context", namespace)
         self.assertTrue(type(namespace["system_ssl_context"]()).__module__.startswith("truststore"))

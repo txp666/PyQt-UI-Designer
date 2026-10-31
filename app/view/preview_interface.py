@@ -97,6 +97,8 @@ class PreviewCanvas(QWidget):
                 bindingEngine.register_widget(widget_id, widget)
 
             self._wire_commands(widget, type_name, props)
+            if hasattr(widget, "set_modbus_needs"):  # the Modbus card's 自动 polling reads what bindings show
+                widget.set_modbus_needs(bindingEngine.modbus_needs)
 
             if type_name == "RealtimeChart" and hasattr(widget, "start_listening"):
                 widget.start_listening()

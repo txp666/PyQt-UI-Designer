@@ -19,6 +19,20 @@ PROJECT_VERSION = "1.0"
 LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard")
 
 
+def _with_legacy_cards(items):
+    """The widget tree with what older files leave out of a Modbus card filled in: one with a poll
+    table and no pollMode keeps polling its table (modbus_card_properties)."""
+    from app.core.modbus_card import modbus_card_properties
+    result = []
+    for item in items:
+        if item.get("type") == "ModbusConfigCard" and "pollMode" not in item.get("properties", {}):
+            item = {**item, "properties": modbus_card_properties(item.get("properties", {}))}
+        if item.get("children"):
+            item = {**item, "children": _with_legacy_cards(item["children"])}
+        result.append(item)
+    return result
+
+
 class ProjectData:
     """In-memory representation of a .uidp project."""
 
@@ -62,7 +76,7 @@ class ProjectData:
         proj.canvas_width = canvas.get("width", 1200)
         proj.canvas_height = canvas.get("height", 800)
         proj.grid_size = canvas.get("gridSize", 10)
-        proj.widgets = data.get("widgets", [])
+        proj.widgets = _with_legacy_cards(data.get("widgets", []))
         proj.serial.update(data.get("serial", {}))
         return proj
 

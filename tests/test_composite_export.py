@@ -1,7 +1,40 @@
 """Exercise configured cards and containers in preview and standalone applications."""
+import copy
+import json
+from pathlib import Path
+import sys
+import textwrap
 import unittest
 
 from tests import test_preview_export_parity as parity
+
+ROOT = Path(__file__).resolve().parents[1]
+PLC_EXAMPLE = ROOT / "examples" / "tutorials" / "10-PLC恒压供水.uidp"
+
+# The parity harness's preview runs no bindings; the Modbus card's 自动 polling still needs to know
+# what they read, and the widgets of a project with containers are found by id.
+_AUTO_SETUP = textwrap.indent(r'''
+import struct
+from serial_handler import create_parser, modbus_crc
+export = os.environ["APPLICATION_MODE"] == "export"
+if export:
+    def widget(name): return window.widgets[name]
+else:
+    from app.core.data_binding import bindingEngine
+    bindingEngine.load_bindings_from_project(project.widgets)
+    def widget(name): return bindingEngine._widget_map[name]
+def rtu(pdu):
+    pdu = bytes.fromhex(pdu)
+    return pdu + modbus_crc(pdu)
+# The device: replies parsed the way the serial link parses them, on the reads it noted.
+device = create_parser("modbus", {}, serial.modbus_requests)
+def reply(pdu):
+    for data in device.feed(rtu(pdu)):
+        serial.dataReceived.emit(data)
+def registers(*values):
+    return "".join(value.hex() if isinstance(value, bytes) else f"{value:04x}" for value in values)
+clock = [0]
+''', " " * 12)  # as indented as the checks it precedes
 
 
 def control(name, kind, properties, row=0):
@@ -96,7 +129,7 @@ class CompositeExportTests(unittest.TestCase):
 
             bus._poll_timer.timeout.emit()
             check_payloads([registers, coils, registers])
-            bus._reply_timer.timeout.emit()  # no reply in time: the round moves on to the coils
+            serial.modbus_master._timer.timeout.emit()  # no reply in time: the round moves on to the coils
             check_payloads([registers, coils, registers, coils])
             reply("01010105")
             assert bus._status.text() == "第 1 条无响应 · 1/2", bus._status.text()
@@ -108,8 +141,8 @@ class CompositeExportTests(unittest.TestCase):
             reply("010302002a")
             assert bus._status.text() == "设备已响应", bus._status.text()
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            assert bus._reply_timer.isActive()
-            bus._reply_timer.timeout.emit()
+            assert serial.modbus_master.busy()
+            serial.modbus_master._timer.timeout.emit()
             assert bus._status.text() == "无响应（60000 ms 超时）", bus._status.text()
             bus.set_poll_list("1,6,0,1")
             QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
@@ -120,6 +153,132 @@ class CompositeExportTests(unittest.TestCase):
             assert not bus._poll_timer.isActive()
             assert bus._status.text() == "轮询表第 1 条：Modbus 值或读取数量超出功能码允许范围", bus._status.text()
         ''')
+
+    def test_modbus_card_polls_automatically_what_the_bindings_show(self):
+        # The bindings of the PLC tutorial, polled by a card with no poll table.
+        widgets = json.loads(PLC_EXAMPLE.read_text(encoding="utf-8"))["widgets"]
+        poller = next(item for item in widgets if item["id"] == "poller")
+        poller["properties"] = {"title": "自动轮询", "pollMode": "自动", "defaultPoll": 500, "timeout": 60000}
+        self.run_both(widgets, _AUTO_SETUP + r'''
+            bus = widgets["poller"]
+            assert bus._mode_hint.text() == "轮询方式：自动", bus._mode_hint.text()
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)  # the serial link parses lines: nothing to read with
+            assert bus._status.text() == "自动 · 等待连接", bus._status.text()
+            check_payloads([])
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            serial.configure({"parser": "modbus"})
+            bus._now = lambda: clock[0]
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            coils, live, setpoint = rtu("010100000004"), rtu("010300640006"), rtu("010300c80002")
+            assert bus._status.text() == "自动 · 3 块 · 轮询中", bus._status.text()
+            assert bus._status.toolTip() == "\n".join((
+                "从站 1 · 功能码 1 · 地址 0–3 · 周期 500 ms",
+                "从站 1 · 功能码 3 · 地址 100–105 · 周期 500 ms",
+                "从站 1 · 功能码 3 · 地址 200–201 · 周期 500 ms")), bus._status.toolTip()
+            assert bus._poll_timer.interval() == 500 and not bus._send_btn.isEnabled()
+            check_payloads([coils])
+            bus._poll_timer.timeout.emit()  # waiting for the reply
+            check_payloads([coils])
+            reply("01010101")  # 1 号泵运行
+            check_payloads([coils, live])
+            # A write while a read is on the wire waits for its reply, then goes ahead of the next read.
+            click_switch("run")
+            start = rtu("01050003ff00")
+            check_payloads([coils, live])
+            reply("01030c" + registers(struct.pack(">f", 0.42), struct.pack(">f", 36.5), 452, 76))
+            check_payloads([coils, live, start])
+            reply("01050003ff00")
+            check_payloads([coils, live, start, setpoint])
+            reply("010304" + registers(struct.pack(">f", 0.40)))
+            assert bus._status.text() == "自动 · 3 块 · 正常", bus._status.text()
+            if export:
+                for name, text in (("pressure", "0.42"), ("flow", "36.5"), ("target", "0.40")):
+                    assert widgets[name]._value.text() == text, (name, widgets[name]._value.text())
+                assert widgets["level"]._ring.value() == 76
+                assert [widgets[name]._on for name in ("pump1", "pump2")] == [True, False]
+            bus._poll_timer.timeout.emit()  # nothing is due before 500 ms
+            check_payloads([coils, live, start, setpoint])
+
+            clock[0] = 500  # all three are due again, in plan order
+            bus._poll_timer.timeout.emit()
+            reply("01010101")
+            reply("018302")  # the live block's addresses are refused
+            serial.modbus_master._timer.timeout.emit()  # and the setpoints do not come
+            check_payloads([coils, live, start, setpoint] + [coils, live, setpoint])
+            assert bus._status.text() == "自动 · 第 2 块异常 02 非法数据地址", bus._status.text()
+            clock[0] = 1000
+            bus._poll_timer.timeout.emit()
+            reply("01010101")
+            reply("01030c" + registers(0, 0, 0, 0, 0, 0))
+            serial.modbus_master._timer.timeout.emit()
+            assert bus._status.text() == "自动 · 第 3 块无响应（从站 1 功能码 3 地址 200）", bus._status.text()
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            assert not bus._poll_timer.isActive() and bus._send_btn.isEnabled()
+        ''')
+
+    def test_modbus_card_reads_fast_blocks_more_often_starts_on_connect_and_skips_hidden_tabs(self):
+        self.run_both([
+            control("bus", "ModbusConfigCard", {"pollMode": "自动", "defaultPoll": 300, "timeout": 60000}),
+            parity.control("fast", "NumericDisplay", {}, 5) | {"binding": {
+                "parseMode": "Modbus", "mbArea": "保持寄存器", "mbRegIndex": 0, "mbPeriod": 100}},
+            parity.control("tabs", "TabWidget", {"tabNames": "趋势\n说明"}, 6) | {"children": [
+                parity.control("slow", "NumericDisplay", {}) | {"binding": {
+                    "parseMode": "Modbus", "mbArea": "保持寄存器", "mbRegIndex": 50}},
+                parity.control("note", "Label", {"text": "说明"}) | {"tabIndex": 1}]},
+        ], _AUTO_SETUP + r'''
+            bus = widgets["bus"]
+            fast, slow = rtu("010300000001"), rtu("010300320001")
+            def answer():
+                while serial.modbus_master.busy():
+                    reply("0103020007")
+            bus._now = lambda: clock[0]
+            serial.configure({"parser": "modbus"})
+            serial.connected.emit("PLC")  # autoStart: polling starts as a Modbus link connects
+            assert bus._polling and bus._status.text() == "自动 · 2 块 · 轮询中", bus._status.text()
+            assert bus._poll_timer.interval() == 100, bus._poll_timer.interval()  # the fastest block
+            check_payloads([fast])
+            answer()
+            assert bus._status.text() == "自动 · 2 块 · 正常", bus._status.text()
+            for clock[0] in range(100, 700, 100):
+                bus._poll_timer.timeout.emit()
+                answer()
+            assert (port.writes.count(fast), port.writes.count(slow)) == (7, 3), port.writes
+            # On the other tab page the slow reading is out of sight, and no longer read.
+            widget("tabs").setCurrentIndex(1)
+            app.processEvents()
+            for clock[0] in range(700, 1300, 100):
+                bus._poll_timer.timeout.emit()
+                answer()
+            assert bus._status.text() == "自动 · 1 块 · 正常", bus._status.text()
+            assert (port.writes.count(fast), port.writes.count(slow)) == (13, 3), port.writes
+            widget("fast").hide()
+            bus._poll_timer.timeout.emit()
+            assert bus._status.text() == "自动 · 没有 Modbus 绑定", bus._status.text()
+            serial.disconnect()
+            assert not bus._polling and bus._status.text() == "未连接", bus._status.text()
+        ''')
+
+    def test_projects_from_before_automatic_polling_keep_their_poll_table(self):
+        sys.path.insert(0, str(ROOT / "tools"))
+        try:
+            import check_uidp
+        finally:
+            sys.path.remove(str(ROOT / "tools"))
+        from app.core.project import ProjectData
+        document = json.loads(PLC_EXAMPLE.read_text(encoding="utf-8"))
+        original = copy.deepcopy(document)
+        self.assertEqual(check_uidp.problems(document), [])
+        cards = {item["id"]: item for item in ProjectData.from_dict(document).widgets}
+        self.assertEqual({key: cards["poller"]["properties"][key] for key in ("pollMode", "autoStart")},
+                         {"pollMode": "轮询表", "autoStart": False})
+        self.assertEqual(document, original, "loading leaves the document as it was read")
+        # Any card saved without a pollMode, with or without a table, waits for 轮询 as it did.
+        for properties, expected in (({"defaultPoll": 500}, {"pollMode": "轮询表", "autoStart": False}),
+                                     ({"pollMode": "自动"}, {"pollMode": "自动"})):
+            loaded = ProjectData.from_dict({"widgets": [
+                {"type": "ModbusConfigCard", "id": "bus", "properties": properties}]})
+            self.assertEqual({key: value for key, value in loaded.widgets[0]["properties"].items()
+                              if key in ("pollMode", "autoStart")}, expected)
 
     def test_send_card_preserves_title_placeholder_and_all_newline_choices(self):
         self.run_both([control("send", "DataSendCard", {

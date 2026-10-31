@@ -123,7 +123,7 @@ python tools/check_uidp.py motor.uidp
 - MQTT 发命令时，编码后的整条命令就是消息内容，**包括 `commandNewline` 加的换行**。设备要的是不带换行的 `RESET` 时，把发命令控件的 `commandNewline` 设成 `"无"`。
 - 订阅主题如果也包含了发布主题（比如订阅 `workshop/#`、发布到 `workshop/cmd`），上位机会收到自己发出的命令；只要没有控件绑定同名的键，就没有影响。
 - 发送命令时，命令会发到**所有已连接的链路**（MQTT 发到 `defaultPublish` 主题）。
-- `ModbusConfigCard` 用来手动发送或轮询 Modbus 请求，它本身不是链路，需要和串口或 TCP 卡片一起用。`pollList` 是轮询表（多行文本，每行 `从站,功能码,地址,数量`，功能码 1–4），轮询时逐条发送，每条等到响应或 `timeout`（默认 1000 ms）再发下一条（链路要用 `modbus`、`modbus_tcp` 或 `modbus_ascii` 解析，卡片才认得出响应）；为空时轮询卡片上的那条请求。读 PLC 的几块地址时，把每块写成一行，绑定按寄存器地址取值（见下文"绑定数据"）。
+- `ModbusConfigCard` 用来轮询或手动发送 Modbus 请求，它本身不是链路，需要和串口或 TCP 卡片一起用（链路要用 `modbus`、`modbus_tcp` 或 `modbus_ascii` 解析，卡片才认得出响应）。`pollMode` 默认 `"自动"`：卡片按工程里的 Modbus 绑定（选了寄存器区的，见下文"绑定数据"）和实时曲线的 Modbus 曲线自己决定读哪些地址，只要给控件写绑定，不用写轮询表。同一从站、同一功能码里相近的地址合并成一块读：寄存器间隔不超过 8 个、一块最多 120 个，线圈和离散输入间隔不超过 64 个、一块最多 1000 个。从站是绑定的 `mbSlaveFilter`，不过滤时用卡片的 `defaultSlave`；每块按成员里最小的 `mbPeriod` 读，`0` 用卡片的 `defaultPoll`（为 0 时按 500 ms）。只读界面上看得见的控件，选项卡其他页上的不读，曲线一直读。`autoStart` 默认 `true`：链路连上就开始轮询，不用点「轮询」。写命令和读请求在同一条链路上排队，一次只发一条，写命令排在读请求前面。`pollMode` 为 `"轮询表"` 时按 `pollList` 读（多行文本，每行 `从站,功能码,地址,数量`，功能码 1–4），逐条发送，每条等到响应或 `timeout`（默认 1000 ms）再发下一条；为空时轮询卡片上的那条请求。没写 `pollMode`、`pollList` 不为空的旧工程按 `"轮询表"` 打开。
 
 ## 解析收到的数据
 
@@ -157,7 +157,7 @@ python tools/check_uidp.py motor.uidp
 | `"键值匹配"` | `key`：键名，如 `"rpm"` |
 | `"JSON路径"` | `jsonPath`：用点分隔，数组用下标，如 `"data.sensors.0.temp"`（负数从末尾数） |
 | `"HEX字节提取"` | 直接从原始字节取：`byteOffset`、`dataType`（`"uint8"` … `"float32"`）、`byteOrder`（`"大端(BE)"` / `"小端(LE)"`），可选 `frameHeader` / `frameTail`（HEX 文本，如 `"AA55"`） |
-| `"Modbus"` | `mbArea`：`"响应内序号"`（默认）、`"保持寄存器"`、`"输入寄存器"`、`"线圈"`、`"离散输入"`；`mbRegIndex`：`"响应内序号"` 时是响应里第几个寄存器（从 0 开始），选了寄存器区时是寄存器地址；`mbDataType`（`"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`）、`mbRegOrder`（`"大端(AB CD)"` / `"小端(CD AB)"`），可选过滤 `mbSlaveFilter`、`mbFcFilter`（-1 表示不过滤）。轮询多块地址时用寄存器区，`"响应内序号"` 分不清是哪一块的响应 |
+| `"Modbus"` | `mbArea`：`"响应内序号"`（默认）、`"保持寄存器"`、`"输入寄存器"`、`"线圈"`、`"离散输入"`；`mbRegIndex`：`"响应内序号"` 时是响应里第几个寄存器（从 0 开始），选了寄存器区时是寄存器地址；`mbDataType`（`"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`）、`mbRegOrder`（`"大端(AB CD)"` / `"小端(CD AB)"`），可选过滤 `mbSlaveFilter`、`mbFcFilter`（-1 表示不过滤）；`mbPeriod` 是自动轮询的采集周期（毫秒，0–60000，默认 `0` 表示用 Modbus 卡片的轮询 ms）。自动轮询和轮询多块地址时都用寄存器区：`"响应内序号"` 分不清是哪一块的响应，自动轮询也不读它 |
 
 所有模式都可以加 `expression` 做换算，变量是 `value`，如 `"value * 0.1"`。支持 Python 的算术 `+ - * / // % **`、位运算 `& | ^ ~ << >>`（只对整数）、比较 `< <= > >= == !=`（可以连写，如 `"0 < value < 40"`）和 `and` / `or` / `not`，可以加括号；比较的结果是 `True` / `False`，给指示灯用时 `onValue` 填 `1` 即可，如 `"(value >> 1) & 1"` 取第 1 位、`"value * 3.3 / 4095 < 1"` 判断电压。算不出来（除以零、位运算碰到小数）就按原值显示。
 

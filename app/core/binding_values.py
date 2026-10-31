@@ -30,6 +30,20 @@ def binding_register(value):
 # the tables name them by register address (hr100), which the request for each response gives.
 MODBUS_AREAS = {"响应内序号": None, "保持寄存器": "hr", "输入寄存器": "ir",
                 "线圈": "co", "离散输入": "di"}
+# The registers a value of each type takes; coils and discrete inputs are one bit each.
+MODBUS_REGISTERS = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2}
+
+
+def modbus_need(area, address, data_type="uint16", slave_filter=-1, period=0):
+    """What a Modbus binding or chart curve reads, for the Modbus card's 自动 polling:
+    ``(slave, table, address, count, period)``, or None for 响应内序号, which takes whatever
+    response comes. A slave of 0 or less stands for the card's 默认从站, a period of 0 for
+    its 轮询ms."""
+    table = MODBUS_AREAS.get(area)
+    if table is None:
+        return None
+    count = 1 if table in ("co", "di") else MODBUS_REGISTERS.get(data_type, 1)
+    return int(slave_filter), table, int(address), count, max(0, min(60000, int(period)))
 
 
 def modbus_value(data, index, data_type="uint16", reg_order="大端(AB CD)",

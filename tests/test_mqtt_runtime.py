@@ -13,6 +13,7 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication
 
 from app.core import mqtt_runtime
+from app.core.modbus_master import ModbusMaster
 from app.core import protocol_parser as protocol
 from app.core.code_generator import _gen_mqtt_handler
 from app.core.mqtt_runtime import mqtt_topics
@@ -109,7 +110,7 @@ class MqttLinkTests(unittest.TestCase):
         exported = {}
         with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
                 create_parser=protocol.create_parser, text_encoding=protocol.text_encoding,
-                ModbusRequests=protocol.ModbusRequests)}):
+                ModbusRequests=protocol.ModbusRequests, ModbusMaster=ModbusMaster)}):
             exec(_gen_mqtt_handler(config or {}), exported)
         host = patch.object(mqtt_runtime, "mqtt", paho)
         host.start()

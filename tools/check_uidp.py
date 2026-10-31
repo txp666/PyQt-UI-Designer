@@ -82,6 +82,8 @@ def problems(data) -> list:
                         modbus_poll_table(value)
                     except ValueError as error:
                         found.append(f"{name}: {error}")
+                elif kind == "ModbusConfigCard" and key == "autoStart" and not isinstance(value, bool):
+                    found.append(f"{name}: autoStart 应为 true 或 false")
             binding = item.get("binding")
             if binding:
                 if kind not in BIND_PROPERTIES:
@@ -92,6 +94,9 @@ def problems(data) -> list:
                 for key, options in MODBUS_BINDING_OPTIONS.items():
                     if key in binding and binding[key] not in options:
                         found.append(f"{name}: binding 的 {key} 不能是 {binding[key]!r}，可选 {'、'.join(options)}")
+                period = binding.get("mbPeriod", 0)
+                if type(period) is not int or not 0 <= period <= 60000:
+                    found.append(f"{name}: binding 的 mbPeriod 应为 0–60000 的整数（毫秒），不能是 {period!r}")
             walk(item.get("children", []))
 
     walk(data.get("widgets", []))

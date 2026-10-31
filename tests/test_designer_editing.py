@@ -18,6 +18,7 @@ from PyQt5.QtGui import QFocusEvent
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QWidget
 
+from app.core import modbus_master
 from app.core.code_generator import _gen_ui
 from app.common.signal_bus import signalBus
 from app.core.project import ProjectData, ProjectManager
@@ -87,6 +88,33 @@ class DesignerEditingTests(unittest.TestCase):
         self.assertFalse(template.isVisible())
         editor._on_prop_changed("commandMode", "文本")  # text mode does need the toggle
         self.assertFalse(mode.isVisible() or function.isVisible() or template.isVisible())
+
+    def test_modbus_polling_rows_follow_the_poll_mode_and_binding_mode(self):
+        register_composite_widgets()
+        editor = PropertyEditor()
+        self.addCleanup(editor.deleteLater)
+        editor.resize(360, 1400)
+        card = self.make_item("ModbusConfigCard")
+        editor._load_item(card)
+        editor.show()
+        self.app.processEvents()
+        mode, auto, table = (editor._prop_rows[name] for name in ("pollMode", "autoStart", "pollList"))
+        self.assertEqual((mode[0].text(), auto[0].text(), mode[1].currentText(), auto[1].isChecked()),
+                         ("轮询方式", "连接后自动轮询", "自动", True))
+        self.assertFalse(table[1].isVisible(), "自动 polling needs no poll table")
+        mode[1].setCurrentText("轮询表")
+        self.assertTrue(table[0].isVisible() and table[1].isVisible())
+        self.assertEqual(card.properties["pollMode"], "轮询表")
+        # A Modbus binding's 采集周期 row comes last in its section, and only for Modbus.
+        editor._load_item(self.make_item("Label"))
+        self.app.processEvents()
+        self.assertFalse(editor._bind_mb_period_spin.isVisible())
+        editor._bind_mode_combo.setCurrentText("Modbus")
+        self.assertTrue(editor._bind_mb_period_spin.isVisible())
+        self.assertEqual(editor._bind_mb_period_label.text(), "采集周期(ms)")
+        self.assertEqual(editor._bind_mb_period_spin.toolTip(), "0 = 用 Modbus 卡片的轮询 ms")
+        editor._bind_mb_period_spin.setValue(250)
+        self.assertEqual(editor._current_item.binding["mbPeriod"], 250)
 
     def test_renaming_tabs_preserves_active_page_widgets_and_child_visibility(self):
         tabs = self.make_item("TabWidget", tabNames="A\nB", currentTab=1)
@@ -286,6 +314,8 @@ class DesignerEditingTests(unittest.TestCase):
                 # A QWidget host avoids requiring native frameless-window APIs.
                 serial_module = ModuleType("serial_handler")
                 serial_module._list_all_ports = lambda: []
+                vars(serial_module).update(  # the exported serial_handler holds the Modbus master
+                    (name, value) for name, value in vars(modbus_master).items() if not name.startswith("__"))
                 namespace = {"__file__": str(Path(self.temp.name) / "ui.py")}
                 with patch.dict("sys.modules", {"serial_handler": serial_module}):
                     exec(_gen_ui([document], 500, 350), namespace)

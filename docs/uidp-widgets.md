@@ -343,6 +343,8 @@
 - `mbDataType`（写入数据类型，选项）默认 `"uint16"`，可选 `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
 - `mbRegOrder`（写入寄存器序，选项）默认 `"大端(AB CD)"`，可选 `"大端(AB CD)"` `"小端(CD AB)"`
 - `timeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
+- `pollMode`（轮询方式，选项）默认 `"自动"`，可选 `"自动"` `"轮询表"`
+- `autoStart`（连接后自动轮询，true/false）默认 `true`
 - `pollList`（轮询表，多行文本）默认 `""`
 
 #### `DataSendCard` 数据发送卡片
