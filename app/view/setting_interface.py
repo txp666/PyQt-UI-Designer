@@ -9,13 +9,14 @@ from qfluentwidgets import (
     SwitchSettingCard, ComboBoxSettingCard,
     PrimaryPushSettingCard, OptionsSettingCard,
     FluentIcon as FIF, InfoBar, InfoBarPosition,
-    setTheme, Theme, MessageBox,
+    setTheme, Theme,
 )
 
 from app.common.config import cfg, APP_VERSION, isWin11
 from app.common.signal_bus import signalBus
 from app.common.update_checker import UpdateCheckThread, RELEASE_URL
 from app.core.signal_lifetime import SignalConnections
+from app.view.update_dialog import UpdateDialog
 
 
 class SettingInterface(ScrollArea):
@@ -158,17 +159,8 @@ class SettingInterface(ScrollArea):
             return
 
         if has_new:
-            body = f"发现新版本 {latest}（当前 v{current}）\n\n"
-            if changelog:
-                lines = changelog.strip().splitlines()
-                body += "\n".join(lines[:15])
-                if len(lines) > 15:
-                    body += "\n..."
-            body += "\n\n是否打开下载页面？"
-            w = MessageBox("发现新版本", body, self.window())
-            w.yesButton.setText("前往下载")
-            w.cancelButton.setText("稍后再说")
-            if w.exec():
+            # The notes scroll inside the dialog, so even a long changelog leaves the buttons in view.
+            if UpdateDialog(latest, current, changelog, self.window()).exec():
                 QDesktopServices.openUrl(QUrl(url))
         else:
             InfoBar.success("已是最新版本",
