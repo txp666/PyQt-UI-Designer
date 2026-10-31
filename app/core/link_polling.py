@@ -4,8 +4,9 @@ designer preview and exported applications.
 Every link card hands the running application's Modbus poller (modbus_poller.py) its 默认轮询(ms),
 响应超时(ms) and 默认从站 (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which count while the
 card is the first in the document whose link is connected and parses Modbus. While its link is
-connected and parses Modbus, the card's status reads ``<connection> · <poller status>``, with the
-poller's blocks as its tooltip; 等待连接 is never shown there.
+connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
+``<connection> · <poller status>``, with the poller's blocks as its tooltip; 等待连接 is never shown
+there.
 """
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QSizePolicy
@@ -97,7 +98,7 @@ class ModbusLinkSettings:
 
     def _with_poll_status(self, text):
         """``text``, which describes the connection, then `` · `` and the poller's status while the
-        link parses Modbus; and the tooltip for it: the poller's blocks, one per line, or the whole
+        link parses Modbus and can send; and the tooltip for it: the poller's blocks, one per line, or the whole
         text without blocks. The tooltip is None when the poller's status is not shown."""
         poller = self._modbus_poller
         status = poller.shown_status(self._handler) if poller is not None else ""

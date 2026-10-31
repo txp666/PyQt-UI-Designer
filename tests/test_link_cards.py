@@ -221,9 +221,11 @@ class LinkCardTests(unittest.TestCase):
             assert card._status.toolTip() == "从站 1 · 功能码 3 · 地址 0–0 · 周期 100 ms", card._status.toolTip()
             wait_for(lambda: probe.bytesAvailable() >= 12, "the read from the client")
             assert bytes(probe.readAll())[7:] == bytes.fromhex("0300000001"), "an FC03 read of register 0"
+            probe.abort()  # the client leaves: nobody to send to, no polling status
+            wait_for(lambda: link.peer_count == 0, "the client to leave")
+            assert (card._status.text(), card._status.toolTip()) == ("● 监听中 · 0 客户端", ""), card._status.text()
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             assert not link.is_active and card._status.text() == "未连接"
-            probe.abort()
         """)
 
     def test_the_first_card_whose_link_is_connected_and_parses_modbus_sets_up_the_poller(self):
@@ -234,7 +236,7 @@ class LinkCardTests(unittest.TestCase):
                                                    "modbusTimeout": 800, "modbusSlave": 9}, 1),
         ], r"""
             import time
-            from PyQt5.QtNetwork import QHostAddress, QTcpServer
+            from PyQt5.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
             def wait_for(predicate, what):
                 deadline = time.monotonic() + 5
                 while not predicate() and time.monotonic() < deadline:
@@ -265,20 +267,29 @@ class LinkCardTests(unittest.TestCase):
             assert card._status.text() == "● 已连接 · 没有 Modbus 绑定", card._status.text()
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开: the serial card's again
             assert settings() == (700, 800, 9), settings()
-            serial.disconnect()
-            assert settings() == (500, 1000, 1), settings()
-            # A server that listens counts as connected before any device connects; with nothing to
-            # send to, the poller waits, which the card does not show.
+            # A server that listens counts as connected before any device connects, so its settings
+            # count; with no client it cannot send, so it shows no polling status, though the serial
+            # link polls.
             device.close()
             card._mode_combo.setCurrentText("服务端")
             card._port_spin.setValue(device_port)
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             assert link.is_connected and settings() == (200, 300, 4), settings()
-            assert poller.status() == "等待连接", poller.status()
+            assert widgets["serial"]._status.text() == "● 已连接 · 没有 Modbus 绑定", widgets["serial"]._status.text()
+            assert (card._status.text(), card._status.toolTip()) == ("● 监听中 · 0 客户端", ""), card._status.text()
+            probe = QTcpSocket()
+            probe.connectToHost("127.0.0.1", link.port)
+            wait_for(lambda: link.peer_count == 1, "the client")
+            nothing = "● 监听中 · 1 客户端 · 没有 Modbus 绑定"
+            assert (card._status.text(), card._status.toolTip()) == (nothing, nothing), card._status.text()
+            probe.abort()
+            wait_for(lambda: link.peer_count == 0, "the client to leave")
             assert (card._status.text(), card._status.toolTip()) == ("● 监听中 · 0 客户端", ""), card._status.text()
             card.set_modbus_slave(300)  # out of range: 247 at most, and it counts at once
             assert settings() == (200, 300, 247), settings()
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            assert settings() == (700, 800, 9), settings()
+            serial.disconnect()
             assert settings() == (500, 1000, 1), settings()
         """)
 

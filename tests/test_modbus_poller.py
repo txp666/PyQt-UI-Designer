@@ -206,9 +206,9 @@ class ModbusPollerTests(unittest.TestCase):
             failed = "● 已连接 · 第 3 块无响应（从站 1 功能码 3 地址 200）"
             assert (card._status.text(), card._status.toolTip()) == (failed, PLC_TIP), card._status.text()
             assert card._status.lightColor == ok, card._status.lightColor.name()
-            # 单行 has no status line, only the connection: nothing of the poller's shows there.
+            # 单行 shows the same at the end of its strip.
             card.set_display_mode("单行")
-            assert (card._sl_status.text(), card._sl_status.toolTip()) == ("● 已连接", ""), card._sl_status.text()
+            assert (card._sl_status.text(), card._sl_status.toolTip()) == (failed, PLC_TIP), card._sl_status.text()
             card.set_display_mode("完整")
             for name in ("pressure", "flow", "target", "frequency", "level", "pump1", "pump2", "fault", "run"):
                 widget(name).hide()

@@ -186,8 +186,8 @@ Its settings are the link cards' (serial, TCP, MQTT; link_card.ModbusLinkSetting
 card in document order whose link is connected and parses Modbus hands it its 默认轮询(ms)
 (``modbusPeriod``), 响应超时(ms) (``modbusTimeout``) and 默认从站 (``modbusSlave``, read by the
 bindings that filter no slave). Without such a card the period is 500 ms, a read waits 1000 ms
-for its reply and the slave is 1. A change counts at once. A link card whose link is connected
-and parses Modbus shows the poller's status after its own.
+for its reply and the slave is 1. A change counts at once. A link card whose link is connected,
+parses Modbus and can send shows the poller's status after its own.
 """
 import time
 from functools import partial
@@ -325,8 +325,9 @@ class ModbusPoller(QObject):
 
     def shown_status(self, link):
         """What a link card shows after its connection text: the status, while its ``link`` is
-        connected and parses Modbus; nothing before start() or while no link can send (等待连接)."""
-        if not _parses_modbus(link) or self._status[0] in ("", WAITING):
+        connected, parses Modbus and can send (a TCP server needs a client); nothing before start()
+        or while no link can send (等待连接)."""
+        if not _parses_modbus(link) or not _can_send(link) or self._status[0] in ("", WAITING):
             return ""
         return self._status[0]
 
