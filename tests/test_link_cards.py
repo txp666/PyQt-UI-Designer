@@ -193,7 +193,7 @@ class LinkCardTests(unittest.TestCase):
         self.run_both([
             control("tcp", "TcpConfigCard", {"defaultParser": "modbus_ascii"}),
             control("bus", "ModbusConfigCard", {"defaultSlave": 1, "defaultFunc": "03 读保持寄存器",
-                                                "defaultAddr": 100, "defaultValue": 2, "timeout": 300}, 1),
+                                                "defaultAddr": 100, "defaultValue": 2, "timeout": 60000}, 1),
         ], r'''
             import time
             from PyQt5.QtNetwork import QHostAddress, QTcpServer
@@ -228,10 +228,11 @@ class LinkCardTests(unittest.TestCase):
             assert received == [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1,
                                  "start": 100, "hr100": 25, "hr101": 1}], received
             assert bus._status.text() == "设备已响应", bus._status.text()
-            # No reply: the card says so once the timeout has passed.
+            # No reply: the card says so once the timeout has passed, which the test decides.
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            wait_for(lambda: bus._status.text().startswith("无响应"), "the timeout")
-            assert bus._status.text() == "无响应（300 ms 超时）", bus._status.text()
+            assert bus._reply_timer.isActive()
+            bus._reply_timer.timeout.emit()
+            assert bus._status.text() == "无响应（60000 ms 超时）", bus._status.text()
             QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
         ''')
 

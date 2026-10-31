@@ -424,14 +424,17 @@ class FrameFormatEditingTests(unittest.TestCase):
         rows["encoding"][1].setCurrentText("gbk")
         self.assertEqual(serial()["parserConfig"],
                          {"separator": ",", "terminator": ";", "kvSeparator": ":", "encoding": "gbk"})
+        rows["separator"][1].setText(" ")  # a separator is kept as typed, even a single space
         terminator.setText("\\r\\n")
         self.manager.save_from_scene(self.scene, str(self.path))
         saved = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(saved["serial"]["parserConfig"]["terminator"], "\r\n")
+        self.assertEqual((saved["serial"]["parserConfig"]["separator"],
+                          saved["serial"]["parserConfig"]["terminator"]), (" ", "\r\n"))
         self.manager.load_to_scene(self.scene, str(self.path))
         rows = self.editor._project_frame_rows  # loading rebuilds the section
-        self.assertEqual((rows["terminator"][1].currentText(), rows["kvSeparator"][1].currentText(),
-                          rows["encoding"][1].currentText()), ("\\r\\n", ":", "gbk"))
+        self.assertEqual((rows["separator"][1].text(), rows["terminator"][1].currentText(),
+                          rows["kvSeparator"][1].currentText(), rows["encoding"][1].currentText()),
+                         (" ", "\\r\\n", ":", "gbk"))
         serial()["parserConfig"]["encoding"] = "GBK"  # the parser ignores case
         self.editor._clear()
         rows = self.editor._project_frame_rows
@@ -445,6 +448,8 @@ class FrameFormatEditingTests(unittest.TestCase):
         rows["parser"][1].setCurrentText("hex")
         self.assertEqual(self.shown(rows), ["解析模式", *HEX_ROWS])
         self.assertEqual((rows["header"][1].text(), rows["footer"][1].text()), ("AA55", "55AA"))
+        rows["header"][1].setText(" AA 55 ")
+        self.assertEqual(serial()["parserConfig"]["header"], "AA 55", "HEX text loses its outer spaces")
         rows["footer"][1].setText("")
         rows["lengthOffset"][1].setValue(2)
         rows["checksum"][1].setCurrentText("和校验")

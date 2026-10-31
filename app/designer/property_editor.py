@@ -512,12 +512,15 @@ class PropertyEditor(ScrollArea):
             editor.valueChanged.connect(lambda value: write(key, value))
             return editor
 
-        def line_edit(key, default, placeholder):
+        def line_edit(key, default, placeholder, hex_text=False):
+            # HEX text loses its stray spaces; other text is kept as typed, so a separator
+            # may be a single space.
             editor = LineEdit()
             value = config.get(key, default)
             editor.setText(value if isinstance(value, str) else str(value))
             editor.setPlaceholderText(placeholder)
-            editor.textChanged.connect(lambda value: write(key, value.strip()))
+            editor.textChanged.connect(
+                lambda value: write(key, value.strip() if hex_text else value))
             return editor
 
         if with_mode:
@@ -541,8 +544,8 @@ class PropertyEditor(ScrollArea):
         add("kvSeparator", "键值分隔符", combo("kvSeparator", list(LINE_KV_SEPARATORS), "="))
         add("encoding", "编码", combo("encoding", list(LINE_ENCODINGS), LINE_ENCODINGS[0],
                                       normal=lambda value: str(value).lower()))
-        add("header", "帧头(HEX)", line_edit("header", "AA55", "如 AA 55，留空表示没有帧头"))
-        add("footer", "帧尾(HEX)", line_edit("footer", "55AA", "如 0D 0A，留空表示没有帧尾"))
+        add("header", "帧头(HEX)", line_edit("header", "AA55", "如 AA 55，留空表示没有帧头", True))
+        add("footer", "帧尾(HEX)", line_edit("footer", "55AA", "如 0D 0A，留空表示没有帧尾", True))
         add("lengthOffset", "长度字段偏移", spin("lengthOffset", -1, 65535, -1), "-1 = 没有长度字段")
         add("lengthSize", "长度字节数", combo("lengthSize", ["1", "2"], 1, int))
         add("lengthEndian", "长度字节序", combo("lengthEndian", list(HEX_ENDIANS), HEX_ENDIANS[0]))

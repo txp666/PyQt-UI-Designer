@@ -116,7 +116,7 @@ python tools/check_uidp.py motor.uidp
 | `TcpConfigCard` TCP | `defaultMode`（`"客户端"` / `"服务端"`）、`defaultHost`、`defaultPort` |
 | `MqttConfigCard` MQTT | `defaultHost`、`defaultPort`、`defaultSubscribe`（可用 `+` `#` 通配）、`defaultPublish`、`defaultUsername`、`defaultPassword`、`defaultQos`（`"0"` `"1"` `"2"`） |
 
-- `displayMode` 是 `"完整"`（默认）时，卡片不要比默认尺寸矮：串口 360×340、TCP 360×290、MQTT 380×430。MQTT 卡片字段最多，矮了字段会挤在一起；地方不够就设成 `"简洁"`。控件参考里的「最小」尺寸是简洁模式下的下限。
+- `displayMode` 是 `"完整"`（默认）时，卡片不要比默认尺寸矮：串口 360×340、TCP 360×290、MQTT 380×430。矮了字段会挤在一起，地方不够就设成 `"简洁"`。控件参考里的「最小」尺寸是简洁模式下的下限。
 - 每张卡片都有 `defaultParser`：`"项目设置"`（默认，用工程的 `serial.parser`）、`"line"`、`"hex"`、`"modbus"`、`"modbus_tcp"`、`"modbus_ascii"`。不同设备帧格式不同时，在卡片上分别设置。
 - 卡片的 `parserConfig` 是这张卡片自己的帧格式（对象，键和 `serial.parserConfig` 一样），`defaultParser` 不是 `"项目设置"` 时生效；不写或写 `{}` 时，卡片的解析模式和工程相同就沿用工程的 `parserConfig`，不同就用默认值。
 - MQTT 每条消息算一帧，按这条链路的解析模式解析；用 `line` 解析时消息末尾不需要行结束符。消息只有一个数值时（比如主题 `sensor/temp` 收到 `25.3`），还可以直接用主题名 `sensor/temp` 当键绑定。
@@ -131,7 +131,7 @@ python tools/check_uidp.py motor.uidp
 
 | parser | 帧 | 解析结果 |
 | --- | --- | --- |
-| `line` | 一条条文本记录。`parserConfig` 各键都可省略：`separator` 分隔符（默认 `","`）；`terminator` 行结束符（默认 `"\n"`，也可以是 `";"`、`"\r"` 等；记录两端的空白会去掉，所以 `"\n"` 也认 `\r\n`）；`kvSeparator` 键值分隔符（默认 `"="`，可改成 `":"`）；`encoding` 编码（默认 `"utf-8"`，可选 `"gbk"`、`"ascii"`）。JSON 对象和数组不需要行结束符，可以跨多行、连着发 | `temp=25.3,hum=60` → 键 `temp`、`hum`；JSON 对象 → 原样的对象，数组 → 键 `"0"`、`"1"`……；`25.3,60` → `ch0`、`ch1`。数字自动转成数值。带 `*HH` 的 NMEA 语句（如 `$GPGGA,…*47`）先校验，不对就丢掉，对了去掉 `$` 和 `*HH` 再解析，`ch0` 是 `GPGGA` |
+| `line` | 一条条文本记录。`parserConfig` 各键都可省略：`separator` 分隔符（默认 `","`）；`terminator` 行结束符（默认 `"\n"`，也可以是 `";"`、`"\r"` 等；记录两端的空白会去掉，所以 `"\n"` 也认 `\r\n`）；`kvSeparator` 键值分隔符（默认 `"="`，可改成 `":"`）；`encoding` 编码（默认 `"utf-8"`，可选 `"gbk"`、`"ascii"`）。JSON 对象和数组不需要行结束符，可以跨多行、连着发。以 `{` 或 `[` 开头的记录如果在字符串之外出现了 JSON 不可能有的字节（如 `=`），这一行丢掉，后面的记录照常解析 | `temp=25.3,hum=60` → 键 `temp`、`hum`；JSON 对象 → 原样的对象，数组 → 键 `"0"`、`"1"`……；`25.3,60` → `ch0`、`ch1`。数字自动转成数值。带 `*HH` 的 NMEA 语句（如 `$GPGGA,…*47`）先校验，不对就丢掉，对了去掉 `$` 和 `*HH` 再解析，`ch0` 是 `GPGGA` |
 | `hex` | 二进制帧。`parserConfig` 各键都可省略：`header` 帧头、`footer` 帧尾（HEX 文本，默认 `"AA55"`、`"55AA"`，`""` 表示没有）；`lengthOffset` 长度字段的偏移（从帧头第一个字节算，默认 `-1` 表示没有）、`lengthSize`（`1` 或 `2`）、`lengthEndian`（`"大端(BE)"` / `"小端(LE)"`）、`lengthCovers`（长度数的是 `"数据"` / `"长度字段之后"` / `"整帧"`）；`fixedLength` 固定帧长（默认 `0` 表示不固定）；`checksum`（`"无"` `"和校验"` `"异或"` `"CRC8"` `"CRC16-Modbus"` `"CRC16-CCITT"`，校验字节紧贴帧尾之前）、`checksumStart`（从帧内这个偏移开始校验）、`checksumEndian`；`idleTimeout`（毫秒，这么久没有新数据就结束一帧）。帧尾、长度字段、固定帧长、空闲超时至少要有一个。`fields`：`[["temp", 0, 2, "int16"], ...]`，每项是 `[名字, 偏移, 长度, 类型]`，可加第 5 项字节序；偏移从帧头之后算，类型有 `uint8` `int8` `uint16` `int16` `uint32` `int32` `float32` `float64` `ASCII` `HEX` | 按字段取值得到键。HEX字节提取 和 HEX 曲线收到的是整帧，`byteOffset` 从帧头第一个字节算 |
 | `modbus` / `modbus_tcp` | Modbus RTU / TCP 响应 | `slave`、`fc`，以及 `reg0`、`reg1`……（读寄存器）或 `coil0`……（读线圈），是响应内的序号；读请求由本程序发出时，还有起始地址 `start` 和按地址命名的 `hr100`（保持寄存器）、`ir100`（输入寄存器）、`co100`（线圈）、`di100`（离散输入） |
 | `modbus_ascii` | Modbus ASCII 响应 | 键同 `modbus` |
@@ -165,7 +165,7 @@ python tools/check_uidp.py motor.uidp
 
 按钮、开关、滑块、数值框、输入框、下拉框都能发命令。`commandMode` 决定格式：
 
-- **`"文本"`（默认）**：`commandTemplate` 里的 `{value}` 换成要发的值，末尾加 `commandNewline`。`commandNewline` 可选 `"无"`、`"\\r\\n"`（默认）、`"\\n"`、`"\\r"`。注意在 JSON 里要写成两个反斜杠，因为这个值本身就是反斜杠加字母的文字。
+- **`"文本"`（默认）**：`commandTemplate` 里的 `{value}` 换成要发的值，末尾加 `commandNewline`。`commandNewline` 可选 `"无"`、`"\\r\\n"`（默认）、`"\\n"`、`"\\r"`。在 JSON 里要写成两个反斜杠，因为这个值是反斜杠加字母的文字。
 - **`"HEX"`**：`dataType` 为 `"HEX字符串"` 时，值本身就是 HEX 文本（如 `"01 03 00 00"`）；为数值类型时，按 `dataType` 和 `byteOrder` 打包后放进模板。可加 `frameHeader` / `frameTail`。
 - **`"Modbus"`**：用 `mbSlave`、`mbFunc`（如 `"06 写单寄存器"`）、`mbAddress` 组请求；连接的链路解析模式是 `modbus_tcp` 时自动用 MBAP 帧，`modbus_ascii` 时用 ASCII 帧，否则用 RTU 帧加 CRC。`mbDataType`（默认 `"uint16"`）和 `mbRegOrder` 决定写入的值怎么放进寄存器：`"06 写单寄存器"` 可用 `"uint16"`、`"int16"`；`"16 写多个寄存器"` 还可用 `"uint32"`、`"int32"`、`"float32"`，32 位类型写两个寄存器。按钮写的值是 `mbValue`，只能是整数（int16、int32 可以是负数）；写小数用输入框。
 
@@ -195,7 +195,7 @@ python tools/check_uidp.py motor.uidp
 
 控件参考里 `curveName`、`curveKey` 这些 `curve` 开头的属性，是设计器属性面板编辑「当前曲线」用的，写文件时不需要。
 
-曲线颜色按顺序固定（浅色主题下依次是蓝、红、绿、橙、紫、青、棕、灰，深色主题用对应的浅一些的颜色），文件里不能改。所有曲线共用一条自动缩放的纵轴，数量级差很多的量最好分到两个曲线控件里。
+曲线颜色按顺序固定（依次是蓝、红、绿、橙、紫、青、棕、灰，深色主题下浅一些），文件里不能改。所有曲线共用一条自动缩放的纵轴，数量级差很多的量最好分到两个曲线控件里。
 
 横轴是这条曲线收到的点数，不是时间。几条曲线来自发送频率不同的设备时，会一条快一条慢；能统一频率最好。
 
@@ -207,9 +207,9 @@ python tools/check_uidp.py motor.uidp
 
 - 控件类型拼错或大小写不对 → 设计器和 `check_uidp.py` 都会报「未知控件类型」。
 - 两个控件同一个 `id` → 「控件 ID 无效或重复」。
-- 选项类属性写了参考里没有的值（比如把 `"键值匹配"` 写成 `"key"`、`"大端(BE)"` 写成 `"BE"`）→ 设计器打开时不报错，但设置不生效，`check_uidp.py` 会指出来。照抄参考里的原文。
+- 选项类属性写了参考里没有的值（比如把 `"键值匹配"` 写成 `"key"`、`"大端(BE)"` 写成 `"BE"`）→ 设计器打开时不报错，但设置不生效，`check_uidp.py` 会指出来。
 - `defaultPort`、`maximum` 这类数值写成了字符串；`defaultBaud`、`defaultQos` 反过来是字符串选项。
-- 文本命令忘了设备需要的换行符；设备只认 `\n` 时把 `commandNewline` 设成 `"\\n"`。反过来，MQTT 设备通常不要换行，设成 `"无"`。
+- 文本命令忘了设备需要的换行符；设备只认 `\n` 时把 `commandNewline` 设成 `"\\n"`（MQTT 设备通常设成 `"无"`）。
 - 以为工程会自动连接：不会，用户要点「连接」。
 
 ## 控件一览
