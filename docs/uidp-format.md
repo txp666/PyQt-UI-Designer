@@ -117,12 +117,13 @@ python tools/check_uidp.py motor.uidp
 | `MqttConfigCard` MQTT | `defaultHost`、`defaultPort`、`defaultSubscribe`（可用 `+` `#` 通配）、`defaultPublish`、`defaultUsername`、`defaultPassword`、`defaultQos`（`"0"` `"1"` `"2"`） |
 
 - `displayMode` 是 `"完整"`（默认）时，卡片不要比默认尺寸矮：串口 360×340、TCP 360×290、MQTT 380×430。MQTT 卡片字段最多，矮了字段会挤在一起；地方不够就设成 `"简洁"`。控件参考里的「最小」尺寸是简洁模式下的下限。
-- 每张卡片都有 `defaultParser`：`"项目设置"`（默认，用工程的 `serial.parser`）、`"line"`、`"hex"`、`"modbus"`、`"modbus_tcp"`。不同设备帧格式不同时，在卡片上分别设置。
-- MQTT 每条消息算一帧，按这条链路的解析模式解析；用 `line` 解析时消息末尾不需要换行。消息只有一个数值时（比如主题 `sensor/temp` 收到 `25.3`），还可以直接用主题名 `sensor/temp` 当键绑定。
+- 每张卡片都有 `defaultParser`：`"项目设置"`（默认，用工程的 `serial.parser`）、`"line"`、`"hex"`、`"modbus"`、`"modbus_tcp"`、`"modbus_ascii"`。不同设备帧格式不同时，在卡片上分别设置。
+- 卡片的 `parserConfig` 是这张卡片自己的帧格式（对象，键和 `serial.parserConfig` 一样），`defaultParser` 不是 `"项目设置"` 时生效；不写或写 `{}` 时，卡片的解析模式和工程相同就沿用工程的 `parserConfig`，不同就用默认值。
+- MQTT 每条消息算一帧，按这条链路的解析模式解析；用 `line` 解析时消息末尾不需要行结束符。消息只有一个数值时（比如主题 `sensor/temp` 收到 `25.3`），还可以直接用主题名 `sensor/temp` 当键绑定。
 - MQTT 发命令时，编码后的整条命令就是消息内容，**包括 `commandNewline` 加的换行**。设备要的是不带换行的 `RESET` 时，把发命令控件的 `commandNewline` 设成 `"无"`。
 - 订阅主题如果也包含了发布主题（比如订阅 `workshop/#`、发布到 `workshop/cmd`），上位机会收到自己发出的命令；只要没有控件绑定同名的键，就没有影响。
 - 发送命令时，命令会发到**所有已连接的链路**（MQTT 发到 `defaultPublish` 主题）。
-- `ModbusConfigCard` 用来手动发送或轮询 Modbus 请求，它本身不是链路，需要和串口或 TCP 卡片一起用。
+- `ModbusConfigCard` 用来手动发送或轮询 Modbus 请求，它本身不是链路，需要和串口或 TCP 卡片一起用。`pollList` 是轮询表（多行文本，每行 `从站,功能码,地址,数量`，功能码 1–4），轮询时逐条发送，每条等到响应或 `timeout`（默认 1000 ms）再发下一条（链路要用 `modbus`、`modbus_tcp` 或 `modbus_ascii` 解析，卡片才认得出响应）；为空时轮询卡片上的那条请求。读 PLC 的几块地址时，把每块写成一行，绑定按寄存器地址取值（见下文"绑定数据"）。
 
 ## 解析收到的数据
 
@@ -130,9 +131,10 @@ python tools/check_uidp.py motor.uidp
 
 | parser | 帧 | 解析结果 |
 | --- | --- | --- |
-| `line` | 一行文本，以 `\n` 结尾（`\r\n` 也行）。`parserConfig.separator` 是分隔符，默认 `","` | `temp=25.3,hum=60` → 键 `temp`、`hum`；一行 JSON 对象 → 原样的对象；`25.3,60` → `ch0`、`ch1`。数字自动转成数值 |
-| `hex` | 二进制帧。`parserConfig`：`header`（如 `"AA55"`）、`footer`（如 `"55AA"`）、`fields`：`[["temp", 0, 2, "int16"], ...]`，每项是 `[名字, 偏移, 长度, 类型]` | 按字段取值得到键 |
-| `modbus` / `modbus_tcp` | Modbus RTU / TCP 响应 | `slave`、`fc`，以及 `reg0`、`reg1`……（读寄存器）或 `coil0`……（读线圈） |
+| `line` | 一条条文本记录。`parserConfig` 各键都可省略：`separator` 分隔符（默认 `","`）；`terminator` 行结束符（默认 `"\n"`，也可以是 `";"`、`"\r"` 等；记录两端的空白会去掉，所以 `"\n"` 也认 `\r\n`）；`kvSeparator` 键值分隔符（默认 `"="`，可改成 `":"`）；`encoding` 编码（默认 `"utf-8"`，可选 `"gbk"`、`"ascii"`）。JSON 对象和数组不需要行结束符，可以跨多行、连着发 | `temp=25.3,hum=60` → 键 `temp`、`hum`；JSON 对象 → 原样的对象，数组 → 键 `"0"`、`"1"`……；`25.3,60` → `ch0`、`ch1`。数字自动转成数值。带 `*HH` 的 NMEA 语句（如 `$GPGGA,…*47`）先校验，不对就丢掉，对了去掉 `$` 和 `*HH` 再解析，`ch0` 是 `GPGGA` |
+| `hex` | 二进制帧。`parserConfig` 各键都可省略：`header` 帧头、`footer` 帧尾（HEX 文本，默认 `"AA55"`、`"55AA"`，`""` 表示没有）；`lengthOffset` 长度字段的偏移（从帧头第一个字节算，默认 `-1` 表示没有）、`lengthSize`（`1` 或 `2`）、`lengthEndian`（`"大端(BE)"` / `"小端(LE)"`）、`lengthCovers`（长度数的是 `"数据"` / `"长度字段之后"` / `"整帧"`）；`fixedLength` 固定帧长（默认 `0` 表示不固定）；`checksum`（`"无"` `"和校验"` `"异或"` `"CRC8"` `"CRC16-Modbus"` `"CRC16-CCITT"`，校验字节紧贴帧尾之前）、`checksumStart`（从帧内这个偏移开始校验）、`checksumEndian`；`idleTimeout`（毫秒，这么久没有新数据就结束一帧）。帧尾、长度字段、固定帧长、空闲超时至少要有一个。`fields`：`[["temp", 0, 2, "int16"], ...]`，每项是 `[名字, 偏移, 长度, 类型]`，可加第 5 项字节序；偏移从帧头之后算，类型有 `uint8` `int8` `uint16` `int16` `uint32` `int32` `float32` `float64` `ASCII` `HEX` | 按字段取值得到键。HEX字节提取 和 HEX 曲线收到的是整帧，`byteOffset` 从帧头第一个字节算 |
+| `modbus` / `modbus_tcp` | Modbus RTU / TCP 响应 | `slave`、`fc`，以及 `reg0`、`reg1`……（读寄存器）或 `coil0`……（读线圈），是响应内的序号；读请求由本程序发出时，还有起始地址 `start` 和按地址命名的 `hr100`（保持寄存器）、`ir100`（输入寄存器）、`co100`（线圈）、`di100`（离散输入） |
+| `modbus_ascii` | Modbus ASCII 响应 | 键同 `modbus` |
 
 协议的完整规则（各种发送格式的例子、HEX 类型的字节长度、Modbus 输出格式）见 [protocol.md](protocol.md)。
 
@@ -155,9 +157,9 @@ python tools/check_uidp.py motor.uidp
 | `"键值匹配"` | `key`：键名，如 `"rpm"` |
 | `"JSON路径"` | `jsonPath`：用点分隔，数组用下标，如 `"data.sensors.0.temp"`（负数从末尾数） |
 | `"HEX字节提取"` | 直接从原始字节取：`byteOffset`、`dataType`（`"uint8"` … `"float32"`）、`byteOrder`（`"大端(BE)"` / `"小端(LE)"`），可选 `frameHeader` / `frameTail`（HEX 文本，如 `"AA55"`） |
-| `"Modbus"` | `mbRegIndex`（第几个寄存器，从 0 开始）、`mbDataType`（`"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`）、`mbRegOrder`（`"大端(AB CD)"` / `"小端(CD AB)"`），可选过滤 `mbSlaveFilter`、`mbFcFilter`（-1 表示不过滤） |
+| `"Modbus"` | `mbArea`：`"响应内序号"`（默认）、`"保持寄存器"`、`"输入寄存器"`、`"线圈"`、`"离散输入"`；`mbRegIndex`：`"响应内序号"` 时是响应里第几个寄存器（从 0 开始），选了寄存器区时是寄存器地址；`mbDataType`（`"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`）、`mbRegOrder`（`"大端(AB CD)"` / `"小端(CD AB)"`），可选过滤 `mbSlaveFilter`、`mbFcFilter`（-1 表示不过滤）。轮询多块地址时用寄存器区，`"响应内序号"` 分不清是哪一块的响应 |
 
-所有模式都可以加 `expression` 做换算，变量是 `value`，如 `"value * 0.1"`。
+所有模式都可以加 `expression` 做换算，变量是 `value`，如 `"value * 0.1"`。支持 Python 的算术 `+ - * / // % **`、位运算 `& | ^ ~ << >>`（只对整数）、比较 `< <= > >= == !=`（可以连写，如 `"0 < value < 40"`）和 `and` / `or` / `not`，可以加括号；比较的结果是 `True` / `False`，给指示灯用时 `onValue` 填 `1` 即可，如 `"(value >> 1) & 1"` 取第 1 位、`"value * 3.3 / 4095 < 1"` 判断电压。算不出来（除以零、位运算碰到小数）就按原值显示。
 
 ## 发送命令
 
@@ -165,7 +167,7 @@ python tools/check_uidp.py motor.uidp
 
 - **`"文本"`（默认）**：`commandTemplate` 里的 `{value}` 换成要发的值，末尾加 `commandNewline`。`commandNewline` 可选 `"无"`、`"\\r\\n"`（默认）、`"\\n"`、`"\\r"`。注意在 JSON 里要写成两个反斜杠，因为这个值本身就是反斜杠加字母的文字。
 - **`"HEX"`**：`dataType` 为 `"HEX字符串"` 时，值本身就是 HEX 文本（如 `"01 03 00 00"`）；为数值类型时，按 `dataType` 和 `byteOrder` 打包后放进模板。可加 `frameHeader` / `frameTail`。
-- **`"Modbus"`**：用 `mbSlave`、`mbFunc`（如 `"06 写单寄存器"`）、`mbAddress` 组请求；连接的链路解析模式是 `modbus_tcp` 时自动用 MBAP 帧，否则用 RTU 帧加 CRC。
+- **`"Modbus"`**：用 `mbSlave`、`mbFunc`（如 `"06 写单寄存器"`）、`mbAddress` 组请求；连接的链路解析模式是 `modbus_tcp` 时自动用 MBAP 帧，`modbus_ascii` 时用 ASCII 帧，否则用 RTU 帧加 CRC。`mbDataType`（默认 `"uint16"`）和 `mbRegOrder` 决定写入的值怎么放进寄存器：`"06 写单寄存器"` 可用 `"uint16"`、`"int16"`；`"16 写多个寄存器"` 还可用 `"uint32"`、`"int32"`、`"float32"`，32 位类型写两个寄存器。按钮写的值是 `mbValue`，只能是整数（int16、int32 可以是负数）；写小数用输入框。
 
 每种控件发什么值：
 
@@ -189,7 +191,7 @@ python tools/check_uidp.py motor.uidp
 | `_curve_0_parseMode` | 同 binding 的 `parseMode`，默认 `"键值匹配"` |
 | `_curve_0_key`、`_curve_0_jsonPath` | 键值匹配 / JSON路径 |
 | `_curve_0_byteOffset`、`_curve_0_dataType`、`_curve_0_byteOrder`、`_curve_0_frameHeader`、`_curve_0_frameTail` | HEX字节提取 |
-| `_curve_0_regIndex`、`_curve_0_mbDataType`、`_curve_0_mbRegOrder`、`_curve_0_mbFcFilter`、`_curve_0_mbSlaveFilter` | Modbus |
+| `_curve_0_mbArea`、`_curve_0_regIndex`、`_curve_0_mbDataType`、`_curve_0_mbRegOrder`、`_curve_0_mbFcFilter`、`_curve_0_mbSlaveFilter` | Modbus，含义同 binding 的 `mbArea`、`mbRegIndex` 等 |
 
 控件参考里 `curveName`、`curveKey` 这些 `curve` 开头的属性，是设计器属性面板编辑「当前曲线」用的，写文件时不需要。
 

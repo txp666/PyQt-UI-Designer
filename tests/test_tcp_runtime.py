@@ -18,6 +18,13 @@ from app.core.command_runtime import send_modbus_command
 
 HEX_CONFIG = {"parser": "hex", "parserConfig": {
     "header": "AA55", "footer": "55AA", "fields": [["v", 0, 2, "uint16"]]}}
+# Frames counted by a length field and checked by a sum, and frames ended by silence: a quiet far
+# longer than a loopback write takes, so each frame sent in one write is flushed whole.
+COUNTED = {"header": "AA55", "footer": "", "lengthOffset": 2, "checksum": "和校验",
+           "fields": [["cmd", 1, 1, "uint8"], ["temp", 2, 2, "int16", "小端(LE)"]]}
+FRAMES = [bytes.fromhex("aa550401f6ff3c35"), bytes.fromhex("aa5504021000283d")]
+MESSAGES = [{"cmd": 1, "temp": -10}, {"cmd": 2, "temp": 16}]
+IDLE = {"header": "7E", "footer": "", "idleTimeout": 200, "fields": [["a", 0, 1, "uint8"]]}
 
 
 class TcpLinkTests(unittest.TestCase):
@@ -28,7 +35,8 @@ class TcpLinkTests(unittest.TestCase):
     def runtimes(self, config=None):
         exported = {}
         with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
-                create_parser=protocol.create_parser)}):
+                create_parser=protocol.create_parser, text_encoding=protocol.text_encoding,
+                ModbusRequests=protocol.ModbusRequests)}):
             exec(_gen_tcp_handler(config or {}), exported)
         return vars(tcp_runtime), exported
 
@@ -142,12 +150,15 @@ class TcpLinkTests(unittest.TestCase):
             self.wait_for(lambda: server.peer_count == 2 and first.is_connected
                           and second.is_connected, "both clients")
             self.assertTrue(first.send(bytes.fromhex("aa5500")))
-            self.wait_for(lambda: self.of(server_events, "raw"), "the first half")
+            QTest.qWait(50)
+            self.assertEqual(self.of(server_events, "raw"), [], "a hex link publishes whole frames")
             self.assertTrue(second.send(bytes.fromhex("aa55000255aa")))
             self.wait_for(lambda: self.of(server_events, "data"), "the second peer's frame")
             self.assertTrue(first.send(bytes.fromhex("0155aa")))
             self.wait_for(lambda: len(self.of(server_events, "data")) == 2, "the first peer's frame")
             self.assertEqual(self.of(server_events, "data"), [{"v": 2}, {"v": 1}])
+            self.assertEqual(self.of(server_events, "raw"),
+                             [bytes.fromhex("aa55000255aa"), bytes.fromhex("aa55000155aa")])
 
             self.assertTrue(server.send(b"all=1\n"))
             self.wait_for(lambda: ("data", {"all": 1}) in first_events
@@ -158,6 +169,49 @@ class TcpLinkTests(unittest.TestCase):
             self.wait_for(lambda: ("data", {"one": 1}) in first_events, "the remaining peer")
             self.assertNotIn(("data", {"one": 1}), second_events)
 
+    def test_hex_links_publish_each_frame_and_flush_after_the_line_goes_quiet(self):
+        for namespace in self.runtimes():
+            server, client = self.make(namespace), self.make(namespace)
+            server_events, client_events = self.record(server), self.record(client)
+            # The server's peers frame by silence; the client counts its frames.
+            self.assertTrue(server.connect("127.0.0.1", 0, mode="服务端", parser_type="hex",
+                                           parser_config=IDLE))
+            self.assertTrue(client.connect("127.0.0.1", server.port, parser_type="hex",
+                                           parser_config=COUNTED))
+            self.wait_for(lambda: client.is_connected and server.peer_count == 1, "the client")
+
+            wire = b"\x12" + b"".join(FRAMES)
+            self.assertTrue(server.send(wire[:6]))
+            self.assertTrue(server.send(wire[6:]))
+            self.wait_for(lambda: len(self.of(client_events, "data")) == 2, "both frames")
+            self.assertEqual([event[1] for event in client_events if event[0] in ("raw", "data")],
+                             [FRAMES[0], MESSAGES[0], FRAMES[1], MESSAGES[1]], "each frame, then its message")
+
+            for quiet_frame, message in ((bytes.fromhex("7e0102"), {"a": 1}), (bytes.fromhex("7e05"), {"a": 5})):
+                self.assertTrue(client.send(quiet_frame))
+                self.wait_for(lambda: ("data", message) in server_events, "the quiet after a frame")
+            self.assertEqual(self.of(server_events, "raw"), [bytes.fromhex("7e0102"), bytes.fromhex("7e05")])
+
+            # A client that frames by silence flushes on its own timer, and not once it is closed.
+            client.disconnect()
+            self.wait_for(lambda: server.peer_count == 0, "the client to leave")
+            idle_client = self.make(namespace)
+            idle_events = self.record(idle_client)
+            self.assertTrue(idle_client.connect("127.0.0.1", server.port, parser_type="hex",
+                                                parser_config=IDLE))
+            self.wait_for(lambda: idle_client.is_connected and server.peer_count == 1, "the idle client")
+            self.assertTrue(server.send(bytes.fromhex("337e09")))
+            self.wait_for(lambda: self.of(idle_events, "data"), "the client's quiet")
+            self.assertEqual(self.of(idle_events, "raw"), [bytes.fromhex("7e09")])
+            self.assertEqual(self.of(idle_events, "data"), [{"a": 9}])
+            timer, = idle_client._idle_timers.values()
+            timer.setInterval(60000)  # from here the test decides when it fires
+            self.assertTrue(server.send(bytes.fromhex("7e0a")))
+            self.wait_for(timer.isActive, "the next frame to arrive")
+            idle_client.disconnect()
+            timer.timeout.emit()  # a tick already due as the stream closed
+            self.assertEqual(len(self.of(idle_events, "raw")), 1, "a closed stream is not flushed")
+
     def test_invalid_parameters_never_open_anything(self):
         for namespace in self.runtimes():
             handler = self.make(namespace)
@@ -167,7 +221,7 @@ class TcpLinkTests(unittest.TestCase):
                 dict(host="", port=80),
                 dict(host="127.0.0.1", port=70000),
                 dict(host="127.0.0.1", port=80, mode="udp"),
-                dict(host="127.0.0.1", port=80, parser_type="hex", parser_config={"header": ""}),
+                dict(host="127.0.0.1", port=80, parser_type="hex", parser_config={"header": "XYZ"}),
                 dict(host="not an address", port=0, mode="服务端"),
             ):
                 with self.subTest(**arguments):
@@ -199,8 +253,8 @@ class TcpLinkTests(unittest.TestCase):
         for namespace in self.runtimes(config):
             device, host = self.make(namespace), self.make(namespace, config)
             device_events, host_events = self.record(device), self.record(host)
-            self.assertTrue(device.connect("127.0.0.1", 0, mode="服务端", parser_type="hex",
-                                           parser_config={"header": "FF", "footer": "FE"}))
+            # A line link passes on the raw bytes as they arrive, and they hold no newline.
+            self.assertTrue(device.connect("127.0.0.1", 0, mode="服务端", parser_type="line"))
             self.assertTrue(host.connect("127.0.0.1", device.port))
             self.wait_for(lambda: host.is_connected and device.peer_count == 1, "the host link")
             self.assertEqual(host.parser_type, "modbus_tcp")
@@ -213,8 +267,10 @@ class TcpLinkTests(unittest.TestCase):
             QTest.qWait(30)
             self.assertTrue(device.send(response[5:]))
             self.wait_for(lambda: self.of(host_events, "data"), "the response")
+            # The link noted the read, so its registers are also named by address.
             self.assertEqual(self.of(host_events, "data"),
-                             [{"slave": 1, "fc": 3, "temperature": 255, "reg1": 1}])
+                             [{"slave": 1, "fc": 3, "temperature": 255, "reg1": 1,
+                               "start": 0, "hr0": 255, "hr1": 1}])
             # The same link framed as RTU over TCP keeps the CRC.
             self.assertTrue(host.connect("127.0.0.1", device.port, parser_type="modbus"))
             self.wait_for(lambda: host.is_connected and device.peer_count == 1, "the RTU link")

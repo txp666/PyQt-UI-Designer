@@ -50,6 +50,8 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
     def _create_interfaces(self):
         self.designer_interface = DesignerInterface(self)
         self.designer_interface.populate_palette()
+        # A save replaces the project object, so the panel asks for the current one each time.
+        self.designer_interface.set_project_source(lambda: self._project_mgr.current)
 
         self.preview_interface = PreviewInterface(self)
         self.setting_interface = SettingInterface(self)
