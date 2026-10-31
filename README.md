@@ -14,6 +14,8 @@
     <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows" alt="Download"></a>
   </p>
   <p align="center">
+    <a href="README_EN.md">English</a> •
+    简体中文 •
     <a href="https://modusignal.cn/pyqt-ui-designer/">官网</a> •
     <a href="https://modusignal.cn/pyqt-ui-designer/guide/">使用说明</a> •
     <a href="#演示视频">演示视频</a> •
