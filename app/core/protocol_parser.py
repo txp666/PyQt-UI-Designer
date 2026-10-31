@@ -79,6 +79,10 @@ LINE_ENCODINGS = ("utf-8", "gbk", "ascii")
 LINE_KV_SEPARATORS = ("=", ":")
 # An NMEA sentence ends in *HH, the XOR of the characters between the leading $ (or !) and the *.
 _NMEA_TAIL = re.compile(r"\*[0-9A-Fa-f]{2}\Z")
+# The bytes JSON may hold outside a string, besides brackets and quotes: punctuation, numbers,
+# the letters of true, false and null, and whitespace. Any other byte means the value is not JSON.
+_JSON_BYTES = frozenset(b",:0123456789-+.eEtruefalsn \t\n\r")
+_NOT_JSON = -1
 
 
 class LineParser(BaseParser):
@@ -90,7 +94,9 @@ class LineParser(BaseParser):
       - KEY=VALUE: "temp=25.3,humidity=60" (or temp:25.3 with kvSeparator ":")
       - NMEA: "$GPGGA,...*47", kept only when its checksum matches, read as CSV without $ and *HH
     A buffer that starts with { or [ holds a JSON value instead; it ends where its brackets
-    close, so it needs no terminator and may span lines: '{"temp": 25.3}', [1, 2].
+    close, so it needs no terminator and may span lines: '{"temp": 25.3}', [1, 2]. A byte
+    JSON cannot hold outside a string (such as =) ends the candidate: it is dropped through
+    its first terminator and the records after it parse as usual.
     """
 
     def __init__(self, separator: str = ",", max_buffer: int = 65536, terminator: str = "\n",
@@ -144,6 +150,9 @@ class LineParser(BaseParser):
             json_value = self._buf[:1] in (b"{", b"[")
             if json_value:
                 size = self._json_size(self._buf)
+                if size == _NOT_JSON:  # dropped through its first terminator, here or yet to come
+                    self._discarding = True
+                    continue
                 end = size
             else:
                 at = self._buf.find(term)
@@ -170,8 +179,9 @@ class LineParser(BaseParser):
     @staticmethod
     def _json_size(buf: bytes) -> Optional[int]:
         """The length of the JSON value ``buf`` starts with, by its brackets outside strings;
-        None until they close. Any closing bracket closes any opening one: a mismatched value
-        ends all the same and then fails to parse."""
+        None until they close, or _NOT_JSON at a byte JSON cannot hold outside a string. Any
+        closing bracket closes any opening one: a mismatched value ends all the same and then
+        fails to parse."""
         depth, in_string, index = 0, False, 0
         while index < len(buf):
             byte = buf[index]
@@ -188,6 +198,8 @@ class LineParser(BaseParser):
                 depth -= 1
                 if depth == 0:
                     return index + 1
+            elif byte not in _JSON_BYTES:
+                return _NOT_JSON
             index += 1
         return None
 
@@ -638,9 +650,9 @@ class ModbusRequests:
 class ModbusRTUParser(BaseParser):
     """Parse Modbus RTU response frames.
 
-    Extracts register values from FC 01-04 responses and maps them
-    to named fields: reg0, reg1, … (or custom field names), plus
-    hr100, … by register address when the request is known.
+    Reads the replies to FC 01-08, 0x0F, 0x10, 0x11, 0x16 and 0x17 and exceptions as
+    modbus_response does: register values become named fields reg0, reg1, … (or custom
+    field names), plus hr100, … by register address when the request is known.
     """
 
     def __init__(self, fields: list = None, requests: ModbusRequests = None):

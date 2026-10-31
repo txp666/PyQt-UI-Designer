@@ -5068,7 +5068,11 @@
    [
     {
      "frame": "7b2261223a0a313d320a",
-     "messages": []
+     "messages": [
+      {
+       "1": 2
+      }
+     ]
     }
    ]
   ]
@@ -5224,6 +5228,166 @@
      "messages": [
       {
        "a": 1
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json broken resyncs",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b2261223a20310a743d310a743d320a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b2261223a20310a743d310a743d320a",
+     "messages": [
+      {
+       "t": 1
+      },
+      {
+       "t": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json bad then record same line",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b2261223a203120743d310a6b3d320a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b2261223a203120743d310a6b3d320a",
+     "messages": [
+      {
+       "k": 2
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json pretty array",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "5b0a20207b"
+   },
+   {
+    "feed": "2261"
+   },
+   {
+    "feed": "223a20317d"
+   },
+   {
+    "feed": "2c0a20207b"
+   },
+   {
+    "feed": "226122"
+   },
+   {
+    "feed": "3a"
+   },
+   {
+    "feed": "20327d0a5d"
+   },
+   {
+    "feed": "0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "5b0a20207b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2261",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "223a20317d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "2c0a20207b",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "226122",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "20327d0a5d",
+     "messages": [
+      {
+       "0": {
+        "a": 1
+       },
+       "1": {
+        "a": 2
+       }
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "frame": "0a",
+     "messages": []
+    }
+   ]
+  ]
+ },
+ {
+  "name": "L json escaped newline in string",
+  "type": "line",
+  "config": {},
+  "steps": [
+   {
+    "feed": "7b2273223a2022785c6e79222c20226e223a20317d0a"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "7b2273223a2022785c6e79222c20226e223a20317d0a",
+     "messages": [
+      {
+       "s": "x\ny",
+       "n": 1
       }
      ]
     }
@@ -5486,52 +5650,67 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a30313033"
+    "feed": "3a303130"
    },
    {
-    "feed": "3032"
+    "feed": "333032"
    },
    {
-    "feed": "3031326363"
+    "feed": "30313263"
    },
    {
-    "feed": "640d0a3a30"
+    "feed": "6364"
    },
    {
-    "feed": "313031"
+    "feed": "0d"
    },
    {
-    "feed": "30"
+    "feed": "0a3a303130"
    },
    {
-    "feed": "3130444630"
+    "feed": "3130313044"
    },
    {
-    "feed": "0d0a"
+    "feed": "46300d"
+   },
+   {
+    "feed": "0a"
    }
   ],
   "expect": [
    [
     {
-     "frame": "3a30313033",
+     "frame": "3a303130",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3032",
+     "frame": "333032",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3031326363",
+     "frame": "30313263",
      "messages": []
     }
    ],
    [
     {
-     "frame": "640d0a3a30",
+     "frame": "6364",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a3a303130",
      "messages": [
       {
        "slave": 1,
@@ -5543,25 +5722,19 @@
    ],
    [
     {
-     "frame": "313031",
+     "frame": "3130313044",
      "messages": []
     }
    ],
    [
     {
-     "frame": "30",
+     "frame": "46300d",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3130444630",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "0d0a",
+     "frame": "0a",
      "messages": [
       {
        "slave": 1,
@@ -5871,85 +6044,103 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a303130"
+    "feed": "3a30"
    },
    {
-    "feed": "333032"
+    "feed": "31303330"
    },
    {
-    "feed": "30313243"
+    "feed": "3230"
    },
    {
-    "feed": "430d"
+    "feed": "31"
+   },
+   {
+    "feed": "3243430d0a"
+   },
+   {
+    "feed": "3a3031"
+   },
+   {
+    "feed": "30363030"
+   },
+   {
+    "feed": "3041303030"
+   },
+   {
+    "feed": "314545"
+   },
+   {
+    "feed": "0d"
    },
    {
     "feed": "0a"
-   },
-   {
-    "feed": "3a30313036"
-   },
-   {
-    "feed": "3030304130"
-   },
-   {
-    "feed": "303031"
-   },
-   {
-    "feed": "45450d0a"
    }
   ],
   "expect": [
    [
     {
-     "frame": "3a303130",
+     "frame": "3a30",
      "messages": []
     }
    ],
    [
     {
-     "frame": "333032",
+     "frame": "31303330",
      "messages": []
     }
    ],
    [
     {
-     "frame": "30313243",
+     "frame": "3230",
      "messages": []
     }
    ],
    [
     {
-     "frame": "430d",
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3243430d0a",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3a3031",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "30363030",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "3041303030",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "314545",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
      "messages": []
     }
    ],
    [
     {
      "frame": "0a",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "3a30313036",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "3030304130",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "303031",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "45450d0a",
      "messages": [
       {
        "slave": 1,
@@ -6513,16 +6704,13 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a30"
+    "feed": "3a303130"
    },
    {
-    "feed": "31303736"
+    "feed": "373644"
    },
    {
-    "feed": "4438"
-   },
-   {
-    "feed": "42"
+    "feed": "3842"
    },
    {
     "feed": "0d0a"
@@ -6531,25 +6719,19 @@
   "expect": [
    [
     {
-     "frame": "3a30",
+     "frame": "3a303130",
      "messages": []
     }
    ],
    [
     {
-     "frame": "31303736",
+     "frame": "373644",
      "messages": []
     }
    ],
    [
     {
-     "frame": "4438",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "42",
+     "frame": "3842",
      "messages": []
     }
    ],
@@ -6785,19 +6967,25 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a3031"
+    "feed": "3a303130"
    },
    {
-    "feed": "30383030"
+    "feed": "38"
    },
    {
-    "feed": "3030413533"
+    "feed": "30"
    },
    {
-    "feed": "373142"
+    "feed": "3030"
    },
    {
-    "feed": "0d"
+    "feed": "3041353337"
+   },
+   {
+    "feed": "31"
+   },
+   {
+    "feed": "420d"
    },
    {
     "feed": "0a"
@@ -6806,31 +6994,43 @@
   "expect": [
    [
     {
-     "frame": "3a3031",
+     "frame": "3a303130",
      "messages": []
     }
    ],
    [
     {
-     "frame": "30383030",
+     "frame": "38",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3030413533",
+     "frame": "30",
      "messages": []
     }
    ],
    [
     {
-     "frame": "373142",
+     "frame": "3030",
      "messages": []
     }
    ],
    [
     {
-     "frame": "0d",
+     "frame": "3041353337",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "31",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "420d",
      "messages": []
     }
    ],
@@ -7069,58 +7269,67 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a303131"
+    "feed": "3a30"
    },
    {
-    "feed": "313033"
+    "feed": "31"
    },
    {
-    "feed": "4131"
+    "feed": "313130"
    },
    {
-    "feed": "464630"
+    "feed": "3341314646"
    },
    {
-    "feed": "3534360d"
+    "feed": "303534"
    },
    {
-    "feed": "0a"
+    "feed": "36"
+   },
+   {
+    "feed": "0d0a"
    }
   ],
   "expect": [
    [
     {
-     "frame": "3a303131",
+     "frame": "3a30",
      "messages": []
     }
    ],
    [
     {
-     "frame": "313033",
+     "frame": "31",
      "messages": []
     }
    ],
    [
     {
-     "frame": "4131",
+     "frame": "313130",
      "messages": []
     }
    ],
    [
     {
-     "frame": "464630",
+     "frame": "3341314646",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3534360d",
+     "frame": "303534",
      "messages": []
     }
    ],
    [
     {
-     "frame": "0a",
+     "frame": "36",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d0a",
      "messages": [
       {
        "slave": 1,
@@ -7390,58 +7599,43 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a"
+    "feed": "3a30313136"
    },
    {
-    "feed": "3031"
+    "feed": "303030"
    },
    {
-    "feed": "3136303030"
-   },
-   {
-    "feed": "34"
+    "feed": "3430304632"
    },
    {
     "feed": "3030"
    },
    {
-    "feed": "463230"
+    "feed": "323543"
    },
    {
-    "feed": "3032"
+    "feed": "45"
    },
    {
-    "feed": "35"
-   },
-   {
-    "feed": "43450d"
-   },
-   {
-    "feed": "0a"
+    "feed": "0d0a"
    }
   ],
   "expect": [
    [
     {
-     "frame": "3a",
+     "frame": "3a30313136",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3031",
+     "frame": "303030",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3136303030",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "34",
+     "frame": "3430304632",
      "messages": []
     }
    ],
@@ -7453,31 +7647,19 @@
    ],
    [
     {
-     "frame": "463230",
+     "frame": "323543",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3032",
+     "frame": "45",
      "messages": []
     }
    ],
    [
     {
-     "frame": "35",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "43450d",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "0a",
+     "frame": "0d0a",
      "messages": [
       {
        "slave": 1,
@@ -7727,28 +7909,34 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a3031"
+    "feed": "3a30"
    },
    {
     "feed": "31"
    },
    {
-    "feed": "373034"
+    "feed": "3137303430"
    },
    {
-    "feed": "3030304130"
+    "feed": "3030"
    },
    {
-    "feed": "303042"
+    "feed": "4130"
    },
    {
-    "feed": "43460d0a"
+    "feed": "3030424346"
+   },
+   {
+    "feed": "0d"
+   },
+   {
+    "feed": "0a"
    }
   ],
   "expect": [
    [
     {
-     "frame": "3a3031",
+     "frame": "3a30",
      "messages": []
     }
    ],
@@ -7760,25 +7948,37 @@
    ],
    [
     {
-     "frame": "373034",
+     "frame": "3137303430",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3030304130",
+     "frame": "3030",
      "messages": []
     }
    ],
    [
     {
-     "frame": "303042",
+     "frame": "4130",
      "messages": []
     }
    ],
    [
     {
-     "frame": "43460d0a",
+     "frame": "3030424346",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0d",
+     "messages": []
+    }
+   ],
+   [
+    {
+     "frame": "0a",
      "messages": [
       {
        "slave": 1,
@@ -7953,34 +8153,22 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a30"
-   },
-   {
-    "feed": "313937"
+    "feed": "3a30313937"
    },
    {
     "feed": "30"
    },
    {
-    "feed": "3236"
+    "feed": "323636"
    },
    {
-    "feed": "360d"
-   },
-   {
-    "feed": "0a"
+    "feed": "0d0a"
    }
   ],
   "expect": [
    [
     {
-     "frame": "3a30",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "313937",
+     "frame": "3a30313937",
      "messages": []
     }
    ],
@@ -7992,19 +8180,13 @@
    ],
    [
     {
-     "frame": "3236",
+     "frame": "323636",
      "messages": []
     }
    ],
    [
     {
-     "frame": "360d",
-     "messages": []
-    }
-   ],
-   [
-    {
-     "frame": "0a",
+     "frame": "0d0a",
      "messages": [
       {
        "slave": 1,
@@ -8178,10 +8360,10 @@
   "config": {},
   "steps": [
    {
-    "feed": "3a30313838"
+    "feed": "3a30"
    },
    {
-    "feed": "3034"
+    "feed": "3138383034"
    },
    {
     "feed": "3733"
@@ -8193,13 +8375,13 @@
   "expect": [
    [
     {
-     "frame": "3a30313838",
+     "frame": "3a30",
      "messages": []
     }
    ],
    [
     {
-     "frame": "3034",
+     "frame": "3138383034",
      "messages": []
     }
    ],
@@ -8428,6 +8610,150 @@
        "fc": 3,
        "reg0": 100,
        "reg1": 200
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp bad protocol id",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000100010005010302012c000200000005010302012c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000100010005010302012c000200000005010302012c",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp length mismatch",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000100000009010302012c000200000005010302012c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000100000009010302012c000200000005010302012c",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp odd byte count",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000100000006010303012c00000200000005010302012c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000100000006010303012c00000200000005010302012c",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp unknown fc",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000100000005012a02012c000200000005010302012c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000100000005012a02012c000200000005010302012c",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC tcp request as reply",
+  "type": "modbus_tcp",
+  "config": {},
+  "steps": [
+   {
+    "feed": "000100000006010300000002000200000005010302012c"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "000100000006010300000002000200000005010302012c",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ {
+  "name": "FC rtu bad crc then good",
+  "type": "modbus",
+  "config": {},
+  "steps": [
+   {
+    "feed": "010302012cb800010302012cb809"
+   }
+  ],
+  "expect": [
+   [
+    {
+     "frame": "010302012cb800010302012cb809",
+     "messages": [
+      {
+       "slave": 1,
+       "fc": 3,
+       "reg0": 300
       }
      ]
     }

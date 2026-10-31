@@ -3,9 +3,10 @@
 It sends one request from its fields, or polls: each round sends the reads in its poll
 table (or the request in its fields) one at a time, waiting for each reply or for the
 timeout, so a slow or silent device shows up as a timeout instead of piling requests up
-on the bus. Requests go out over every connected link, as RTU or Modbus TCP to match
-that link's parser. When no connected link parses Modbus, no reply can be recognised:
-then each poll tick sends the next request without waiting, as the card always did.
+on the bus. Requests go out over every connected link, as RTU, Modbus TCP or Modbus
+ASCII to match that link's parser. When no connected link parses Modbus, no reply can be
+recognised: then each poll tick sends the next request without waiting, as the card
+always did.
 """
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
