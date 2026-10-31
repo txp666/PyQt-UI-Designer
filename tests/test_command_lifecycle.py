@@ -242,7 +242,7 @@ class CommandLifecycleTests(unittest.TestCase):
             assert config["parserConfig"]["fields"] == [["temperature", 0, 2, "uint16"]]
         """)
 
-    def test_modbus_reports_failed_or_short_writes_and_stops_polling(self):
+    def test_modbus_card_reports_failed_or_short_writes(self):
         self.run_both([control("bus", "ModbusConfigCard", {
             "defaultPoll": 60000,
         })], r"""
@@ -258,10 +258,9 @@ class CommandLifecycleTests(unittest.TestCase):
                         raise OSError("device unplugged during write")
                     return outcome
                 port.write = failing_write
-                QTest.mouseClick(bus._poll_btn, Qt.LeftButton)  # the first request goes out at once
-                assert not bus._poll_timer.isActive()
+                QTest.mouseClick(bus._send_btn, Qt.LeftButton)
                 assert bus._send_btn.isEnabled()
-                assert "发送失败" in bus._status.text(), bus._status.text()
+                assert bus._status.text() == "发送失败，请检查连接", bus._status.text()
                 assert "已发送" not in bus._status.text()
                 assert not sent
                 assert not errors, errors

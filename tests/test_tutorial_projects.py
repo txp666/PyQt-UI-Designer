@@ -104,15 +104,20 @@ class TutorialProjectTests(unittest.TestCase):
                         pdu = bytes([fc | 0x80, 1])
                     return adu[:2] + b"\0\0" + (len(pdu) + 1).to_bytes(2, "big") + bytes([unit]) + pdu
 
-            export = os.environ["APPLICATION_MODE"] == "export"  # the preview harness runs no bindings
+            export = os.environ["APPLICATION_MODE"] == "export"
+            if export:
+                from data_binding import ModbusPoller
+            else:  # the preview harness runs no bindings; the poller reads what they show
+                from app.core.modbus_poller import ModbusPoller
+                from app.core.data_binding import bindingEngine
+                bindingEngine.load_bindings_from_project(project.widgets)
+            poller, = window.findChildren(ModbusPoller)
             plc = Plc()
-            link, poller = widgets["plc_link"], widgets["poller"]
+            link = widgets["plc_link"]
             link._port_spin.setValue(plc.server.serverPort())
-            QTest.mouseClick(link._connect_btn, Qt.LeftButton)
-            wait_for(lambda: link._handler.is_connected and plc.peer is not None, "the PLC link")
-            QTest.mouseClick(poller._poll_btn, Qt.LeftButton)
-            wait_for(lambda: poller._status.text() == "轮询正常 · 3/3", "a full poll round")
-            assert [request[:2] for request in plc.requests[:3]] == [(3, 100), (3, 200), (1, 0)], plc.requests
+            QTest.mouseClick(link._connect_btn, Qt.LeftButton)  # no Modbus card: polling starts once connected
+            wait_for(lambda: poller.status() == "3 块 · 正常", "a full poll round")
+            assert plc.requests[:3] == [(1, 0, 4), (3, 100, 6), (3, 200, 2)], plc.requests
             if export:
                 for name, text in (("pressure", "0.42"), ("flow", "36.5"), ("target", "0.40")):
                     assert widgets[name]._value.text() == text, (name, widgets[name]._value.text())
@@ -131,6 +136,6 @@ class TutorialProjectTests(unittest.TestCase):
             if export:
                 wait_for(lambda: widgets["target"]._value.text() == "0.45", "the new setpoint read back")
                 wait_for(lambda: widgets["run"]._switch.isChecked(), "the start coil read back")
-            QTest.mouseClick(poller._poll_btn, Qt.LeftButton)
             QTest.mouseClick(link._connect_btn, Qt.LeftButton)  # 断开
+            assert poller.status() == "等待连接", poller.status()
         ''')

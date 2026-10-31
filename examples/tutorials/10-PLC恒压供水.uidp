@@ -45,27 +45,7 @@
         "x": 20,
         "y": 60,
         "w": 380,
-        "h": 290
-      }
-    },
-    {
-      "id": "poller",
-      "type": "ModbusConfigCard",
-      "properties": {
-        "title": "轮询 PLC",
-        "defaultSlave": 1,
-        "defaultFunc": "03 读保持寄存器",
-        "defaultAddr": 100,
-        "defaultValue": 6,
-        "defaultPoll": 500,
-        "timeout": 1000,
-        "pollList": "# 实时数据：保持寄存器 100–105\n1,3,100,6\n# 设定参数：保持寄存器 200–201\n1,3,200,2\n# 状态：线圈 0–3\n1,1,0,4"
-      },
-      "geometry": {
-        "x": 20,
-        "y": 360,
-        "w": 380,
-        "h": 180
+        "h": 240
       }
     },
     {
@@ -77,7 +57,7 @@
       },
       "geometry": {
         "x": 20,
-        "y": 556,
+        "y": 310,
         "w": 90,
         "h": 32
       }
@@ -96,7 +76,7 @@
       },
       "geometry": {
         "x": 110,
-        "y": 556,
+        "y": 310,
         "w": 290,
         "h": 33
       }
@@ -315,9 +295,9 @@
         "_curve_1_mbSlaveFilter": 1
       },
       "geometry": {
-        "x": 420,
+        "x": 20,
         "y": 360,
-        "w": 520,
+        "w": 920,
         "h": 330
       }
     }

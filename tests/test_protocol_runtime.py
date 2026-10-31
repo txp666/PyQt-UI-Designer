@@ -1,6 +1,7 @@
 """Parser behaviour is pinned by golden vectors; the hand-written tests cover what a vector cannot
 show: bounded buffers, requests shared between parsers, the serial reader, bindings and exports."""
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -8,8 +9,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtCore import QObject, Qt
+from PyQt5.QtWidgets import QApplication
 
+from app.core import modbus_master
 from app.core import protocol_parser as protocol
 from app.core import serial_runtime
 from app.core.code_generator import _gen_serial_handler, _gen_data_binding, _extract_bindings
@@ -34,6 +38,19 @@ def exported_serial_runtime(config=None):
     namespace = {}
     exec(_gen_serial_handler(config or {}), namespace)
     return namespace
+
+
+def exported_data_binding(bindings):
+    """The DataBinding class of an export's data_binding.py, which imports from serial_handler.py.
+    Its Modbus poller runs a timer, which needs an application."""
+    global _app
+    _app = QApplication.instance() or QApplication([])
+    namespace = {}
+    with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
+            RawFrameBuffer=protocol.RawFrameBuffer, MODBUS_PARSERS=modbus_master.MODBUS_PARSERS,
+            modbus_problem=modbus_master.modbus_problem, plan_blocks=modbus_master.plan_blocks)}):
+        exec(_gen_data_binding(bindings), namespace)
+    return namespace["DataBinding"]
 
 
 class ParserTests(unittest.TestCase):
@@ -94,8 +111,10 @@ class ModbusRequestTests(unittest.TestCase):
 
 class BindingTests(unittest.TestCase):
     def test_host_and_export_modbus_bindings_read_register_tables_alike(self):
-        cases = [  # binding, expected value
-            ({"mbRegIndex": 1}, 0x6666),
+        cases = [  # binding, expected value; holding registers when no area is named
+            ({"mbRegIndex": 101}, 0x6666),
+            ({"mbRegIndex": 1}, None),
+            ({"mbArea": "响应内序号", "mbRegIndex": 1}, None),  # no longer an area: reads nothing
             ({"mbArea": "保持寄存器", "mbRegIndex": 100, "mbDataType": "float32"}, 25.299999237060547),
             ({"mbArea": "保持寄存器", "mbRegIndex": 101}, 0x6666),
             ({"mbArea": "保持寄存器", "mbRegIndex": 101, "mbDataType": "float32"}, None),
@@ -109,12 +128,11 @@ class BindingTests(unittest.TestCase):
         coils = {"slave": 1, "fc": 1, "coil0": 1, "start": 9, "co9": 1}
         widgets = [{"id": f"w{i}", "type": "Label", "binding": {"parseMode": "Modbus", **b}}
                    for i, (b, _) in enumerate(cases)]
-        namespace = {}
-        exec(_gen_data_binding(_extract_bindings(widgets)), namespace)
+        DataBinding = exported_data_binding(_extract_bindings(widgets))
         handler = serial_runtime.SerialHandler()
         ui = QObject()
         ui.widgets = {w["id"]: Mock() for w in widgets}
-        binding = namespace["DataBinding"](ui, handler)
+        binding = DataBinding(ui, handler)
         for data in (registers, coils):
             handler.dataReceived.emit(data)
         for index, (config, expected) in enumerate(cases):
@@ -123,7 +141,7 @@ class BindingTests(unittest.TestCase):
                                     mb_reg_index=config["mbRegIndex"],
                                     mb_data_type=config.get("mbDataType", "uint16"),
                                     mb_slave_filter=config.get("mbSlaveFilter", -1),
-                                    mb_area=config.get("mbArea", "响应内序号"))
+                                    mb_area=config.get("mbArea", "保持寄存器"))
                 values = [v for v in map(host.extract_from_parsed, (registers, coils)) if v is not None]
                 self.assertEqual(values, [] if expected is None else [expected])
                 shown = [call.args[0] for call in ui.widgets[f"w{index}"].setText.call_args_list]
@@ -286,14 +304,11 @@ class RawBindingTests(unittest.TestCase):
         widgets = [{"id": name, "type": "Label", "binding": {
             "parseMode": "HEX字节提取", "byteOffset": offset, "dataType": dtype, "byteOrder": order}}
             for name, offset, dtype, order, _values in bindings]
-        namespace = {}
-        with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
-                RawFrameBuffer=protocol.RawFrameBuffer)}):
-            exec(_gen_data_binding(_extract_bindings(widgets)), namespace)
+        DataBinding = exported_data_binding(_extract_bindings(widgets))
         handler = serial_runtime.SerialHandler()
         ui = QObject()
         ui.widgets = {name: Mock() for name, *_rest in bindings}
-        binding = namespace["DataBinding"](ui, handler)
+        binding = DataBinding(ui, handler)
         for unit in FRAMES:
             handler.rawReceived.emit(unit)
         for name, offset, dtype, order, values in bindings:
@@ -317,15 +332,12 @@ class RawBindingTests(unittest.TestCase):
                 "parseMode": "HEX字节提取", "frameHeader": "BB66",
                 "frameTail": "66BB", "dataType": "uint16"}},
         ])
-        namespace = {}
-        with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
-                RawFrameBuffer=protocol.RawFrameBuffer)}):
-            exec(_gen_data_binding(bindings), namespace)
+        DataBinding = exported_data_binding(bindings)
         first, second = Mock(), Mock()
         handler = serial_runtime.SerialHandler()
         ui = QObject()
         ui.widgets = {"first": first, "second": second}
-        binding = namespace["DataBinding"](ui, handler)
+        binding = DataBinding(ui, handler)
         handler.rawReceived.emit(bytes.fromhex("bb66000766bb"))
         second.setText.assert_called_once_with("7")
         first.setText.assert_not_called()

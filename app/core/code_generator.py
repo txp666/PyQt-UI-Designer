@@ -721,8 +721,7 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                 f"self.widgets[{wid!r}].set_title({p('title', '数据接收')}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 1000)})")
     if wtype == "ModbusConfigCard":
-        from app.core.modbus_card import ModbusConfigCard, modbus_card_properties
-        props = modbus_card_properties(props)
+        from app.core.modbus_card import ModbusConfigCard
         code = [f"self.widgets[{wid!r}] = ModbusConfigCard({pv})"]
         for prop, method, default in ModbusConfigCard.PROPERTY_SETTERS:
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
@@ -810,7 +809,7 @@ def _extract_bindings(widgets: list) -> list:
                         "mbRegOrder": b.get("mbRegOrder", "大端(AB CD)"),
                         "mbFcFilter": int(b.get("mbFcFilter", -1)),
                         "mbSlaveFilter": int(b.get("mbSlaveFilter", -1)),
-                        "mbArea": b.get("mbArea", "响应内序号"),
+                        "mbArea": b.get("mbArea", "保持寄存器"),
                         "mbPeriod": int(b.get("mbPeriod", 0)),
                     }
                     if w["type"] == "LEDIndicator":
@@ -826,7 +825,6 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
     has_parsed = any(b["parseMode"] in ("键值匹配", "JSON路径", "Modbus") for b in bindings)
     has_hex = any(b["parseMode"] == "HEX字节提取" for b in bindings)
     has_chart = widget_types and "RealtimeChart" in widget_types
-    has_modbus_card = widget_types and "ModbusConfigCard" in widget_types
 
     lines = [
         '# coding: utf-8',
@@ -841,6 +839,9 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
     lines.append('')
     lines.append(runtime_source("binding_values.py"))
     lines.append(runtime_source("signal_lifetime.py"))
+    lines.append(runtime_source("modbus_poller.py").replace(
+        "from .modbus_master import", "from serial_handler import").replace(
+        "from .signal_lifetime import SignalConnections", ""))
 
     lines += [
         '',
@@ -883,15 +884,15 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         '        self.hub = hub',
         '        self._connections = SignalConnections(ui)',
         '        ui._comm_hub = hub',
+        '        # Reads what the Modbus bindings and chart curves show, with or without a Modbus card;',
+        '        # the cards, in document order, show it and the first sets its parameters.',
+        '        self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)',
         '        for w in ui.widgets.values():',
         '            if hasattr(w, "set_serial_handler"):',
         '                w.set_serial_handler(hub)  # connection cards pick their own link',
+        '            if hasattr(w, "set_modbus_poller"):  # a Modbus card: the poller\'s panel',
+        '                w.set_modbus_poller(self.modbus_poller)',
     ]
-    if has_modbus_card:
-        lines += [
-            '            if hasattr(w, "set_modbus_needs"):  # the Modbus card polls what bindings show',
-            '                w.set_modbus_needs(self.modbus_needs)',
-        ]
     if has_chart:
         lines += [
             '            if isinstance(w, RealtimeLineChart):',
@@ -915,6 +916,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
     if has_hex:
         lines.append('        self._connections.connect(self.hub.rawReceived, self._on_raw)')
         lines.append('        self._connections.connect(self.hub.disconnected, self._reset_stream)')
+    lines.append('        self.modbus_poller.start()  # reads once a link that parses Modbus can send')
     lines.append('')
 
     # -- _on_data for 键值匹配 / JSON路径 --
@@ -954,16 +956,12 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
             lines.append(f'    def _raw_binding_{index}(self, raw):')
             _gen_binding_apply(lines, b, source="raw")
 
-    if has_modbus_card:
-        lines += _gen_modbus_needs(bindings)
-    elif not has_parsed and not has_hex:
-        lines.append('    pass')
-
+    lines += _gen_modbus_needs(bindings)
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _gen_modbus_needs(bindings: list) -> list:
-    """DataBinding.modbus_needs: what the Modbus card's 自动 polling reads, as data_binding's engine lists it."""
+    """DataBinding.modbus_needs: what the Modbus poller reads, as data_binding's engine lists it."""
     from app.core.binding_values import modbus_need
     needs = []
     for b in bindings:
@@ -972,7 +970,7 @@ def _gen_modbus_needs(bindings: list) -> list:
             if need is not None:
                 needs.append((b["widget_id"], *need))
     return [
-        '    # (widget id, slave, table, address, count, period) of each Modbus binding to a register table',
+        '    # (widget id, slave, table, address, count, period) of each Modbus binding',
         f'    _MODBUS_NEEDS = {needs!r}',
         '',
         '    def modbus_needs(self):',
@@ -1010,7 +1008,7 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
         elif pm == "Modbus":
             args = (b.get("mbRegIndex", 0), b.get("mbDataType", "uint16"),
                     b.get("mbRegOrder", "大端(AB CD)"), b.get("mbFcFilter", -1),
-                    b.get("mbSlaveFilter", -1), b.get("mbArea", "响应内序号"))
+                    b.get("mbSlaveFilter", -1), b.get("mbArea", "保持寄存器"))
             lines.append(f"        value = modbus_value(data, {', '.join(map(repr, args))})")
             lines.append(f"        if value is not None:")
     elif source == "raw":

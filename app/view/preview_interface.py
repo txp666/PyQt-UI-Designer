@@ -24,6 +24,7 @@ from app.common.build_support import archive_build, build_environment, build_nui
 from app.widgets.basic import create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
+from app.core.modbus_poller import ModbusPoller
 from app.core.signal_lifetime import SignalConnections
 from app.core.slider_release import SendOnRelease
 from app.core.command_runtime import (
@@ -40,6 +41,7 @@ class PreviewCanvas(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._widgets = []
         self._asset_base_dir = None
+        self._modbus_poller = None
         self._update_style()
 
     def _update_style(self):
@@ -57,9 +59,13 @@ class PreviewCanvas(QWidget):
         self.setFixedSize(project.canvas_width, project.canvas_height)
         self._asset_base_dir = (Path(project.file_path).expanduser().resolve().parent
                                 if project.file_path else Path.cwd())
+        # Reads what the Modbus bindings and chart curves show, with or without a Modbus card;
+        # the cards, created in document order, show it and the first sets its parameters.
+        self._modbus_poller = ModbusPoller(commHub, bindingEngine.modbus_needs, self)
 
         for wd in project.widgets:
             self._create_widget_recursive(wd, self)
+        self._modbus_poller.start()
 
     def _create_widget_recursive(self, wd: dict, parent_widget: QWidget):
         type_name = wd["type"]
@@ -97,8 +103,8 @@ class PreviewCanvas(QWidget):
                 bindingEngine.register_widget(widget_id, widget)
 
             self._wire_commands(widget, type_name, props)
-            if hasattr(widget, "set_modbus_needs"):  # the Modbus card's 自动 polling reads what bindings show
-                widget.set_modbus_needs(bindingEngine.modbus_needs)
+            if hasattr(widget, "set_modbus_poller"):  # a Modbus card: the poller's panel
+                widget.set_modbus_poller(self._modbus_poller)
 
             if type_name == "RealtimeChart" and hasattr(widget, "start_listening"):
                 widget.start_listening()
@@ -294,6 +300,10 @@ class PreviewCanvas(QWidget):
                 sw.checkedChanged.connect(lambda _: emit())
 
     def clear(self):
+        if self._modbus_poller is not None:
+            self._modbus_poller.stop()
+            self._modbus_poller.deleteLater()
+            self._modbus_poller = None
         for w in self._widgets:
             if hasattr(w, "stop_listening"):
                 w.stop_listening()

@@ -153,6 +153,9 @@ class LinkCardTests(unittest.TestCase):
                 assert predicate(), f"Timed out waiting for {what}"
             card, bus = widgets["tcp"], widgets["bus"]
             assert card._parser_combo.currentText() == "modbus_tcp"
+            # 停止 first: the poller would read the bound register as soon as the link connects.
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            assert bus._status.text() == "已暂停", bus._status.text()
             device = QTcpServer()
             assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
             card._host_edit.setText("127.0.0.1")
@@ -213,7 +216,7 @@ class LinkCardTests(unittest.TestCase):
             wait_for(lambda: device.hasPendingConnections() and card._handler.is_connected, "the link")
             peer = device.nextPendingConnection()
             assert card._handler.parser_type == "modbus_ascii"
-            assert bus._expects_replies()
+            assert bus._status.text() == "没有 Modbus 绑定", bus._status.text()
 
             # The Modbus ASCII link gets ':', uppercase hex, the LRC and CR LF; the card waits for the reply.
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)

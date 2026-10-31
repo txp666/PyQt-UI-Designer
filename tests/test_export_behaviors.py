@@ -321,7 +321,7 @@ class ExportBehaviorTests(unittest.TestCase):
             serial.dataReceived.emit({"progress": 45, "state": {"progress": 46}})
             serial.rawReceived.emit(bytes.fromhex("aa5500"))
             serial.rawReceived.emit(bytes.fromhex("2f55aa"))
-            serial.dataReceived.emit({"slave": 1, "fc": 3, "reg2": 48})
+            serial.dataReceived.emit({"slave": 1, "fc": 3, "hr2": 48})
             for name, value, maximum, percentage in (
                     ("key", 45, 200, "22%"), ("json", 46, 100, "46%"),
                     ("hex", 47, 100, "47%"), ("modbus", 48, 100, "48%")):
@@ -331,7 +331,7 @@ class ExportBehaviorTests(unittest.TestCase):
                 assert ring._ring.isTextVisible()
                 assert ring._ring.text() == percentage, (name, ring._ring.text())
             assert widgets["bar"].value() == 45
-            serial.dataReceived.emit({"slave": 2, "fc": 3, "reg2": 99})
+            serial.dataReceived.emit({"slave": 2, "fc": 3, "hr2": 99})
             assert widgets["modbus"]._ring.value() == 48
             check_payloads([])
         """)

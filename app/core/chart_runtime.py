@@ -54,7 +54,7 @@ _DEFAULT_CURVE_CFG = {
     "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",
     "frameHeader": "", "frameTail": "",
     "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",
-    "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "响应内序号",
+    "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器",
 }
 
 # Virtual prop name -> per-curve storage suffix
@@ -704,14 +704,14 @@ class RealtimeLineChart(QWidget):
                         pass
 
     def modbus_needs(self):
-        """What the Modbus curves read, for the Modbus card's 自动 polling: (slave, table, address,
-        count, period) each, read at the card's 轮询ms. A curve counts whether or not it is on screen."""
+        """What the Modbus curves read, for the Modbus poller: (slave, table, address, count,
+        period) each, read at the poller's default period. A curve counts whether or not it is on screen."""
         needs = []
         for cfg in self._cfgs:
             if cfg.get("parseMode") != "Modbus":
                 continue
             try:
-                need = modbus_need(cfg.get("mbArea", "响应内序号"), int(cfg.get("regIndex", 0)),
+                need = modbus_need(cfg.get("mbArea", "保持寄存器"), int(cfg.get("regIndex", 0)),
                                    cfg.get("mbDataType", "uint16"), int(cfg.get("mbSlaveFilter", -1)))
             except (TypeError, ValueError):
                 continue
@@ -724,7 +724,7 @@ class RealtimeLineChart(QWidget):
         return modbus_value(
             data, int(cfg.get("regIndex", 0)), cfg.get("mbDataType", "uint16"),
             cfg.get("mbRegOrder", "大端(AB CD)"), int(cfg.get("mbFcFilter", -1)),
-            int(cfg.get("mbSlaveFilter", -1)), cfg.get("mbArea", "响应内序号"))
+            int(cfg.get("mbSlaveFilter", -1)), cfg.get("mbArea", "保持寄存器"))
 
     @staticmethod
     def _strip_frame(raw: bytes, cfg: dict):

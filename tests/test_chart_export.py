@@ -177,13 +177,13 @@ class ChartTests(unittest.TestCase):
                     chart.on_parsed({"custom_temperature": 12,
                                      "sensors": [{}, {"value": 13}],
                                      "fc": 3, "slave": 7,
-                                     "reg2": 0x5678, "reg3": 0x1234})
+                                     "hr2": 0x5678, "hr3": 0x1234})
                     chart.on_raw(bytes.fromhex("020355aa"))
                     self.assertEqual([list(h.values()) for h in chart._data],
                                      [[1, 2, 12], [3, 4, 13],
                                       [5, 6, 0x12345678], [7, 8, 770]])
                     # Modbus filters must also survive history import.
-                    chart.on_parsed({"fc": 4, "slave": 7, "reg2": 1, "reg3": 0})
+                    chart.on_parsed({"fc": 4, "slave": 7, "hr2": 1, "hr3": 0})
                     self.assertEqual(chart._data[2].count, 3)
 
     def test_history_channel_mismatch_preserves_config_and_samples(self):
@@ -278,16 +278,22 @@ ui = QWidget()
 ui.widgets = {"chart": chart, "value": value, "serial": card}
 binding = DataBinding(ui, handler)
 with patch.object(runtime.serial, "Serial") as port, patch.object(runtime, "SerialReaderThread"):
+    port.return_value.write.side_effect = len
     card._on_connect()
     assert port.call_args.kwargs["bytesize"] == 7
     assert port.call_args.kwargs["parity"] == "E"
     assert port.call_args.kwargs["stopbits"] == 2
     assert port.call_args.kwargs["rtscts"]
+    # No Modbus card: the poller reads what the chart's curve shows (the value is not on screen).
+    read = bytes.fromhex("010300000001")
+    assert port.return_value.write.call_args_list == [((read + runtime.modbus_crc(read),),)]
+    assert binding.modbus_poller.status() == "1 块 · 轮询中"
     payload = bytes.fromhex("0103020019")
     for parsed in handler._parser.feed(payload + runtime.modbus_crc(payload)):
         handler.dataReceived.emit(parsed)
     assert chart._data[0][-1] == 25
-    assert value._value.text() == "25"
+    assert value._value.text() == "25"  # the reply names holding register 0
+    assert binding.modbus_poller.status() == "1 块 · 正常"
     handler.disconnect()
 print("STANDALONE_MODBUS_CHART_OK")
 """

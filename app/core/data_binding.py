@@ -5,7 +5,8 @@ Supports four parse modes:
   - 键值匹配: match key from parsed dict (serialDataReceived)
   - JSON路径: traverse nested parsed dict via dot-path (serialDataReceived)
   - HEX字节提取: extract bytes from raw serial data (serialRawReceived)
-  - Modbus: extract register/coil from ModbusRTUParser output (serialDataReceived)
+  - Modbus: the register or coil at an address of a register table, from the Modbus parsers'
+    output (serialDataReceived)
 """
 import struct
 from typing import Dict, Any, Optional, List
@@ -53,7 +54,7 @@ class BindingEntry:
                  frame_header: str = "", frame_tail: str = "",
                  mb_reg_index: int = 0, mb_slave_filter: int = -1,
                  mb_data_type: str = "uint16", mb_reg_order: str = "大端(AB CD)",
-                 mb_fc_filter: int = -1, mb_area: str = "响应内序号",
+                 mb_fc_filter: int = -1, mb_area: str = "保持寄存器",
                  mb_period: int = 0,
                  led_on_value: str = "1", led_off_value: str = "0",
                  decimals: str = "自动"):
@@ -80,7 +81,7 @@ class BindingEntry:
         self.mb_reg_order = mb_reg_order
         self.mb_fc_filter = mb_fc_filter
         self.mb_area = mb_area
-        self.mb_period = mb_period  # 采集周期 ms for the Modbus card's 自动 polling; 0: the card's 轮询ms
+        self.mb_period = mb_period  # 采集周期 ms for the Modbus poller; 0: its default period
 
     @staticmethod
     def _hex_to_bytes(s: str) -> bytes:
@@ -302,7 +303,7 @@ class DataBindingEngine(QObject):
                 mb_data_type=binding.get("mbDataType", "uint16"),
                 mb_reg_order=binding.get("mbRegOrder", "大端(AB CD)"),
                 mb_fc_filter=int(binding.get("mbFcFilter", -1)),
-                mb_area=binding.get("mbArea", "响应内序号"),
+                mb_area=binding.get("mbArea", "保持寄存器"),
                 mb_period=int(binding.get("mbPeriod", 0)),
                 led_on_value=str(props.get("onValue", "1")),
                 led_off_value=str(props.get("offValue", "0")),
@@ -312,10 +313,9 @@ class DataBindingEngine(QObject):
             self._walk_bindings(wd.get("children", []))
 
     def modbus_needs(self):
-        """What the Modbus card's 自动 polling reads: (widget_id, slave, table, address, count,
-        period, visible) for each Modbus binding to a register table, and for each Modbus curve of
-        a chart (always visible). A binding counts while its widget is on screen: not on a hidden
-        tab page."""
+        """What the Modbus poller reads: (widget_id, slave, table, address, count, period, visible)
+        for each Modbus binding, and for each Modbus curve of a chart (always visible). A binding
+        counts while its widget is on screen: not on a hidden tab page."""
         needs = []
         for b in self._bindings:
             if b.parse_mode != "Modbus":

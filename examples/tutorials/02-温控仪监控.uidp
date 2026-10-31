@@ -47,29 +47,10 @@
       "binding": null
     },
     {
-      "id": "ModbusConfigCard_9a1e0c",
-      "type": "ModbusConfigCard",
-      "geometry": {
-        "x": 20.0,
-        "y": 120.0,
-        "w": 380.0,
-        "h": 180.0
-      },
-      "properties": {
-        "title": "Modbus 配置",
-        "defaultSlave": 1,
-        "defaultFunc": "03 读保持寄存器",
-        "defaultAddr": 0,
-        "defaultValue": 6,
-        "defaultPoll": 200
-      },
-      "binding": null
-    },
-    {
       "id": "GaugeMeter_b5314e",
       "type": "GaugeMeter",
       "geometry": {
-        "x": 410.0,
+        "x": 20.0,
         "y": 120.0,
         "w": 180.0,
         "h": 180.0
@@ -83,6 +64,7 @@
       },
       "binding": {
         "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
         "key": "",
         "jsonPath": "",
         "byteOffset": 0,
@@ -102,7 +84,7 @@
       "id": "ProgressRingDisplay_804ecb",
       "type": "ProgressRingDisplay",
       "geometry": {
-        "x": 600.0,
+        "x": 210.0,
         "y": 120.0,
         "w": 120.0,
         "h": 130.0
@@ -114,6 +96,7 @@
       },
       "binding": {
         "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
         "key": "",
         "jsonPath": "",
         "byteOffset": 0,
@@ -133,7 +116,7 @@
       "id": "NumericDisplay_13f35e",
       "type": "NumericDisplay",
       "geometry": {
-        "x": 730.0,
+        "x": 340.0,
         "y": 120.0,
         "w": 150.0,
         "h": 90.0
@@ -147,6 +130,7 @@
       },
       "binding": {
         "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
         "key": "",
         "jsonPath": "",
         "byteOffset": 0,
@@ -166,7 +150,7 @@
       "id": "Slider_43c962",
       "type": "Slider",
       "geometry": {
-        "x": 730.0,
+        "x": 340.0,
         "y": 220.0,
         "w": 150.0,
         "h": 30.0
@@ -193,9 +177,9 @@
       "id": "LEDIndicator_92cf42",
       "type": "LEDIndicator",
       "geometry": {
-        "x": 730.0,
+        "x": 340.0,
         "y": 260.0,
-        "w": 140.0,
+        "w": 150.0,
         "h": 30.0
       },
       "properties": {
@@ -207,6 +191,7 @@
       },
       "binding": {
         "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
         "key": "",
         "jsonPath": "",
         "byteOffset": 0,
@@ -226,9 +211,9 @@
       "id": "ToggleSwitch_b73224",
       "type": "ToggleSwitch",
       "geometry": {
-        "x": 730.0,
+        "x": 340.0,
         "y": 290.0,
-        "w": 140.0,
+        "w": 150.0,
         "h": 30.0
       },
       "properties": {
@@ -259,7 +244,7 @@
       "geometry": {
         "x": 20.0,
         "y": 330.0,
-        "w": 560.0,
+        "w": 860.0,
         "h": 250.0
       },
       "properties": {
@@ -295,10 +280,10 @@
       "id": "DataRecvCard_3ad8a0",
       "type": "DataRecvCard",
       "geometry": {
-        "x": 600.0,
-        "y": 330.0,
-        "w": 280.0,
-        "h": 250.0
+        "x": 500.0,
+        "y": 120.0,
+        "w": 380.0,
+        "h": 200.0
       },
       "properties": {
         "title": "数据接收",
