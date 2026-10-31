@@ -116,14 +116,14 @@ python tools/check_uidp.py motor.uidp
 | `TcpConfigCard` TCP | `defaultMode`（`"客户端"` / `"服务端"`）、`defaultHost`、`defaultPort` |
 | `MqttConfigCard` MQTT | `defaultHost`、`defaultPort`、`defaultSubscribe`（可用 `+` `#` 通配）、`defaultPublish`、`defaultUsername`、`defaultPassword`、`defaultQos`（`"0"` `"1"` `"2"`） |
 
-- `displayMode` 是 `"完整"`（默认）时，卡片不要比默认尺寸矮：串口 360×340、TCP 360×290、MQTT 380×430。矮了字段会挤在一起，地方不够就设成 `"简洁"`。控件参考里的「最小」尺寸是简洁模式下的下限。
+- `displayMode` 是 `"完整"`（默认）时，卡片不要比默认尺寸矮：串口 360×320、TCP 360×250、MQTT 380×390。写得比字段需要的高度矮时，卡片按字段需要的高度显示（Studio 打开时也会把它抬高），地方不够就设成 `"简洁"`。控件参考里的「最小」尺寸是串口单行模式用的下限。
 - 每张卡片都有 `defaultParser`：`"项目设置"`（默认，用工程的 `serial.parser`）、`"line"`、`"hex"`、`"modbus"`、`"modbus_tcp"`、`"modbus_ascii"`。不同设备帧格式不同时，在卡片上分别设置。
 - 卡片的 `parserConfig` 是这张卡片自己的帧格式（对象，键和 `serial.parserConfig` 一样），`defaultParser` 不是 `"项目设置"` 时生效；不写或写 `{}` 时，卡片的解析模式和工程相同就沿用工程的 `parserConfig`，不同就用默认值。
 - MQTT 每条消息算一帧，按这条链路的解析模式解析；用 `line` 解析时消息末尾不需要行结束符。消息只有一个数值时（比如主题 `sensor/temp` 收到 `25.3`），还可以直接用主题名 `sensor/temp` 当键绑定。
 - MQTT 发命令时，编码后的整条命令就是消息内容，**包括 `commandNewline` 加的换行**。设备要的是不带换行的 `RESET` 时，把发命令控件的 `commandNewline` 设成 `"无"`。
 - 订阅主题如果也包含了发布主题（比如订阅 `workshop/#`、发布到 `workshop/cmd`），上位机会收到自己发出的命令；只要没有控件绑定同名的键，就没有影响。
 - 发送命令时，命令会发到**所有已连接的链路**（MQTT 发到 `defaultPublish` 主题）。
-- `ModbusConfigCard` 用来轮询或手动发送 Modbus 请求，它本身不是链路，需要和串口或 TCP 卡片一起用（链路要用 `modbus`、`modbus_tcp` 或 `modbus_ascii` 解析，卡片才认得出响应）。`pollMode` 默认 `"自动"`：卡片按工程里的 Modbus 绑定（选了寄存器区的，见下文"绑定数据"）和实时曲线的 Modbus 曲线自己决定读哪些地址，只要给控件写绑定，不用写轮询表。同一从站、同一功能码里相近的地址合并成一块读：寄存器间隔不超过 8 个、一块最多 120 个，线圈和离散输入间隔不超过 64 个、一块最多 1000 个。从站是绑定的 `mbSlaveFilter`，不过滤时用卡片的 `defaultSlave`；每块按成员里最小的 `mbPeriod` 读，`0` 用卡片的 `defaultPoll`（为 0 时按 500 ms）。只读界面上看得见的控件，选项卡其他页上的不读，曲线一直读。`autoStart` 默认 `true`：链路连上就开始轮询，不用点「轮询」。写命令和读请求在同一条链路上排队，一次只发一条，写命令排在读请求前面。`pollMode` 为 `"轮询表"` 时按 `pollList` 读（多行文本，每行 `从站,功能码,地址,数量`，功能码 1–4），逐条发送，每条等到响应或 `timeout`（默认 1000 ms）再发下一条；为空时轮询卡片上的那条请求。没写 `pollMode`、`pollList` 不为空的旧工程按 `"轮询表"` 打开。
+- `ModbusConfigCard` 用来轮询或手动发送 Modbus 请求，它本身不是链路，需要和串口或 TCP 卡片一起用（链路要用 `modbus`、`modbus_tcp` 或 `modbus_ascii` 解析，卡片才认得出响应）。`pollMode` 默认 `"自动"`：卡片按工程里的 Modbus 绑定（选了寄存器区的，见下文"绑定数据"）和实时曲线的 Modbus 曲线自己决定读哪些地址，只要给控件写绑定，不用写轮询表。同一从站、同一功能码里相近的地址合并成一块读：寄存器间隔不超过 8 个、一块最多 120 个，线圈和离散输入间隔不超过 64 个、一块最多 1000 个。从站是绑定的 `mbSlaveFilter`，不过滤时用卡片的 `defaultSlave`；每块按成员里最小的 `mbPeriod` 读，`0` 用卡片的 `defaultPoll`（为 0 时按 500 ms）。只读界面上看得见的控件，选项卡其他页上的不读，曲线一直读。`autoStart` 默认 `true`：链路连上就开始轮询，不用点「轮询」。写命令和读请求在同一条链路上排队，一次只发一条，写命令排在读请求前面。`pollMode` 为 `"轮询表"` 时按 `pollList` 读（多行文本，每行 `从站,功能码,地址,数量`，功能码 1–4），逐条发送，每条等到响应或 `timeout`（默认 1000 ms）再发下一条；为空时轮询卡片上的那条请求。没写 `pollMode` 的旧工程按 `"轮询表"` 打开，且不自动开始轮询（`autoStart` 按 `false`）。
 
 ## 解析收到的数据
 
@@ -222,4 +222,4 @@ python tools/check_uidp.py motor.uidp
 - 布局容器：`HBoxLayout` 水平布局（300×80）、`VBoxLayout` 垂直布局（200×200）、`FlexLayout` 弹性布局（400×200）、`GroupBox` 分组框（280×180）、`TabWidget` 选项卡（350×250）、`Separator` 分割线（200×2）、`CardContainer` 卡片容器（300×200）
 - 显示控件：`LEDIndicator` LED指示灯（140×30）、`NumericDisplay` 数值显示（160×90）、`ProgressBar` 进度条（250×20）、`ImageDisplay` 图片显示（200×150）
 - 图表控件：`RealtimeChart` 实时曲线（400×280）、`GaugeMeter` 仪表盘（180×180）、`DataTable` 数据表格（350×250）
-- 复合卡片：`SerialConfigCard` 串口配置卡片（360×340）、`TcpConfigCard` TCP 配置卡片（360×290）、`MqttConfigCard` MQTT 配置卡片（380×430）、`ModbusConfigCard` Modbus 配置卡片（380×180）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ProgressRingDisplay` 进度环（120×130）
+- 复合卡片：`SerialConfigCard` 串口配置卡片（360×320）、`TcpConfigCard` TCP 配置卡片（360×250）、`MqttConfigCard` MQTT 配置卡片（380×390）、`ModbusConfigCard` Modbus 配置卡片（380×180）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ProgressRingDisplay` 进度环（120×130）

@@ -71,7 +71,8 @@ class LinkCardTests(unittest.TestCase):
             assert not card._parser_combo.isVisibleTo(card), "简洁 hides the parser row"
             card.set_display_mode("完整")
             assert card._parser_combo.isVisibleTo(card)
-            assert card._connect_btn.isEnabled() and not card._disconnect_btn.isEnabled()
+            button = card._connect_btn  # one button: 连接, 取消 while connecting, 断开
+            assert button.isEnabled() and button.text() == "连接"
             link = card._handler
             assert type(link).__name__ == "TcpHandler" and not link.is_active
 
@@ -84,12 +85,12 @@ class LinkCardTests(unittest.TestCase):
             card._port_spin.setValue(device_port)
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             assert "连接中" in card._status.text(), card._status.text()
-            assert not card._connect_btn.isEnabled() and not card._host_edit.isEnabled()
-            assert card._disconnect_btn.isEnabled(), "断开 cancels a pending connection"
+            assert not card._host_edit.isEnabled()
+            assert button.isEnabled() and button.text() == "取消", "取消 cancels a pending connection"
             wait_for(lambda: device.hasPendingConnections() and link.is_connected, "the connection")
             peer = device.nextPendingConnection()
             assert card._status.text() == "● 已连接", card._status.text()
-            assert not card._connect_btn.isEnabled() and card._disconnect_btn.isEnabled()
+            assert button.isEnabled() and button.text() == "断开"
             assert not card._host_edit.isEnabled()
             recv = getattr(widgets["recv"], "_output", None) or widgets["recv"]._text
             assert f"已连接: TCP 127.0.0.1:{device_port}" in recv.toPlainText()
@@ -106,7 +107,7 @@ class LinkCardTests(unittest.TestCase):
             peer.disconnectFromHost()
             wait_for(lambda: not link.is_active, "the close")
             assert card._status.text() == "TCP 连接已被对方关闭", card._status.text()
-            assert card._connect_btn.isEnabled() and card._host_edit.isEnabled()
+            assert button.text() == "连接" and card._host_edit.isEnabled()
             assert "已断开" in recv.toPlainText()
 
             # Server mode: the card listens and counts clients.
@@ -122,7 +123,7 @@ class LinkCardTests(unittest.TestCase):
             probe.connectToHost("127.0.0.1", link.port)
             wait_for(lambda: link.peer_count == 1, "the probe client")
             assert card._status.text() == "● 监听中 · 1 客户端", card._status.text()
-            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            QTest.mouseClick(button, Qt.LeftButton)
             assert not link.is_active and card._status.text() == "未连接"
             probe.abort()
 
@@ -131,7 +132,7 @@ class LinkCardTests(unittest.TestCase):
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             wait_for(lambda: not link.is_active, "the refusal")
             assert card._status.text().startswith("TCP 连接"), card._status.text()
-            assert card._connect_btn.isEnabled()
+            assert button.isEnabled() and button.text() == "连接"
             check_payloads([b"READ\r\n"])
         ''')
 
@@ -182,7 +183,7 @@ class LinkCardTests(unittest.TestCase):
             assert bus._status.text() == "设备已响应", bus._status.text()
             if os.environ["APPLICATION_MODE"] == "export":  # the preview harness runs no bindings
                 assert widgets["value"]._value.text() == "25", widgets["value"]._value.text()
-            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开
             assert not card._handler.is_active
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
             check_payloads([rtu, rtu])
@@ -234,7 +235,7 @@ class LinkCardTests(unittest.TestCase):
             assert master.busy()
             master._timer.timeout.emit()
             assert bus._status.text() == "无响应（60000 ms 超时）", bus._status.text()
-            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开
         ''')
 
     def test_tcp_card_parses_hex_frames_with_its_own_frame_format(self):
@@ -279,7 +280,7 @@ class LinkCardTests(unittest.TestCase):
             if os.environ["APPLICATION_MODE"] == "export":  # the preview harness runs no bindings
                 assert widgets["cmd"].text() == "2", widgets["cmd"].text()
                 assert widgets["temp"].text() == "16", widgets["temp"].text()
-            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开
             check_payloads([])
         ''')
 
@@ -328,18 +329,18 @@ class LinkCardTests(unittest.TestCase):
             assert client.client_id == "panel-1"
             assert client.calls == [("auth", "user", "secret"), ("tls", "truststore"), ("connect", "broker.local", 8883)], client.calls
             assert "连接中" in card._status.text(), card._status.text()
-            assert card._disconnect_btn.isEnabled() and not card._connect_btn.isEnabled()
-            # 断开 cancels the attempt and stops paho's network loop.
-            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            assert card._connect_btn.isEnabled() and card._connect_btn.text() == "取消"
+            # 取消 cancels the attempt and stops paho's network loop.
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             assert not link.is_active and not client.loop_running
-            assert card._status.text() == "未连接" and card._connect_btn.isEnabled()
+            assert card._status.text() == "未连接" and card._connect_btn.text() == "连接"
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
             client = FakeClient.instances[-1]
             client.fire("on_connect", {}, ReasonCode(0, "Success"), None)
             wait_for(lambda: link.is_connected, "the CONNACK")
             assert client.subscriptions == [("home/+/state", 1)]
             assert card._status.text() == "● 已连接", card._status.text()
-            assert not card._host_edit.isEnabled() and card._disconnect_btn.isEnabled()
+            assert not card._host_edit.isEnabled() and card._connect_btn.text() == "断开"
             recv = getattr(widgets["recv"], "_output", None) or widgets["recv"]._text
             assert "已连接: MQTT broker.local:8883" in recv.toPlainText()
 
@@ -349,11 +350,11 @@ class LinkCardTests(unittest.TestCase):
             client.fire("on_message", SimpleNamespace(topic="home/1/state", payload=b"temp=25.5"))
             wait_for(lambda: "temp=25.5" in recv.toPlainText(), "device data")
 
-            # The broker goes away: the card shows the retry and 断开 stays available.
+            # The broker goes away: the card shows the retry and 取消 stays available.
             client.fire("on_disconnect", {}, ReasonCode(128, "Unspecified error"), None)
             wait_for(lambda: not link.is_connected, "the loss")
             assert link.is_active and card._status.text() == "重连中...", card._status.text()
-            assert card._disconnect_btn.isEnabled() and not card._connect_btn.isEnabled()
+            assert card._connect_btn.isEnabled() and card._connect_btn.text() == "取消"
             assert not card._host_edit.isEnabled()
             client.fire("on_connect", {}, ReasonCode(0, "Success"), None)
             wait_for(lambda: link.is_connected, "the reconnection")
@@ -362,7 +363,7 @@ class LinkCardTests(unittest.TestCase):
             client.fire("on_connect", {}, ReasonCode(135, "Not authorized"), None)
             wait_for(lambda: not link.is_active, "the rejected session")
             assert card._status.text() == "MQTT 连接失败: 未授权，请检查用户名和密码", card._status.text()
-            assert card._connect_btn.isEnabled() and card._host_edit.isEnabled()
+            assert card._connect_btn.text() == "连接" and card._host_edit.isEnabled()
             assert not client.loop_running
             check_payloads([b"READ"])
         ''')

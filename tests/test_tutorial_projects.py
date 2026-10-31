@@ -132,5 +132,5 @@ class TutorialProjectTests(unittest.TestCase):
                 wait_for(lambda: widgets["target"]._value.text() == "0.45", "the new setpoint read back")
                 wait_for(lambda: widgets["run"]._switch.isChecked(), "the start coil read back")
             QTest.mouseClick(poller._poll_btn, Qt.LeftButton)
-            QTest.mouseClick(link._disconnect_btn, Qt.LeftButton)
+            QTest.mouseClick(link._connect_btn, Qt.LeftButton)  # 断开
         ''')
