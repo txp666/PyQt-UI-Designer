@@ -19,7 +19,7 @@ from qfluentwidgets import FluentIcon as FIF
 from app.common.signal_bus import signalBus
 from app.core.signal_lifetime import SignalConnections
 from app.core.widget_registry import registry
-from app.core.binding_values import MODBUS_AREAS
+from app.core.binding_values import DEFAULT_MODBUS_AREA, MODBUS_AREAS
 from app.core.data_binding import BIND_PROPERTIES
 from app.core.project import LINK_CARD_TYPES
 from app.core.protocol_parser import (
@@ -104,7 +104,7 @@ def hex_fields_text(fields) -> str:
 
 def hex_fields_from_text(text: str):
     """(fields, None) for a valid table, or (None, the number of its first bad line). Lines starting
-    with # are comments, and a full-width comma separates as well, as in a Modbus card's 轮询表."""
+    with # are comments, and a full-width comma separates as well."""
     fields = []
     for number, line in enumerate(text.splitlines(), 1):
         line = line.strip()
@@ -355,7 +355,6 @@ class PropertyEditor(ScrollArea):
 
             cur_mode = item.properties.get("commandMode", "文本")
             self._apply_mode_visibility(cur_mode)
-            self._apply_poll_mode_visibility(item.properties.get("pollMode", "自动"))
 
             if ("sendOnEnter" in self._prop_rows
                     or "sendOnSelect" in self._prop_rows
@@ -452,8 +451,8 @@ class PropertyEditor(ScrollArea):
 
             self._bind_mb_area_combo = ComboBox()
             self._bind_mb_area_combo.addItems(list(MODBUS_AREAS))
-            self._bind_mb_area_combo.setCurrentText(bd.get("mbArea", "响应内序号"))
-            self._bind_mb_area_combo.currentTextChanged.connect(self._on_mb_area_changed)
+            self._bind_mb_area_combo.setCurrentText(bd.get("mbArea", DEFAULT_MODBUS_AREA))
+            self._bind_mb_area_combo.currentTextChanged.connect(self._on_binding_changed)
             self._bind_mb_area_label = BodyLabel("寄存器区")
             binding_rows.add(self._bind_mb_area_label, self._bind_mb_area_combo)
 
@@ -461,9 +460,8 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_reg_spin.setRange(0, 65535)
             self._bind_mb_reg_spin.setValue(int(bd.get("mbRegIndex", 0)))
             self._bind_mb_reg_spin.valueChanged.connect(self._on_binding_changed)
-            self._bind_mb_reg_label = BodyLabel("寄存器索引")
+            self._bind_mb_reg_label = BodyLabel("寄存器地址")
             binding_rows.add(self._bind_mb_reg_label, self._bind_mb_reg_spin)
-            self._show_mb_area(self._bind_mb_area_combo.currentText())
 
             self._bind_mb_dtype_combo = ComboBox()
             self._bind_mb_dtype_combo.addItems([
@@ -494,14 +492,14 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_slave_label = BodyLabel("从站过滤(-1=全部)")
             binding_rows.add(self._bind_mb_slave_label, self._bind_mb_slave_spin)
 
-            # How often the Modbus card's 自动 polling reads this binding's block.
+            # How often the Modbus poller reads this binding's block.
             self._bind_mb_period_spin = SpinBox()
             self._bind_mb_period_spin.setRange(0, 60000)
             self._bind_mb_period_spin.setValue(_int_setting(bd.get("mbPeriod", 0), 0))
             self._bind_mb_period_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_mb_period_label = BodyLabel("采集周期(ms)")
             for widget in (self._bind_mb_period_label, self._bind_mb_period_spin):
-                widget.setToolTip("0 = 用 Modbus 卡片的轮询 ms")
+                widget.setToolTip("0 = 用默认周期（500 ms，或 Modbus 卡片的轮询 ms）")
             binding_rows.add(self._bind_mb_period_label, self._bind_mb_period_spin)
 
             self._bind_expr_edit = LineEdit()
@@ -786,11 +784,6 @@ class PropertyEditor(ScrollArea):
             if name in self._prop_rows:
                 self._show_row(self._prop_rows[name][1], name in visible)
 
-    def _apply_poll_mode_visibility(self, mode: str):
-        """A Modbus card's 轮询表 row shows only when it polls by its table."""
-        if "pollList" in self._prop_rows:
-            self._show_row(self._prop_rows["pollList"][1], mode == "轮询表")
-
     def _apply_send_toggle_visibility(self, enabled: bool):
         """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles.
         A Modbus-mode control sends whether or not the toggle is on, so its fields stay visible."""
@@ -897,8 +890,6 @@ class PropertyEditor(ScrollArea):
                 self._apply_send_toggle_visibility(any(self._current_item.properties.get(n, False) for n in toggles))
         elif prop_name in ("sendOnEnter", "sendOnSelect", "sendOnChange"):
             self._apply_send_toggle_visibility(bool(value))
-        elif prop_name == "pollMode":
-            self._apply_poll_mode_visibility(value)
         elif prop_name == "displayMode" and self._current_item.type_name in LINK_CARD_TYPES:
             self._sync_height_editor()  # another display mode needs another least height
         elif (prop_name == "defaultParser" and self._card_frame_section is not None
@@ -989,14 +980,6 @@ class PropertyEditor(ScrollArea):
                                  self._bind_mb_regorder_combo, self._bind_mb_fc_spin,
                                  self._bind_mb_slave_spin, self._bind_mb_period_spin))):
             self._show_row(field, shown)
-
-    def _show_mb_area(self, area: str):
-        # 响应内序号 counts registers within one response; a register table takes an address.
-        self._bind_mb_reg_label.setText("寄存器索引" if area == "响应内序号" else "寄存器地址")
-
-    def _on_mb_area_changed(self, area: str):
-        self._show_mb_area(area)
-        self._on_binding_changed()
 
     def _on_bind_mode_changed(self, mode: str):
         self._apply_bind_mode_visibility(mode)

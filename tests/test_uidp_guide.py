@@ -52,14 +52,28 @@ class UidpGuideTests(unittest.TestCase):
             {"type": "TcpConfigCard", "id": "tcp", "properties": {"defaultMode": "client"}},
             {"type": "RealtimeChart", "id": "chart", "properties": {"_curve_0_title": "负载"}},
             {"type": "PushButton", "id": "reset", "binding": {"parseMode": "键值匹配", "key": "x"}},
-            {"type": "ModbusConfigCard", "id": "bus", "properties": {"pollMode": "manual", "autoStart": "yes"}},
+            # The poll table and its switches are gone: unknown properties now.
+            {"type": "ModbusConfigCard", "id": "bus", "properties": {
+                "pollMode": "自动", "autoStart": True, "pollList": "1,3,0,4"}},
             {"type": "NumericDisplay", "id": "rate", "binding": {"parseMode": "Modbus", "mbPeriod": 70000}},
+            # So is 响应内序号: a binding or curve names a register table and an address.
+            {"type": "NumericDisplay", "id": "level", "binding": {"parseMode": "Modbus", "mbArea": "响应内序号"}},
+            {"type": "RealtimeChart", "id": "trend", "properties": {
+                "_curve_0_parseMode": "Modbus", "_curve_0_mbArea": "响应内序号",
+                "_curve_1_parseMode": "键值匹配", "_curve_1_mbArea": "响应内序号"}},
+            # Saved with every binding, it counts for Modbus ones only.
+            {"type": "Label", "id": "note", "binding": {"parseMode": "键值匹配", "key": "n", "mbArea": "响应内序号"}},
         ]}
         found = "\n".join(check_uidp.problems(project))
         for expected in ("没有属性 maxValue", "defaultMode 不能是 'client'", "曲线没有字段 title",
-                         "PushButton 不能绑定数据", "pollMode 不能是 'manual'", "autoStart 应为 true 或 false",
-                         "mbPeriod 应为 0–60000 的整数"):
+                         "PushButton 不能绑定数据", "bus: ModbusConfigCard 没有属性 pollMode",
+                         "bus: ModbusConfigCard 没有属性 autoStart", "bus: ModbusConfigCard 没有属性 pollList",
+                         "mbPeriod 应为 0–60000 的整数",
+                         "level: binding 的 mbArea 不能是 '响应内序号'，可选 保持寄存器、输入寄存器、线圈、离散输入",
+                         "trend: _curve_0_mbArea 不能是 '响应内序号'"):
             self.assertIn(expected, found)
+        for unexpected in ("_curve_1_mbArea", "note:"):
+            self.assertNotIn(unexpected, found)
         self.assertEqual(check_uidp.problems({"widgets": [{"type": "Gauge"}]}), ["未知控件类型: Gauge"])
 
 

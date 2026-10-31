@@ -18,7 +18,6 @@ with contextlib.redirect_stdout(io.StringIO()):  # qfluentwidgets prints an adve
     from app.core.binding_values import MODBUS_AREAS
     from app.core.chart_runtime import _DEFAULT_CURVE_CFG
     from app.core.command_runtime import MODBUS_DATA_TYPES, MODBUS_ORDERS
-    from app.core.modbus_card import modbus_poll_table
     from app.core.data_binding import BIND_PROPERTIES
     from app.core.project import ProjectData
     from app.core.widget_registry import registry
@@ -56,13 +55,16 @@ def problems(data) -> list:
             kind = item["type"]
             name = item.get("id") or kind
             meta = registry.get(kind)
-            for key, value in item.get("properties", {}).items():
+            properties = item.get("properties", {})
+            for key, value in properties.items():
                 if kind == "RealtimeChart" and key.startswith("_curve_"):
                     field = key.split("_", 3)[-1]  # _curve_0_key -> key
                     if field not in _DEFAULT_CURVE_CFG:
                         found.append(f"{name}: 曲线没有字段 {field}（{key}）")
                     elif field == "parseMode" and value not in PARSE_MODES:
                         found.append(f"{name}: {key} 不能是 {value!r}，可选 {'、'.join(PARSE_MODES)}")
+                    elif field == "mbArea" and properties.get(key[:-len(field)] + "parseMode") != "Modbus":
+                        continue  # read only by a Modbus curve
                     elif field in MODBUS_BINDING_OPTIONS and value not in MODBUS_BINDING_OPTIONS[field]:
                         found.append(f"{name}: {key} 不能是 {value!r}，"
                                      f"可选 {'、'.join(MODBUS_BINDING_OPTIONS[field])}")
@@ -77,13 +79,6 @@ def problems(data) -> list:
                     found.append(f"{name}: {kind} 没有属性 {key}")
                 elif prop.prop_type == PropType.ENUM and value not in prop.options:
                     found.append(f"{name}: {key} 不能是 {value!r}，可选 {'、'.join(prop.options)}")
-                elif kind == "ModbusConfigCard" and key == "pollList":
-                    try:
-                        modbus_poll_table(value)
-                    except ValueError as error:
-                        found.append(f"{name}: {error}")
-                elif kind == "ModbusConfigCard" and key == "autoStart" and not isinstance(value, bool):
-                    found.append(f"{name}: autoStart 应为 true 或 false")
             binding = item.get("binding")
             if binding:
                 if kind not in BIND_PROPERTIES:
@@ -92,6 +87,8 @@ def problems(data) -> list:
                     found.append(f"{name}: parseMode 不能是 {binding.get('parseMode')!r}，"
                                  f"可选 {'、'.join(PARSE_MODES)}")
                 for key, options in MODBUS_BINDING_OPTIONS.items():
+                    if key == "mbArea" and binding.get("parseMode") != "Modbus":
+                        continue  # read only by a Modbus binding; the designer saves it with every binding
                     if key in binding and binding[key] not in options:
                         found.append(f"{name}: binding 的 {key} 不能是 {binding[key]!r}，可选 {'、'.join(options)}")
                 period = binding.get("mbPeriod", 0)

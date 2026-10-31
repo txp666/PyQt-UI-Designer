@@ -228,19 +228,19 @@ class BindingResilienceTests(unittest.TestCase):
             def frame(value, counter):
                 return b"\\xaa\\x55" + struct.pack(">fB", value, counter) + b"\\x55\\xaa"
             emit_raw(frame(17, 1))
-            emit_data({"fc": 3, "reg0": 0x4188, "reg1": 0})
+            emit_data({"fc": 3, "hr0": 0x4188, "hr1": 0})
             for value in (float("nan"), float("inf"), -float("inf")):
                 emit_raw(frame(value, 2))
                 assert numeric("raw") == 17 and text("raw_good") == "2"
                 hi, lo = struct.unpack(">HH", struct.pack(">f", value))
-                emit_data({"fc": 3, "reg0": hi, "reg1": lo, "good": "alive"})
+                emit_data({"fc": 3, "hr0": hi, "hr1": lo, "good": "alive"})
                 assert numeric("modbus") == 17 and text("good") == "alive"
             for value in ("ERR", {}, [], -1, 65536):
-                emit_data({"fc": 3, "reg0": value, "reg1": 0, "good": "bad register"})
+                emit_data({"fc": 3, "hr0": value, "hr1": 0, "good": "bad register"})
                 assert numeric("modbus") == 17 and text("good") == "bad register"
             emit_raw(frame(float("inf"), 3) + frame(42, 4))
             assert numeric("raw") == 42 and text("raw_good") == "4"
-            emit_data({"fc": 3, "reg0": 0x4228, "reg1": 0})
+            emit_data({"fc": 3, "hr0": 0x4228, "hr1": 0})
             assert numeric("modbus") == 42
             assert changes == [], changes
         """)

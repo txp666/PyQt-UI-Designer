@@ -112,24 +112,24 @@ class ChartResilienceTests(unittest.TestCase):
                  "frameHeader": "AA55", "frameTail": "55AA"},
             ])
             serial.dataReceived.emit({"bad": 1, "sensor": {"value": 2},
-                                      "fc": 3, "reg0": 0, "reg1": 3, "good": 4})
+                                      "fc": 3, "hr0": 0, "hr1": 3, "good": 4})
             assert [h.count for h in chart._data] == [1, 1, 1, 1, 0]
             invalid = ("ERR", {}, [], None, float("nan"), float("inf"),
                        -float("inf"), 10 ** 400)
             for index, value in enumerate(invalid):
                 serial.dataReceived.emit({"bad": value, "sensor": {"value": value},
-                                          "fc": 3, "reg0": value, "reg1": 3,
+                                          "fc": 3, "hr0": value, "hr1": 3,
                                           "good": index})
                 assert not errors, errors
                 assert [h.count for h in chart._data] == [1, 1, 1, index + 2, 0]
             # Validate both words of a dual-register value before combining them.
             for value in ("2", 1.5, -1, 65536, 10 ** 400):
                 before = chart._data[3].count
-                serial.dataReceived.emit({"fc": 3, "reg0": 0, "reg1": value, "good": 7})
+                serial.dataReceived.emit({"fc": 3, "hr0": 0, "hr1": value, "good": 7})
                 assert chart._data[2].count == 1
                 assert chart._data[3].count == before + 1
             serial.dataReceived.emit({"bad": "5.5", "sensor": {"value": "6.5"},
-                                      "fc": 3, "reg0": 1, "reg1": 2, "good": 8})
+                                      "fc": 3, "hr0": 1, "hr1": 2, "good": 8})
             assert [chart._data[i][-1] for i in range(4)] == [5.5, 6.5, 65538, 8]
             def frame(value):
                 return b"\\xaa\\x55" + struct.pack(">f", value) + b"\\x55\\xaa"

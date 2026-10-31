@@ -26,19 +26,18 @@ def binding_register(value):
     return value
 
 
-# Where a Modbus binding reads: 响应内序号 counts registers within one response (reg0, coil0),
-# the tables name them by register address (hr100), which the request for each response gives.
-MODBUS_AREAS = {"响应内序号": None, "保持寄存器": "hr", "输入寄存器": "ir",
-                "线圈": "co", "离散输入": "di"}
+# Where a Modbus binding or chart curve reads: a register table, whose registers a reply names by
+# address (hr100), from the request it answers. 保持寄存器 when a binding names none.
+MODBUS_AREAS = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}
+DEFAULT_MODBUS_AREA = "保持寄存器"
 # The registers a value of each type takes; coils and discrete inputs are one bit each.
 MODBUS_REGISTERS = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2}
 
 
 def modbus_need(area, address, data_type="uint16", slave_filter=-1, period=0):
-    """What a Modbus binding or chart curve reads, for the Modbus card's 自动 polling:
-    ``(slave, table, address, count, period)``, or None for 响应内序号, which takes whatever
-    response comes. A slave of 0 or less stands for the card's 默认从站, a period of 0 for
-    its 轮询ms."""
+    """What a Modbus binding or chart curve reads, for the Modbus poller:
+    ``(slave, table, address, count, period)``, or None for an area that is not a register table.
+    A slave of 0 or less stands for the poller's default slave, a period of 0 for its default period."""
     table = MODBUS_AREAS.get(area)
     if table is None:
         return None
@@ -46,12 +45,14 @@ def modbus_need(area, address, data_type="uint16", slave_filter=-1, period=0):
     return int(slave_filter), table, int(address), count, max(0, min(60000, int(period)))
 
 
-def modbus_value(data, index, data_type="uint16", reg_order="大端(AB CD)",
-                 fc_filter=-1, slave_filter=-1, area="响应内序号"):
+def modbus_value(data, address, data_type="uint16", reg_order="大端(AB CD)",
+                 fc_filter=-1, slave_filter=-1, area=DEFAULT_MODBUS_AREA):
     """One value from a parsed Modbus response, or None when the response does not hold it.
 
-    32-bit types take the register at index and the next one, which must be in the same
-    response. Coils and discrete inputs are 0 or 1 whatever the data type.
+    The value is the register (or coil, or discrete input) at ``address`` of the area's table,
+    named by address in a reply to a read this program sent (hr100, co3). 32-bit types take the
+    register at the address and the next one, which must be in the same response. Coils and
+    discrete inputs are 0 or 1 whatever the data type.
     """
     if slave_filter >= 0 and data.get("slave") != slave_filter:
         return None
@@ -60,12 +61,10 @@ def modbus_value(data, index, data_type="uint16", reg_order="大端(AB CD)",
         return None
     table = MODBUS_AREAS.get(area)
     if table is None:
-        if fc in (0x01, 0x02):
-            return data.get(f"coil{index}")
-        table = "reg"
-    elif table in ("co", "di"):
-        return data.get(f"{table}{index}")
-    r0 = data.get(f"{table}{index}")
+        return None
+    if table in ("co", "di"):
+        return data.get(f"{table}{address}")
+    r0 = data.get(f"{table}{address}")
     if r0 is None:
         return None
     r0 = binding_register(r0)
@@ -73,7 +72,7 @@ def modbus_value(data, index, data_type="uint16", reg_order="大端(AB CD)",
         return r0
     if data_type == "int16":
         return r0 - 65536 if r0 > 32767 else r0
-    r1 = data.get(f"{table}{index + 1}")
+    r1 = data.get(f"{table}{address + 1}")
     if r1 is None:
         return None
     r1 = binding_register(r1)

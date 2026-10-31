@@ -89,30 +89,35 @@ class DesignerEditingTests(unittest.TestCase):
         editor._on_prop_changed("commandMode", "文本")  # text mode does need the toggle
         self.assertFalse(mode.isVisible() or function.isVisible() or template.isVisible())
 
-    def test_modbus_polling_rows_follow_the_poll_mode_and_binding_mode(self):
+    def test_modbus_card_and_binding_rows(self):
         register_composite_widgets()
         editor = PropertyEditor()
         self.addCleanup(editor.deleteLater)
         editor.resize(360, 1400)
-        card = self.make_item("ModbusConfigCard")
-        editor._load_item(card)
+        editor._load_item(self.make_item("ModbusConfigCard"))
         editor.show()
         self.app.processEvents()
-        mode, auto, table = (editor._prop_rows[name] for name in ("pollMode", "autoStart", "pollList"))
-        self.assertEqual((mode[0].text(), auto[0].text(), mode[1].currentText(), auto[1].isChecked()),
-                         ("轮询方式", "连接后自动轮询", "自动", True))
-        self.assertFalse(table[1].isVisible(), "自动 polling needs no poll table")
-        mode[1].setCurrentText("轮询表")
-        self.assertTrue(table[0].isVisible() and table[1].isVisible())
-        self.assertEqual(card.properties["pollMode"], "轮询表")
-        # A Modbus binding's 采集周期 row comes last in its section, and only for Modbus.
+        self.assertEqual(list(editor._prop_rows), [
+            "title", "defaultSlave", "defaultFunc", "defaultAddr", "defaultValue", "defaultPoll",
+            "mbDataType", "mbRegOrder", "timeout"])
+        self.assertEqual(editor._prop_rows["defaultPoll"][0].text(), "默认轮询(ms)")
+        # A Modbus binding names a register table (保持寄存器 unless chosen) and an address; its
+        # 采集周期 row comes last in its section, and only for Modbus.
         editor._load_item(self.make_item("Label"))
         self.app.processEvents()
         self.assertFalse(editor._bind_mb_period_spin.isVisible())
         editor._bind_mode_combo.setCurrentText("Modbus")
         self.assertTrue(editor._bind_mb_period_spin.isVisible())
+        combo = editor._bind_mb_area_combo
+        self.assertEqual([combo.itemText(i) for i in range(combo.count())],
+                         ["保持寄存器", "输入寄存器", "线圈", "离散输入"])
+        self.assertEqual(editor._bind_mb_reg_label.text(), "寄存器地址")
+        self.assertEqual(editor._current_item.binding["mbArea"], "保持寄存器")
+        combo.setCurrentText("线圈")
+        self.assertEqual(editor._bind_mb_reg_label.text(), "寄存器地址")
+        self.assertEqual(editor._current_item.binding["mbArea"], "线圈")
         self.assertEqual(editor._bind_mb_period_label.text(), "采集周期(ms)")
-        self.assertEqual(editor._bind_mb_period_spin.toolTip(), "0 = 用 Modbus 卡片的轮询 ms")
+        self.assertEqual(editor._bind_mb_period_spin.toolTip(), "0 = 用默认周期（500 ms，或 Modbus 卡片的轮询 ms）")
         editor._bind_mb_period_spin.setValue(250)
         self.assertEqual(editor._current_item.binding["mbPeriod"], 250)
 

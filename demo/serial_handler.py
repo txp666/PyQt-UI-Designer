@@ -933,7 +933,7 @@ def create_parser(parser_type: str, config: dict = None, requests: ModbusRequest
 """Modbus master queue, one per link, shared by the designer and standalone exports.
 
 Every Modbus request a link carries goes through its master: a control's write, a request
-sent from the Modbus card, the card's polling reads. The master puts one request on the
+sent from the Modbus card, the Modbus poller's reads. The master puts one request on the
 wire, waits for the reply that answers it or for its timeout, then sends the next one, so
 a reply is never taken for the answer to another request. Writes go ahead of the reads
 waiting in the queue (behind earlier writes), so polling never holds up a button for more
@@ -941,7 +941,7 @@ than the read already on the wire. A reply answers the request in flight when it
 function code match (an exception, fc | 0x80, too) and so does the address it names: the
 start a read reply is named by (Modbus requests) or the address a write reply echoes.
 
-Also the block planner of the Modbus card's 自动 polling: what bound widgets and chart
+Also the block planner of the Modbus poller (modbus_poller): what bound widgets and chart
 curves read, merged into as few reads as the gap and length limits allow.
 """
 from PyQt5.QtCore import QObject, QTimer
@@ -1144,7 +1144,7 @@ class ModbusMaster(QObject):
         self._finish(ModbusResult(problem is None, data, "" if problem is None else f"设备返回{problem}"))
 
 
-# -- the 自动 polling plan ----------------------------------------------------------
+# -- the polling plan -------------------------------------------------------------
 
 FUNCTION_OF_TABLE = {"hr": 3, "ir": 4, "co": 1, "di": 2}
 MAX_GAP = {3: 8, 4: 8, 1: 64, 2: 64}       # unused registers / bits a block may read across
