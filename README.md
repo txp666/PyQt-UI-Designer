@@ -43,11 +43,15 @@
 
 ### 设计器
 
-![设计器界面](images/designer.png)
+拖拽控件到画布，在右侧编辑属性和数据绑定：
+
+![设计器界面](images/designer.jpg)
 
 ### 预览运行
 
-![预览运行](images/preview.png)
+同一份工程连上设备即可实时运行（图中为 MQTT 模拟设备的数据）：
+
+![预览运行](images/preview.jpg)
 
 ## C++ 版 FluentHMI Studio
 

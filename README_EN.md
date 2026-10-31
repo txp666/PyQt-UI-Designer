@@ -45,11 +45,15 @@ Click the image to watch it on Bilibili (narrated in Chinese). The video walks t
 
 ### Designer
 
-![Designer](images/designer.png)
+Drag widgets onto the canvas, and edit their properties and data bindings on the right:
+
+![Designer](images/designer.jpg)
 
 ### Live preview
 
-![Live preview](images/preview.png)
+The same project runs live once it is connected to a device (the data in the screenshot comes from a simulated MQTT device):
+
+![Live preview](images/preview.jpg)
 
 ## C++ version: FluentHMI Studio
 
