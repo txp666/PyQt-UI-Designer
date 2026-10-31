@@ -59,7 +59,7 @@ class DistributionLifecycleTests(unittest.TestCase):
         self.assertEqual(report["exception_count"], 0)
         self.assertEqual(report["cycles"], 6)
         self.assertEqual(report["preview_cycles"], 7)
-        self.assertEqual(len(report["widget_types"]), 29)
+        self.assertEqual(len(report["widget_types"]), 28)
         self.assertIn("demo_export", report["steps"])
         self.assertIn("registry_export", report["steps"])
         self.assertIn("tcp_loopback_exchange", report["steps"])

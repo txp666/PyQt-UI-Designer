@@ -1,5 +1,5 @@
-"""The Modbus master queue every link owns, and the block planner of the Modbus card's 自动 polling,
-in the designer and in the exported serial_handler.py."""
+"""The Modbus master queue every link owns, and the block planner of the Modbus poller, in the designer
+and in the exported serial_handler.py."""
 import json
 import os
 from pathlib import Path
@@ -150,7 +150,7 @@ class ModbusMasterTests(unittest.TestCase):
             plc.dataReceived.emit({"slave": 1, "fc": 3, "reg0": 0, "start": 0})
             self.assertEqual(plc.sent[-1], rtu(1, 6, 10, 500))
             self.assertIsNone(line.modbus_master._current, "a line link's master is never used")
-            # The Modbus card's 自动 reads go to the links that can answer them only.
+            # Reads that only a Modbus link can answer go to those links only.
             read = modbus_request(1, 3, 0, 1)
             self.assertEqual(namespace["modbus_dispatch"](hub, read, 1000, "read", modbus_only=True),
                              [(rtu(1, 3, 0, 1), plc.modbus_master)])

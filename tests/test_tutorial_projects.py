@@ -115,9 +115,15 @@ class TutorialProjectTests(unittest.TestCase):
             plc = Plc()
             link = widgets["plc_link"]
             link._port_spin.setValue(plc.server.serverPort())
-            QTest.mouseClick(link._connect_btn, Qt.LeftButton)  # no Modbus card: polling starts once connected
+            QTest.mouseClick(link._connect_btn, Qt.LeftButton)  # polling starts once connected
             wait_for(lambda: poller.status() == "3 块 · 正常", "a full poll round")
             assert plc.requests[:3] == [(1, 0, 4), (3, 100, 6), (3, 200, 2)], plc.requests
+            # The TCP card shows the polling after its connection, the blocks in its tooltip.
+            assert link._status.text() == "● 已连接 · 3 块 · 正常", link._status.text()
+            assert link._status.toolTip() == "\n".join((
+                "从站 1 · 功能码 1 · 地址 0–3 · 周期 500 ms",
+                "从站 1 · 功能码 3 · 地址 100–105 · 周期 500 ms",
+                "从站 1 · 功能码 3 · 地址 200–201 · 周期 500 ms")), link._status.toolTip()
             if export:
                 for name, text in (("pressure", "0.42"), ("flow", "36.5"), ("target", "0.40")):
                     assert widgets[name]._value.text() == text, (name, widgets[name]._value.text())
@@ -138,4 +144,5 @@ class TutorialProjectTests(unittest.TestCase):
                 wait_for(lambda: widgets["run"]._switch.isChecked(), "the start coil read back")
             QTest.mouseClick(link._connect_btn, Qt.LeftButton)  # 断开
             assert poller.status() == "等待连接", poller.status()
+            assert (link._status.text(), link._status.toolTip()) == ("未连接", ""), link._status.text()
         ''')

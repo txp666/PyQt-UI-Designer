@@ -123,7 +123,7 @@ python tools/check_uidp.py motor.uidp
 - MQTT 发命令时，编码后的整条命令就是消息内容，**包括 `commandNewline` 加的换行**。设备要的是不带换行的 `RESET` 时，把发命令控件的 `commandNewline` 设成 `"无"`。
 - 订阅主题如果也包含了发布主题（比如订阅 `workshop/#`、发布到 `workshop/cmd`），上位机会收到自己发出的命令；只要没有控件绑定同名的键，就没有影响。
 - 发送命令时，命令会发到**所有已连接的链路**（MQTT 发到 `defaultPublish` 主题）。
-- `ModbusConfigCard` 是可选的面板，接 PLC 不需要它：链路用 `modbus`、`modbus_tcp` 或 `modbus_ascii` 解析时，程序按工程里的 Modbus 绑定（见下文"绑定数据"）和实时曲线的 Modbus 曲线自己决定读哪些地址，只要给控件绑定寄存器地址；链路能发送（TCP 服务端要有设备连入）就自动开始轮询，不用点按钮。同一从站、同一功能码里相近的地址合并成一块读：寄存器间隔不超过 8 个、一块最多 120 个，线圈和离散输入间隔不超过 64 个、一块最多 1000 个。每块按成员里最小的 `mbPeriod` 读，`0` 用默认周期；只读界面上看得见的控件，选项卡其他页上的不读，曲线一直读。写命令和读请求在同一条链路上排队，一次只发一条，写命令排在读请求前面。默认周期 500 ms、响应超时 1000 ms，`mbSlaveFilter` 不过滤的绑定读从站 1；放了卡片时，文档里第一张卡片的 `defaultPoll`（运行时改卡片上的「轮询ms」立即生效，`0` 按 500 ms）、`timeout` 和 `defaultSlave` 代替这三项。卡片显示轮询状态（`等待连接`、`没有 Modbus 绑定`、`N 块 · 轮询中`、`N 块 · 正常`、`第 k 块无响应（从站 S 功能码 F 地址 A）`、`第 k 块异常 02 非法数据地址`、`已暂停`，鼠标悬停列出各块），「停止」/「轮询」暂停和继续轮询，「发送」按卡片上的字段手动发一条请求。
+- 接 PLC 只要两步：链路卡片的 `defaultParser` 选 `modbus`、`modbus_tcp` 或 `modbus_ascii`（或用 `"项目设置"`，工程的 `serial.parser` 是其中之一），再给控件绑定寄存器地址（见下文"绑定数据"）。程序按工程里的 Modbus 绑定和实时曲线的 Modbus 曲线自己决定读哪些地址，链路能发送（TCP 服务端要有设备连入）就自动开始轮询，不用点按钮。同一从站、同一功能码里相近的地址合并成一块读：寄存器间隔不超过 8 个、一块最多 120 个，线圈和离散输入间隔不超过 64 个、一块最多 1000 个。每块按成员里最小的 `mbPeriod` 读，`0` 用默认周期；只读界面上看得见的控件，选项卡其他页上的不读，曲线一直读。写命令和读请求在同一条链路上排队，一次只发一条，写命令排在读请求前面。默认周期、响应超时和备用从站（`mbSlaveFilter` 不过滤的绑定读这个从站）来自链路卡片的 `modbusPeriod`（默认轮询(ms)，默认 `500`）、`modbusTimeout`（响应超时(ms)，默认 `1000`）和 `modbusSlave`（默认从站，默认 `1`）：用链路已连上并解析 Modbus 的卡片，有几张时用文档里的第一张，没有时用这三个默认值。这样的卡片在状态栏的连接信息后面加上轮询状态（`没有 Modbus 绑定`、`N 块 · 轮询中`、`N 块 · 正常`、`第 k 块无响应（从站 S 功能码 F 地址 A）`、`第 k 块异常 02 非法数据地址`），鼠标悬停列出各块。手动读写寄存器用发命令控件的 Modbus 模式（见下文"发送命令"）。
 
 ## 解析收到的数据
 
@@ -157,7 +157,7 @@ python tools/check_uidp.py motor.uidp
 | `"键值匹配"` | `key`：键名，如 `"rpm"` |
 | `"JSON路径"` | `jsonPath`：用点分隔，数组用下标，如 `"data.sensors.0.temp"`（负数从末尾数） |
 | `"HEX字节提取"` | 直接从原始字节取：`byteOffset`、`dataType`（`"uint8"` … `"float32"`）、`byteOrder`（`"大端(BE)"` / `"小端(LE)"`），可选 `frameHeader` / `frameTail`（HEX 文本，如 `"AA55"`） |
-| `"Modbus"` | `mbArea`：`"保持寄存器"`（默认）、`"输入寄存器"`、`"线圈"`、`"离散输入"`；`mbRegIndex`：寄存器地址；`mbDataType`（`"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`）、`mbRegOrder`（`"大端(AB CD)"` / `"小端(CD AB)"`），可选过滤 `mbSlaveFilter`、`mbFcFilter`（-1 表示不过滤）；`mbPeriod` 是自动轮询的采集周期（毫秒，0–60000，默认 `0` 表示用默认周期，见上文 `ModbusConfigCard`） |
+| `"Modbus"` | `mbArea`：`"保持寄存器"`（默认）、`"输入寄存器"`、`"线圈"`、`"离散输入"`；`mbRegIndex`：寄存器地址；`mbDataType`（`"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`）、`mbRegOrder`（`"大端(AB CD)"` / `"小端(CD AB)"`），可选过滤 `mbSlaveFilter`、`mbFcFilter`（-1 表示不过滤）；`mbPeriod` 是自动轮询的采集周期（毫秒，0–60000，默认 `0` 表示用链路卡片的默认轮询 ms，即 `modbusPeriod`，见上文"连接设备：链路卡片"） |
 
 所有模式都可以加 `expression` 做换算，变量是 `value`，如 `"value * 0.1"`。支持 Python 的算术 `+ - * / // % **`、位运算 `& | ^ ~ << >>`（只对整数）、比较 `< <= > >= == !=`（可以连写，如 `"0 < value < 40"`）和 `and` / `or` / `not`，可以加括号；比较的结果是 `True` / `False`，给指示灯用时 `onValue` 填 `1` 即可，如 `"(value >> 1) & 1"` 取第 1 位、`"value * 3.3 / 4095 < 1"` 判断电压。算不出来（除以零、位运算碰到小数）就按原值显示。
 
@@ -222,4 +222,4 @@ python tools/check_uidp.py motor.uidp
 - 布局容器：`HBoxLayout` 水平布局（300×80）、`VBoxLayout` 垂直布局（200×200）、`FlexLayout` 弹性布局（400×200）、`GroupBox` 分组框（280×180）、`TabWidget` 选项卡（350×250）、`Separator` 分割线（200×2）、`CardContainer` 卡片容器（300×200）
 - 显示控件：`LEDIndicator` LED指示灯（140×30）、`NumericDisplay` 数值显示（160×90）、`ProgressBar` 进度条（250×20）、`ImageDisplay` 图片显示（200×150）
 - 图表控件：`RealtimeChart` 实时曲线（400×280）、`GaugeMeter` 仪表盘（180×180）、`DataTable` 数据表格（350×250）
-- 复合卡片：`SerialConfigCard` 串口配置卡片（360×320）、`TcpConfigCard` TCP 配置卡片（360×250）、`MqttConfigCard` MQTT 配置卡片（380×390）、`ModbusConfigCard` Modbus 配置卡片（380×180）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ProgressRingDisplay` 进度环（120×130）
+- 复合卡片：`SerialConfigCard` 串口配置卡片（360×320）、`TcpConfigCard` TCP 配置卡片（360×250）、`MqttConfigCard` MQTT 配置卡片（380×390）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ProgressRingDisplay` 进度环（120×130）

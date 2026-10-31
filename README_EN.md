@@ -129,7 +129,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - Dark and light themes, Mica effect on Windows 11
 - Projects saved and loaded as `.uidp` files
 
-### 29 widgets
+### 28 widgets
 
 | Category | Widgets |
 | --- | --- |
@@ -138,7 +138,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 | **Display** | LED indicator, numeric display, progress bar, progress ring, image |
 | **Charts** | Live chart (multiple channels, cursor, data save / load), gauge |
 | **Communication** | Data table |
-| **Composite** | Serial config card, TCP config card, MQTT config card, send card, receive card, Modbus config card, log box |
+| **Composite** | Serial config card, TCP config card, MQTT config card, send card, receive card, log box |
 
 ### Receiving and binding data
 
@@ -160,7 +160,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **Text mode**: optional line ending
 - **HEX mode**: frame header and trailer, and packing values by data type
 - **Modbus mode**: builds frames automatically and can poll; the frame format is chosen per link: links whose parser mode is `modbus_tcp` send MBAP frames, `modbus_ascii` links send ASCII frames, the others send RTU frames with a CRC. FC16 write multiple registers writes int16, 32-bit integers and float32 values by data type
-- **Automatic Modbus polling**: bind widgets to register addresses and they are read, with no polling card needed: once the link connects, neighbouring addresses are merged into read blocks and the widgets on screen are read at each binding's own period; control writes go out between two reads instead of colliding with them. The Modbus card is optional: it sets the polling parameters, shows the status (missing replies, the exception codes a device returns) and sends requests by hand
+- **Automatic Modbus polling**: pick a Modbus parser on the link card and bind widgets to register addresses, and they are read automatically: once the link connects, neighbouring addresses are merged into read blocks and the widgets on screen are read at each binding's own period; control writes go out between two reads instead of colliding with them. The polling parameters (default period, reply timeout, default slave) are set on the link card, whose status line shows the polling state (missing replies, the exception codes a device returns)
 - **Command templates**: insert a widget's current value with the `{value}` placeholder
 
 ### Export and packaging
@@ -232,7 +232,7 @@ Switches, sliders and spin boxes can be updated from received data. Updates from
 
 Changing the design, opening another project or creating a new one stops the old preview and disconnects; running it again uses the current design, so old commands are never sent. Stopping the preview releases the widgets along with their timers and signal connections, so it can be started and stopped repeatedly.
 
-A Modbus button only uses the protocol settings currently visible, and an invalid address, quantity or value isn't sent. HEX content, frame headers and trailers and binary values use the same encoding rules in the preview and in exports. The Modbus card shows "sent" (已发送) only after the whole command has been written; a failed or short write reports a failure. "Sent" doesn't mean the device has confirmed it: when a link parses `modbus` / `modbus_tcp` / `modbus_ascii`, the card shows "device replied" (设备已响应) or the exception code it returned once the device answers, and "no reply" (无响应) after the timeout. A Modbus switch sends an FC05 write single coil command in both the preview and exports.
+A Modbus button only uses the protocol settings currently visible, and an invalid address, quantity or value isn't sent. HEX content, frame headers and trailers and binary values use the same encoding rules in the preview and in exports. A failed or short write is reported by the link as a send failure. When a link parses `modbus` / `modbus_tcp` / `modbus_ascii`, a Modbus command waits in the link's request queue for the device's reply or the timeout before the next one goes out. A Modbus switch sends an FC05 write single coil command in both the preview and exports.
 
 New, Open and Quit offer Save / Discard / Cancel. Cancelling the save, or a failed save, stops the switch. Projects are validated before saving and loading, and a failure keeps the current canvas and the existing file. Saving replaces the file atomically through a temporary file in the same folder, so an interrupted write can't corrupt the original. Resizing respects each widget's minimum width and height, and each tab page keeps its own layout and child widget positions.
 

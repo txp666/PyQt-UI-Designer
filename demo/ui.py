@@ -175,7 +175,7 @@ def command_packed_frame(value, fmt, cast=int, template="{value}", header="", ta
     return command_hex_frame(template.replace("{value}", payload.hex()), header, tail)
 
 
-# Function codes by the names the designer shows, for widgets, the Modbus card and exports.
+# Function codes by the names the designer shows, for widgets and exports.
 MODBUS_FUNCTIONS = {
     "01 读线圈": 0x01, "02 读离散输入": 0x02,
     "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
@@ -1647,6 +1647,115 @@ class LogDisplayBox(QWidget):
             cursor.removeSelectedText()
             cursor.deleteChar()
 
+"""The Modbus polling settings and status every link card (serial, TCP, MQTT) has, shared by the
+designer preview and exported applications.
+
+Every link card hands the running application's Modbus poller (modbus_poller.py) its 默认轮询(ms),
+响应超时(ms) and 默认从站 (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which count while the
+card is the first in the document whose link is connected and parses Modbus. While its link is
+connected and parses Modbus, the card's status reads ``<connection> · <poller status>``, with the
+poller's blocks as its tooltip; 等待连接 is never shown there.
+"""
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QSizePolicy
+from qfluentwidgets import CaptionLabel
+
+
+
+MODBUS_DEFAULTS = (500, 1000, 1)  # modbusPeriod, modbusTimeout, modbusSlave: the poller's own defaults
+MODBUS_RANGES = ((10, 60000), (10, 60000), (1, 247))
+
+
+def status_label(text):
+    """The status of a link card's title row: it takes the room the title leaves, so a long one (the
+    Modbus poller's) never squeezes the title or widens the card; what does not fit is cut at the left."""
+    label = CaptionLabel(text)
+    label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+    label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+    return label
+
+
+def _modbus_setting(index, value):
+    """A whole number within the setting's range; its default for what is not a number."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return MODBUS_DEFAULTS[index]
+    low, high = MODBUS_RANGES[index]
+    return min(max(number, low), high)
+
+
+class ModbusLinkSettings:
+    """The Modbus polling settings of a link card, and the poller's status on its status line.
+
+    The card calls ``_init_modbus()`` while it is built and ``_with_poll_status(text)`` for its
+    status while connected, and has ``_handler`` (its link), ``_connected`` and
+    ``_show_connected()``, which shows the connected status again."""
+
+    def _init_modbus(self):
+        self._modbus_settings = MODBUS_DEFAULTS
+        self._modbus_poller = None
+        self._poll_shown = False  # the status shows the poller's
+        self._poller_connections = SignalConnections(self)
+
+    @property
+    def link(self):
+        """The card's link: whether it is connected and parses Modbus decides whose settings count."""
+        return self._handler
+
+    @property
+    def modbus_settings(self):
+        """(默认轮询 ms, 响应超时 ms, 默认从站) for the Modbus poller."""
+        return self._modbus_settings
+
+    def set_modbus_period(self, value):
+        self._set_modbus_setting(0, value)
+
+    def set_modbus_timeout(self, value):
+        self._set_modbus_setting(1, value)
+
+    def set_modbus_slave(self, value):
+        self._set_modbus_setting(2, value)
+
+    def _set_modbus_setting(self, index, value):
+        settings = list(self._modbus_settings)
+        settings[index] = _modbus_setting(index, value)
+        self._modbus_settings = tuple(settings)
+        if self._modbus_poller is not None:
+            self._modbus_poller.settings_changed()  # counts at once
+
+    def set_modbus_poller(self, poller):
+        """The running application's Modbus poller: this card hands it its settings, in document
+        order, and shows its status while the card's link is connected and parses Modbus."""
+        if poller is self._modbus_poller:
+            return
+        self._poller_connections.clear()
+        self._modbus_poller = poller
+        if poller is not None:
+            self._poller_connections.connect(poller.statusChanged, self._on_poll_status)
+            poller.add_link_card(self)
+        self._on_poll_status()
+
+    def _on_poll_status(self, *_):
+        """A card that shows the poller's status, or can show it now, shows it again; the others
+        keep what they show (an error, say)."""
+        poller = self._modbus_poller
+        can_show = poller is not None and bool(poller.shown_status(self._handler))
+        if self._connected and (self._poll_shown or can_show):
+            self._show_connected()
+
+    def _with_poll_status(self, text):
+        """``text``, which describes the connection, then `` · `` and the poller's status while the
+        link parses Modbus; and the tooltip for it: the poller's blocks, one per line, or the whole
+        text without blocks. The tooltip is None when the poller's status is not shown."""
+        poller = self._modbus_poller
+        status = poller.shown_status(self._handler) if poller is not None else ""
+        self._poll_shown = bool(status)
+        if not status:
+            return text, None
+        text = f"{text} · {status}"
+        return text, poller.tooltip() if poller.blocks() else text
+
 # coding: utf-8
 """Composite card widgets: SerialConfigCard, DataSendCard, DataRecvCard, LogBox, ProgressRing."""
 from PyQt5.QtCore import QSize, Qt, QTimer
@@ -1662,19 +1771,35 @@ from qfluentwidgets import (
     CheckBox, TextEdit, isDarkTheme, qconfig,
 )
 
+
 from serial_handler import _list_all_ports
 
 
-class SerialConfigCard(CardWidget):
+class SerialConfigCard(ModbusLinkSettings, CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
     One button connects or disconnects the hub's serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
-    height is what the rows of its display mode need."""
+    height is what the rows of its display mode need. Like every link card it hands the Modbus
+    poller its settings and shows the poller's status while its link parses Modbus."""
 
     LINK = "serial"  # name of this card's link on a CommHub
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
+    PROPERTY_SETTERS = (
+        ("title", "set_title", "串口配置"),
+        ("displayMode", "set_display_mode", "完整"),
+        ("defaultBaud", "set_default_baud", "115200"),
+        ("defaultDatabits", "set_default_databits", "8"),
+        ("defaultParity", "set_default_parity", "None"),
+        ("defaultStopbits", "set_default_stopbits", "1"),
+        ("defaultFlow", "set_default_flow", "无"),
+        ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusPeriod", "set_modbus_period", 500),
+        ("modbusTimeout", "set_modbus_timeout", 1000),
+        ("modbusSlave", "set_modbus_slave", 1),
+        ("parserConfig", "set_parser_config", {}),
+    )
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1683,8 +1808,11 @@ class SerialConfigCard(CardWidget):
         self._parser_config = {}
         self._connected = False
         self._handler = None
+        self._poll_tip = False  # the status tooltip is the Modbus poller's
+        self._compact_status = "未连接"  # what 单行 shows: nothing of the Modbus poller's status
         self._serial_connections = SignalConnections(self)
         self._theme_connections = SignalConnections(self)
+        self._init_modbus()
 
         self._root = QVBoxLayout(self)
         self._root.setContentsMargins(16, 12, 16, 12)
@@ -1694,9 +1822,9 @@ class SerialConfigCard(CardWidget):
         self._title_w = self._make_row()
         tl = self._title_w.layout()
         self._title = StrongBodyLabel("串口配置")
-        self._status = CaptionLabel("未连接")
+        self._status = status_label("未连接")
         self._status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
-        tl.addWidget(self._title); tl.addStretch(); tl.addWidget(self._status)
+        tl.addWidget(self._title); tl.addWidget(self._status, 1)
         self._root.addWidget(self._title_w)
 
         LW = 48
@@ -1925,7 +2053,7 @@ class SerialConfigCard(CardWidget):
         # A disabled preview parent also makes isEnabled() false: take the state, not that.
         self._sl_conn.setEnabled(True)
         self._sl_conn.setText(self._connect_btn.text())
-        self._sl_status.setText(self._status.text())
+        self._sl_status.setText(self._compact_status)
         self._sl_status.setTextColor(self._status.lightColor, self._status.darkColor)
 
     def _sync_from_sl(self):
@@ -1984,8 +2112,10 @@ class SerialConfigCard(CardWidget):
         self._set_status("错误", "#F44336")
         self._status.setToolTip(msg)
         self._sl_status.setToolTip(msg)
+        self._poll_tip = False
 
-    def _set_status(self, text: str, color: str):
+    def _set_status(self, text: str, color: str, compact=None):
+        """``compact``: what the 单行 row shows instead, when it is shorter."""
         colors = {
             "#888": ("#606060", "#b0b0b0"),
             "#4CAF50": ("#237b27", "#81c784"),
@@ -1993,8 +2123,9 @@ class SerialConfigCard(CardWidget):
             "#FF9800": ("#8a4b00", "#ffb74d"),
         }
         light, dark = colors.get(color, (color, color))
-        for label in (self._status, self._sl_status):
-            label.setText(text)
+        self._compact_status = text if compact is None else compact
+        for label, shown in ((self._status, text), (self._sl_status, self._compact_status)):
+            label.setText(shown)
             label.setTextColor(QColor(light), QColor(dark))
 
     # ---- ports / state ----
@@ -2020,9 +2151,24 @@ class SerialConfigCard(CardWidget):
                   self._stopbits_combo, self._flow_combo, self._parser_combo):
             w.setEnabled(editable)
         if connected:
-            self._set_status("● 已连接", "#4CAF50")
+            self._show_connected()
         else:
             self._set_status("未连接", "#888")
+            self._show_poll_tip(None)
+
+    def _show_connected(self):
+        """The connection, and the Modbus poller's status while the link parses Modbus. The 单行 row
+        has no status line, only room for the connection: it shows nothing of the poller's."""
+        connection = "● 已连接"
+        text, tip = self._with_poll_status(connection)
+        self._set_status(text, "#4CAF50", compact=connection)
+        self._show_poll_tip(tip)
+
+    def _show_poll_tip(self, tip):
+        """The poller's tooltip, or none once it is no longer shown; the card's own (an error's) stays."""
+        if tip is not None or self._poll_tip:
+            self._status.setToolTip(tip or "")
+        self._poll_tip = tip is not None
 
     # ---- property setters ----
 
@@ -2245,7 +2391,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self.widgets['help'].setGeometry(24, 50, 1020, 28)
         self.widgets['help'].show()
 
-        self.widgets['serial'] = SerialConfigCard(self._page); self.widgets['serial'].set_title('串口配置'); self.widgets['serial'].set_display_mode('单行'); self.widgets['serial'].set_default_baud('115200'); self.widgets['serial'].set_default_databits('8'); self.widgets['serial'].set_default_parity('None'); self.widgets['serial'].set_default_stopbits('1'); self.widgets['serial'].set_default_flow('无'); self.widgets['serial'].set_default_parser('项目设置'); self.widgets['serial'].set_parser_config({})
+        self.widgets['serial'] = SerialConfigCard(self._page); self.widgets['serial'].set_title('串口配置'); self.widgets['serial'].set_display_mode('单行'); self.widgets['serial'].set_default_baud('115200'); self.widgets['serial'].set_default_databits('8'); self.widgets['serial'].set_default_parity('None'); self.widgets['serial'].set_default_stopbits('1'); self.widgets['serial'].set_default_flow('无'); self.widgets['serial'].set_default_parser('项目设置'); self.widgets['serial'].set_modbus_period(500); self.widgets['serial'].set_modbus_timeout(1000); self.widgets['serial'].set_modbus_slave(1); self.widgets['serial'].set_parser_config({})
         self.widgets['serial'].setGeometry(24, 90, 1032, 48)
         self.widgets['serial'].show()
 

@@ -40,7 +40,7 @@ project.canvas_height = 1050
 project.widgets = [
     {"id": kind, "type": kind, "properties": {},
      "geometry": {"x": 10, "y": 10 + row * 260, "w": 600, "h": 250}}
-    for row, kind in enumerate(("ModbusConfigCard", "DataRecvCard", "LogBox", "DataSendCard"))
+    for row, kind in enumerate(("SerialConfigCard", "DataRecvCard", "LogBox", "DataSendCard"))
 ]
 window = PreviewInterface()
 window.set_project_data(project)
@@ -118,7 +118,7 @@ class CommandLifecycleTests(unittest.TestCase):
 
     def test_deleted_cards_no_longer_receive_serial_events_in_either_application(self):
         self.run_both([
-            control("bus", "ModbusConfigCard"),
+            control("serial", "SerialConfigCard"),
             control("recv", "DataRecvCard"),
             control("log", "LogBox"),
         ], r"""
@@ -242,11 +242,12 @@ class CommandLifecycleTests(unittest.TestCase):
             assert config["parserConfig"]["fields"] == [["temperature", 0, 2, "uint16"]]
         """)
 
-    def test_modbus_card_reports_failed_or_short_writes(self):
-        self.run_both([control("bus", "ModbusConfigCard", {
-            "defaultPoll": 60000,
+    def test_modbus_commands_report_failed_or_short_writes(self):
+        self.run_both([control("read", "PushButton", {
+            "text": "读取", "commandMode": "Modbus", "mbSlave": 1, "mbFunc": "03 读保持寄存器",
+            "mbAddress": 0, "mbValue": 1,
         })], r"""
-            bus = widgets["bus"]
+            read = widgets["read"]
             failures = []
             serial.error.connect(failures.append)
             original_write = port.write
@@ -258,19 +259,16 @@ class CommandLifecycleTests(unittest.TestCase):
                         raise OSError("device unplugged during write")
                     return outcome
                 port.write = failing_write
-                QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-                assert bus._send_btn.isEnabled()
-                assert bus._status.text() == "发送失败，请检查连接", bus._status.text()
-                assert "已发送" not in bus._status.text()
+                QTest.mouseClick(read, Qt.LeftButton)
+                assert read.isEnabled()
                 assert not sent
                 assert not errors, errors
             assert len(attempts) == len(failures) == 3
             assert "0/8" in failures[1] and "4/8" in failures[2], failures
             port.write = original_write
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            QTest.mouseClick(read, Qt.LeftButton)
             frame = bytes.fromhex("010300000001840a")
             check_payloads([frame])
-            assert "已发送" in bus._status.text()
             assert serial.send_text("READ\n") is True
             check_payloads([frame, b"READ\n"])
             serial.disconnect()
@@ -280,7 +278,7 @@ class CommandLifecycleTests(unittest.TestCase):
 
     def test_exported_cards_replacing_handler_disconnect_the_old_handler(self):
         self.run_both([
-            control("bus", "ModbusConfigCard"),
+            control("serial", "SerialConfigCard"),
             control("recv", "DataRecvCard"),
             control("log", "LogBox"),
         ], r"""

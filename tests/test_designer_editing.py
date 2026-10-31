@@ -89,18 +89,47 @@ class DesignerEditingTests(unittest.TestCase):
         editor._on_prop_changed("commandMode", "文本")  # text mode does need the toggle
         self.assertFalse(mode.isVisible() or function.isVisible() or template.isVisible())
 
-    def test_modbus_card_and_binding_rows(self):
+    def test_link_card_modbus_rows_and_binding_rows(self):
         register_composite_widgets()
         editor = PropertyEditor()
         self.addCleanup(editor.deleteLater)
         editor.resize(360, 1400)
-        editor._load_item(self.make_item("ModbusConfigCard"))
         editor.show()
-        self.app.processEvents()
-        self.assertEqual(list(editor._prop_rows), [
-            "title", "defaultSlave", "defaultFunc", "defaultAddr", "defaultValue", "defaultPoll",
-            "mbDataType", "mbRegOrder", "timeout"])
-        self.assertEqual(editor._prop_rows["defaultPoll"][0].text(), "默认轮询(ms)")
+        fields = ("modbusPeriod", "modbusTimeout", "modbusSlave")
+        for type_name in ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard"):
+            with self.subTest(type_name=type_name):
+                item = self.make_item(type_name)
+                editor._load_item(item)
+                self.app.processEvents()
+                names = [prop.name for prop in registry.get(type_name).properties]
+                at = names.index("defaultParser")
+                self.assertEqual(names[at:at + 5], ["defaultParser", *fields, "parserConfig"])
+                rows = [editor._prop_rows[name] for name in fields]
+                self.assertEqual([label.text() for label, _spin in rows], ["默认轮询(ms)", "响应超时(ms)", "默认从站"])
+                self.assertEqual([(spin.minimum(), spin.maximum(), spin.value()) for _label, spin in rows],
+                                 [(10, 60000, 500), (10, 60000, 1000), (1, 247, 1)])
+                form = rows[0][1].parentWidget().layout()
+                # 项目设置: the rows are out of the form (no gap), and the values are saved all the same.
+                self.assertFalse(any(spin.isVisible() for _label, spin in rows))
+                self.assertEqual(form.getWidgetPosition(rows[0][1])[0], -1)
+                self.assertEqual([item.properties[name] for name in fields], [500, 1000, 1])
+                parser = editor._editors["defaultParser"]
+                parser.setCurrentText("modbus_tcp")
+                self.assertTrue(all(spin.isVisible() for _label, spin in rows))
+                self.assertEqual(form.getWidgetPosition(rows[0][1])[0],
+                                 form.getWidgetPosition(parser)[0] + 1, "right after 默认解析模式")
+                rows[0][1].setValue(250)
+                rows[2][1].setValue(3)
+                self.assertEqual([item.properties[name] for name in fields], [250, 1000, 3])
+                self.assertEqual(item._inner_widget.modbus_settings, (250, 1000, 3))
+                parser.setCurrentText("hex")
+                self.assertFalse(any(spin.isVisible() for _label, spin in rows))
+                parser.setCurrentText("modbus")
+                self.assertTrue(all(spin.isVisible() for _label, spin in rows))
+                # A card saved with a Modbus mode of its own shows them from the start.
+                editor._load_item(self.make_item(type_name, defaultParser="modbus_ascii"))
+                self.app.processEvents()
+                self.assertTrue(all(editor._prop_rows[name][1].isVisible() for name in fields))
         # A Modbus binding names a register table (保持寄存器 unless chosen) and an address; its
         # 采集周期 row comes last in its section, and only for Modbus.
         editor._load_item(self.make_item("Label"))
@@ -117,7 +146,7 @@ class DesignerEditingTests(unittest.TestCase):
         self.assertEqual(editor._bind_mb_reg_label.text(), "寄存器地址")
         self.assertEqual(editor._current_item.binding["mbArea"], "线圈")
         self.assertEqual(editor._bind_mb_period_label.text(), "采集周期(ms)")
-        self.assertEqual(editor._bind_mb_period_spin.toolTip(), "0 = 用默认周期（500 ms，或 Modbus 卡片的轮询 ms）")
+        self.assertEqual(editor._bind_mb_period_spin.toolTip(), "0 = 用默认周期（链路卡片的「默认轮询(ms)」，默认 500）")
         editor._bind_mb_period_spin.setValue(250)
         self.assertEqual(editor._current_item.binding["mbPeriod"], 250)
 
@@ -632,6 +661,9 @@ class FrameFormatEditingTests(unittest.TestCase):
             (project({"defaultParser": "udp", "parserConfig": {}}), "卡片 link: 未知解析模式: udp"),
             ({"widgets": [{"type": "SerialConfigCard", "properties": {"parserConfig": "AA55"}}]},
              "卡片  的 parserConfig 必须是对象"),
+            # The Modbus card is gone, with no upgrade: a project that has one is refused.
+            ({"widgets": [{"type": "ModbusConfigCard", "id": "bus", "properties": {}}]},
+             "未知控件类型: ModbusConfigCard"),
         ):
             with self.subTest(message=message):
                 with self.assertRaises(ValueError) as caught:

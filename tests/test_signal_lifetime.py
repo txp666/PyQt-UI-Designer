@@ -86,7 +86,7 @@ class SignalLifetimeTests(unittest.TestCase):
             from qfluentwidgets import qconfig
             from app.common.signal_bus import signalBus
             from app.core.serial_manager import serialManager
-            from app.widgets.composite import DataRecvCard, LogDisplayBox, ModbusConfigCard
+            from app.widgets.composite import DataRecvCard, LogDisplayBox
             from app.widgets.comm import DataTableWidget
             from app.widgets.chart import RealtimeLineChart, GaugeMeter
             from app.widgets.display import LEDIndicator, NumericDisplay, ImageDisplay
@@ -100,7 +100,7 @@ class SignalLifetimeTests(unittest.TestCase):
             app = QApplication([])
             errors = []
             sys.excepthook = lambda kind, value, tb: errors.append(str(value))
-            kinds = [DataRecvCard, LogDisplayBox, ModbusConfigCard, DataTableWidget,
+            kinds = [DataRecvCard, LogDisplayBox, DataTableWidget,
                      RealtimeLineChart, GaugeMeter, LEDIndicator, NumericDisplay,
                      ImageDisplay, HBoxContainer, VBoxContainer, FlexContainer,
                      GroupBoxContainer, TabContainer, CardContainer, SerialConfigCard,
@@ -156,7 +156,7 @@ class SignalLifetimeTests(unittest.TestCase):
             project = ProjectData()
             project.widgets = [{"id": kind, "type": kind, "properties": {},
                                 "geometry": {"x": 0, "y": 0, "w": 500, "h": 200}}
-                               for kind in ("DataRecvCard", "LogBox", "ModbusConfigCard",
+                               for kind in ("DataRecvCard", "LogBox",
                                             "SerialConfigCard", "TcpConfigCard", "MqttConfigCard",
                                             "DataTable", "RealtimeChart")]
             preview = PreviewInterface()
@@ -194,7 +194,7 @@ class SignalLifetimeTests(unittest.TestCase):
         project.widgets = [
             {"id": kind, "type": kind, "properties": {},
              "geometry": {"x": 0, "y": 0, "w": 300, "h": 150}}
-            for kind in ("DataRecvCard", "LogBox", "ModbusConfigCard", "SerialConfigCard",
+            for kind in ("DataRecvCard", "LogBox", "SerialConfigCard",
                          "TcpConfigCard", "MqttConfigCard",
                          "DataTable", "RealtimeChart", "LEDIndicator", "NumericDisplay",
                          "GaugeMeter", "ImageDisplay", "CardContainer", "HBoxLayout")
@@ -226,8 +226,8 @@ class SignalLifetimeTests(unittest.TestCase):
                         if hasattr(widget, "set_serial_handler"):
                             widget.set_serial_handler(handler)
                             widget.set_serial_handler(handler)
-                    # DataTable plus chart, log and binding each subscribe exactly once; the Modbus
-                    # card hears replies through the links' Modbus masters.
+                    # DataTable plus chart, log and binding each subscribe exactly once; the link
+                    # cards hear the Modbus poller, not the data.
                     assert handler.receivers(handler.dataReceived) == 4
                     window.deleteLater()
                     app.sendPostedEvents(None, QEvent.DeferredDelete)

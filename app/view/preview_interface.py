@@ -59,8 +59,8 @@ class PreviewCanvas(QWidget):
         self.setFixedSize(project.canvas_width, project.canvas_height)
         self._asset_base_dir = (Path(project.file_path).expanduser().resolve().parent
                                 if project.file_path else Path.cwd())
-        # Reads what the Modbus bindings and chart curves show, with or without a Modbus card;
-        # the cards, created in document order, show it and the first sets its parameters.
+        # Reads what the Modbus bindings and chart curves show; the link cards, created in document
+        # order, hand it their settings and show its status.
         self._modbus_poller = ModbusPoller(commHub, bindingEngine.modbus_needs, self)
 
         for wd in project.widgets:
@@ -103,7 +103,7 @@ class PreviewCanvas(QWidget):
                 bindingEngine.register_widget(widget_id, widget)
 
             self._wire_commands(widget, type_name, props)
-            if hasattr(widget, "set_modbus_poller"):  # a Modbus card: the poller's panel
+            if hasattr(widget, "set_modbus_poller"):  # a link card: its settings, the poller's status
                 widget.set_modbus_poller(self._modbus_poller)
 
             if type_name == "RealtimeChart" and hasattr(widget, "start_listening"):

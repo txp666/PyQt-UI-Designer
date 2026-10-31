@@ -15,6 +15,9 @@ class TcpConfigCard(LinkConfigCard):
         ("defaultHost", "set_default_host", "127.0.0.1"),
         ("defaultPort", "set_default_port", 8080),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusPeriod", "set_modbus_period", 500),
+        ("modbusTimeout", "set_modbus_timeout", 1000),
+        ("modbusSlave", "set_modbus_slave", 1),
         ("parserConfig", "set_parser_config", {}),
     )
 
@@ -51,7 +54,7 @@ class TcpConfigCard(LinkConfigCard):
     def _on_peers_changed(self, count):
         self._peers = count
         if self._connected:
-            self._set_status(self._connected_text(), "ok")
+            self._show_connected()
 
     def _connected_text(self):
         # The link may have been started outside the card; report what it is doing.

@@ -18,7 +18,6 @@ from qfluentwidgets import (
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
-from app.core.command_runtime import MODBUS_DATA_TYPES, MODBUS_FUNCTIONS, MODBUS_ORDERS
 
 try:
     import serial.tools.list_ports
@@ -344,45 +343,17 @@ class ProgressRingDisplay(QWidget):
 
 
 # ---------------------------------------------------------------------------
-# Modbus Config Card
-# ---------------------------------------------------------------------------
-
-from app.core.modbus_card import ModbusConfigCard as RuntimeModbusCard
-
-
-class ModbusConfigCard(RuntimeModbusCard):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        from app.core.comm_manager import commHub
-        self.set_serial_handler(commHub)
-
-
-# ---------------------------------------------------------------------------
 # Metadata
 # ---------------------------------------------------------------------------
 
-MODBUS_CONFIG_META = WidgetMeta(
-    type_name="ModbusConfigCard",
-    display_name="Modbus 配置卡片",
-    category=WidgetCategory.COMPOSITE,
-    icon="DEVELOPER_TOOLS",
-    default_width=380, default_height=180,
-    min_width=280, min_height=120,
-    properties=[
-        PropDef("title", "标题", PropType.STRING, "Modbus 配置"),
-        PropDef("defaultSlave", "默认从站", PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("defaultFunc", "默认功能码", PropType.ENUM, "03 读保持寄存器",
-                options=list(MODBUS_FUNCTIONS)),
-        PropDef("defaultAddr", "默认地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("defaultValue", "默认值/数量", PropType.STRING, "1"),  # what the card writes, or a count
-        PropDef("defaultPoll", "默认轮询(ms)", PropType.INT, 0, min_val=0, max_val=60000),
-        PropDef("mbDataType", "写入数据类型", PropType.ENUM, "uint16",
-                options=list(MODBUS_DATA_TYPES)),
-        PropDef("mbRegOrder", "写入寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
-                options=list(MODBUS_ORDERS)),
-        PropDef("timeout", "响应超时(ms)", PropType.INT, 1000, min_val=10, max_val=60000),
-    ],
-)
+# What a link card hands the Modbus poller while its link is connected and parses Modbus (the first
+# such card in the document counts); the property panel shows them while the card's own parser is a
+# Modbus one.
+MODBUS_LINK_PROPS = [
+    PropDef("modbusPeriod", "默认轮询(ms)", PropType.INT, 500, min_val=10, max_val=60000),
+    PropDef("modbusTimeout", "响应超时(ms)", PropType.INT, 1000, min_val=10, max_val=60000),
+    PropDef("modbusSlave", "默认从站", PropType.INT, 1, min_val=1, max_val=247),
+]
 
 # A link card's own frame format, edited in the property panel's 帧格式 section.
 PARSER_CONFIG_PROP = PropDef(
@@ -403,6 +374,7 @@ SERIAL_CONFIG_META = WidgetMeta(
                 options=["完整", "简洁", "单行"]),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
                 options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        *MODBUS_LINK_PROPS,
         PARSER_CONFIG_PROP,
         PropDef("defaultBaud", "默认波特率", PropType.ENUM, "115200",
                 options=["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]),
@@ -434,6 +406,7 @@ TCP_CONFIG_META = WidgetMeta(
         PropDef("defaultPort", "默认端口", PropType.INT, 8080, min_val=1, max_val=65535),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
                 options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        *MODBUS_LINK_PROPS,
         PARSER_CONFIG_PROP,
     ],
 )
@@ -460,6 +433,7 @@ MQTT_CONFIG_META = WidgetMeta(
         PropDef("defaultTls", "默认启用 TLS", PropType.BOOL, False),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
                 options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        *MODBUS_LINK_PROPS,
         PARSER_CONFIG_PROP,
     ],
 )
@@ -517,13 +491,13 @@ PROGRESS_RING_META = WidgetMeta(
 )
 
 ALL_COMPOSITE = [
-    SERIAL_CONFIG_META, TCP_CONFIG_META, MQTT_CONFIG_META, MODBUS_CONFIG_META,
+    SERIAL_CONFIG_META, TCP_CONFIG_META, MQTT_CONFIG_META,
     DATA_SEND_META, DATA_RECV_META, LOG_BOX_META, PROGRESS_RING_META,
 ]
 
 # Cards shared with exported applications, configured through their PROPERTY_SETTERS.
-_RUNTIME_CARDS = {"TcpConfigCard": TcpConfigCard, "MqttConfigCard": MqttConfigCard,
-                  "ModbusConfigCard": ModbusConfigCard}
+_RUNTIME_CARDS = {"SerialConfigCard": SerialConfigCard, "TcpConfigCard": TcpConfigCard,
+                  "MqttConfigCard": MqttConfigCard}
 
 
 def register_composite_widgets():
@@ -532,18 +506,6 @@ def register_composite_widgets():
 
 
 def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget:
-    if type_name == "SerialConfigCard":
-        w = SerialConfigCard(parent)
-        w.set_title(props.get("title", "串口配置"))
-        w.set_display_mode(props.get("displayMode", "完整"))
-        w.set_default_baud(props.get("defaultBaud", "115200"))
-        w.set_default_databits(props.get("defaultDatabits", "8"))
-        w.set_default_parity(props.get("defaultParity", "None"))
-        w.set_default_stopbits(props.get("defaultStopbits", "1"))
-        w.set_default_flow(props.get("defaultFlow", "无"))
-        w.set_default_parser(props.get("defaultParser", "项目设置"))
-        w.set_parser_config(props.get("parserConfig", {}))
-        return w
     if type_name in _RUNTIME_CARDS:
         w = _RUNTIME_CARDS[type_name](parent)
         for prop, method, default in w.PROPERTY_SETTERS:
@@ -573,17 +535,7 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
 
 
 def apply_composite_property(widget, type_name: str, prop_name: str, value):
-    if type_name == "SerialConfigCard":
-        if prop_name == "title": widget.set_title(value)
-        elif prop_name == "displayMode": widget.set_display_mode(value)
-        elif prop_name == "defaultBaud": widget.set_default_baud(value)
-        elif prop_name == "defaultDatabits": widget.set_default_databits(value)
-        elif prop_name == "defaultParity": widget.set_default_parity(value)
-        elif prop_name == "defaultStopbits": widget.set_default_stopbits(value)
-        elif prop_name == "defaultFlow": widget.set_default_flow(value)
-        elif prop_name == "defaultParser": widget.set_default_parser(value)
-        elif prop_name == "parserConfig": widget.set_parser_config(value)
-    elif type_name in _RUNTIME_CARDS:
+    if type_name in _RUNTIME_CARDS:
         for prop, method, _default in widget.PROPERTY_SETTERS:
             if prop == prop_name:
                 getattr(widget, method)(value)

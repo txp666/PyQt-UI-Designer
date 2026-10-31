@@ -167,7 +167,7 @@ class DistributionSmokeTest:
                              "w": 260, "h": 180},
             })
         self.result["widget_types"] = sorted(meta.type_name for meta in registry.all())
-        assert len(self.result["widget_types"]) == 29
+        assert len(self.result["widget_types"]) == 28
         path = self.report.with_suffix(".uidp")
         path.write_text(json.dumps(project.to_dict(), ensure_ascii=False), encoding="utf-8")
         self.window._project_mgr.load_to_scene(self.window.designer_interface.scene, str(path))

@@ -284,7 +284,7 @@ with patch.object(runtime.serial, "Serial") as port, patch.object(runtime, "Seri
     assert port.call_args.kwargs["parity"] == "E"
     assert port.call_args.kwargs["stopbits"] == 2
     assert port.call_args.kwargs["rtscts"]
-    # No Modbus card: the poller reads what the chart's curve shows (the value is not on screen).
+    # No link card: the poller reads what the chart's curve shows (the value is not on screen) by default.
     read = bytes.fromhex("010300000001")
     assert port.return_value.write.call_args_list == [((read + runtime.modbus_crc(read),),)]
     assert binding.modbus_poller.status() == "1 块 · 轮询中"

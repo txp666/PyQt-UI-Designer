@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Any
 
-from app.core.project import ProjectData
+from app.core.project import LINK_CARD_TYPES, ProjectData
 from app.common.runtime_sources import runtime_source
 
 
@@ -44,7 +44,7 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None):
         "tcp_handler.py": _gen_tcp_handler(project.serial),
         "mqtt_handler.py": _gen_mqtt_handler(project.serial),
         "comm_hub.py": _gen_comm_hub(),
-        "data_binding.py": _gen_data_binding(bindings, widget_types),
+        "data_binding.py": _gen_data_binding(bindings, widget_types, _link_card_ids(widgets)),
     }
     for name, source in files.items():
         if name.endswith(".py"):
@@ -241,6 +241,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_progress_ring_display_class())
     if "LogBox" in widget_types or "LogDisplayBox" in widget_types:
         lines.append(_log_display_class())
+    if widget_types & set(LINK_CARD_TYPES):
+        lines.append(_link_polling_source())  # every link card's Modbus polling settings and status
     if "SerialConfigCard" in widget_types:
         lines.append(_serial_config_card_class())
     if widget_types & {"TcpConfigCard", "MqttConfigCard"}:
@@ -253,8 +255,6 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_data_send_card_class())
     if "DataRecvCard" in widget_types:
         lines.append(_data_recv_card_class())
-    if "ModbusConfigCard" in widget_types:
-        lines.append(_modbus_config_card_class())
 
     # MainUI class
     lines.append(f'''
@@ -689,25 +689,12 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
     if wtype in ("LogBox", "LogDisplayBox"):
         return (f"self.widgets[{wid!r}] = LogDisplayBox({pv}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 500)})")
-    if wtype == "SerialConfigCard":
-        code = [f"self.widgets[{wid!r}] = SerialConfigCard({pv})"]
-        for prop, method, default in (
-            ("title", "set_title", "串口配置"),
-            ("displayMode", "set_display_mode", "完整"),
-            ("defaultBaud", "set_default_baud", "115200"),
-            ("defaultDatabits", "set_default_databits", "8"),
-            ("defaultParity", "set_default_parity", "None"),
-            ("defaultStopbits", "set_default_stopbits", "1"),
-            ("defaultFlow", "set_default_flow", "无"),
-            ("defaultParser", "set_default_parser", "项目设置"),
-            ("parserConfig", "set_parser_config", {}),
-        ):
-            code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
-        return "; ".join(code)
-    if wtype in ("TcpConfigCard", "MqttConfigCard"):
+    if wtype in LINK_CARD_TYPES:
+        from app.core.serial_card import SerialConfigCard
         from app.core.tcp_card import TcpConfigCard
         from app.core.mqtt_card import MqttConfigCard
-        card = TcpConfigCard if wtype == "TcpConfigCard" else MqttConfigCard
+        card = {"SerialConfigCard": SerialConfigCard, "TcpConfigCard": TcpConfigCard,
+                "MqttConfigCard": MqttConfigCard}[wtype]
         code = [f"self.widgets[{wid!r}] = {wtype}({pv})"]
         for prop, method, default in card.PROPERTY_SETTERS:
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
@@ -720,12 +707,6 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
         return (f"self.widgets[{wid!r}] = DataRecvCard({pv}); "
                 f"self.widgets[{wid!r}].set_title({p('title', '数据接收')}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 1000)})")
-    if wtype == "ModbusConfigCard":
-        from app.core.modbus_card import ModbusConfigCard
-        code = [f"self.widgets[{wid!r}] = ModbusConfigCard({pv})"]
-        for prop, method, default in ModbusConfigCard.PROPERTY_SETTERS:
-            code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
-        return "; ".join(code)
 
     return f"self.widgets[{wid!r}] = QLabel('未知控件: {wtype}', {pv})"
 
@@ -775,6 +756,20 @@ def _gen_comm_hub() -> str:
     )
 
 
+def _link_card_ids(widgets: list) -> list:
+    """The ids of the link cards, in document order (as the preview creates them): the first whose
+    link is connected and parses Modbus sets the Modbus poller's settings."""
+    ids = []
+
+    def walk(items):
+        for w in items:
+            if w["type"] in LINK_CARD_TYPES:
+                ids.append(w["id"])
+            walk(w.get("children", []))
+    walk(widgets)
+    return ids
+
+
 def _extract_bindings(widgets: list) -> list:
     bindings = []
     def _walk(items):
@@ -821,7 +816,7 @@ def _extract_bindings(widgets: list) -> list:
     return bindings
 
 
-def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
+def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list = ()) -> str:
     has_parsed = any(b["parseMode"] in ("键值匹配", "JSON路径", "Modbus") for b in bindings)
     has_hex = any(b["parseMode"] == "HEX字节提取" for b in bindings)
     has_chart = widget_types and "RealtimeChart" in widget_types
@@ -884,14 +879,12 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         '        self.hub = hub',
         '        self._connections = SignalConnections(ui)',
         '        ui._comm_hub = hub',
-        '        # Reads what the Modbus bindings and chart curves show, with or without a Modbus card;',
-        '        # the cards, in document order, show it and the first sets its parameters.',
+        '        # Reads what the Modbus bindings and chart curves show; the link cards, in document',
+        '        # order, hand it their settings and show its status.',
         '        self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)',
         '        for w in ui.widgets.values():',
         '            if hasattr(w, "set_serial_handler"):',
         '                w.set_serial_handler(hub)  # connection cards pick their own link',
-        '            if hasattr(w, "set_modbus_poller"):  # a Modbus card: the poller\'s panel',
-        '                w.set_modbus_poller(self.modbus_poller)',
     ]
     if has_chart:
         lines += [
@@ -900,6 +893,11 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
             '                w._serial_connections.connect(hub.dataReceived, w.on_parsed)',
             '                w._serial_connections.connect(hub.rawReceived, w.on_raw)',
             '                w._serial_connections.connect(hub.disconnected, w.reset_stream)',
+        ]
+    if link_cards:
+        lines += [
+            f'        for widget_id in {list(link_cards)!r}:',
+            '            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)',
         ]
 
     if has_hex:
@@ -1309,12 +1307,19 @@ def _log_display_class() -> str:
 def _serial_config_card_class() -> str:
     return runtime_source("serial_card.py").replace(
         "from .serial_runtime import _list_all_ports", "from serial_handler import _list_all_ports"
-    ).replace("from .signal_lifetime import SignalConnections", "")
+    ).replace("from .signal_lifetime import SignalConnections", "").replace(
+        "from .link_polling import ModbusLinkSettings, status_label", "")
+
+
+def _link_polling_source() -> str:
+    return runtime_source("link_polling.py").replace(
+        "from .signal_lifetime import SignalConnections", "")
 
 
 def _link_card_class() -> str:
     return runtime_source("link_card.py").replace(
-        "from .signal_lifetime import SignalConnections", "")
+        "from .signal_lifetime import SignalConnections", "").replace(
+        "from .link_polling import ModbusLinkSettings, status_label", "")
 
 
 def _tcp_config_card_class() -> str:
@@ -1462,9 +1467,3 @@ class DataRecvCard(CardWidget):
         self._trim()
 '''
 
-
-def _modbus_config_card_class() -> str:
-    return runtime_source("modbus_card.py").replace(
-        "from .command_runtime import MODBUS_FUNCTIONS, MODBUS_ORDERS, modbus_request", "").replace(
-        "from .modbus_master import", "from serial_handler import").replace(
-        "from .signal_lifetime import SignalConnections", "")

@@ -90,7 +90,7 @@ def main():
         elif "-x64" in archive.stem:
             assert report["architecture"].lower() in ("x86_64", "amd64"), report
         assert report["cycles"] == 6 and report["preview_cycles"] == 7, report
-        assert len(report["widget_types"]) == report["widget_count"] == 29, report
+        assert len(report["widget_types"]) == report["widget_count"] == 28, report
         assert report["exception_count"] == 0, report
         assert report["selected_widget"] == "all_Label", report
         assert "destroyed_selected_scene" in report["steps"], report

@@ -33,7 +33,7 @@ def command_packed_frame(value, fmt, cast=int, template="{value}", header="", ta
     return command_hex_frame(template.replace("{value}", payload.hex()), header, tail)
 
 
-# Function codes by the names the designer shows, for widgets, the Modbus card and exports.
+# Function codes by the names the designer shows, for widgets and exports.
 MODBUS_FUNCTIONS = {
     "01 读线圈": 0x01, "02 读离散输入": 0x02,
     "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
