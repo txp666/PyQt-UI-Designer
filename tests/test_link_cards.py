@@ -136,69 +136,103 @@ class LinkCardTests(unittest.TestCase):
             check_payloads([b"READ\r\n"])
         ''')
 
-    def test_modbus_card_frames_requests_as_mbap_over_a_modbus_tcp_link(self):
+    def test_tcp_card_shows_the_poller_status_and_modbus_commands_go_out_as_mbap(self):
         self.run_both([
-            control("tcp", "TcpConfigCard", {"defaultParser": "modbus_tcp"}),
-            control("bus", "ModbusConfigCard", {"defaultSlave": 1, "defaultFunc": "03 读保持寄存器",
-                                                "defaultAddr": 0, "defaultValue": 2}, 1),
+            control("tcp", "TcpConfigCard", {"defaultParser": "modbus_tcp", "modbusPeriod": 60000}),
             parity.control("value", "NumericDisplay", {"title": "温度"}, 16) | {
                 "binding": {"parseMode": "Modbus", "mbRegIndex": 0, "mbDataType": "uint16"}},
-        ], r'''
+            parity.control("write", "PushButton", {
+                "text": "写入", "commandMode": "Modbus", "mbSlave": 1, "mbFunc": "06 写单寄存器",
+                "mbAddress": 0, "mbValue": 2}, 17),
+        ], r"""
             import time
-            from PyQt5.QtNetwork import QHostAddress, QTcpServer
+            from PyQt5.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
             def wait_for(predicate, what):
                 deadline = time.monotonic() + 5
                 while not predicate() and time.monotonic() < deadline:
                     QTest.qWait(10)
                 assert predicate(), f"Timed out waiting for {what}"
-            card, bus = widgets["tcp"], widgets["bus"]
+            export = os.environ["APPLICATION_MODE"] == "export"
+            if not export:  # the preview harness runs no bindings; the poller reads what they show
+                from app.core.data_binding import bindingEngine
+                bindingEngine.load_bindings_from_project(project.widgets)
+            card = widgets["tcp"]
+            link = card._handler
             assert card._parser_combo.currentText() == "modbus_tcp"
-            # 停止 first: the poller would read the bound register as soon as the link connects.
-            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
-            assert bus._status.text() == "已暂停", bus._status.text()
             device = QTcpServer()
             assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
+            device_port = device.serverPort()
             card._host_edit.setText("127.0.0.1")
-            card._port_spin.setValue(device.serverPort())
+            card._port_spin.setValue(device_port)
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)
-            wait_for(lambda: device.hasPendingConnections() and card._handler.is_connected, "the link")
+            wait_for(lambda: device.hasPendingConnections() and link.is_connected, "the link")
             peer = device.nextPendingConnection()
-            assert card._handler.parser_type == "modbus_tcp"
+            assert link.parser_type == "modbus_tcp"
 
-            # The serial port (line parser) gets RTU, the Modbus TCP link gets MBAP.
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            rtu = bytes.fromhex("010300000002c40b")
-            check_payloads([rtu])
-            wait_for(lambda: peer.bytesAvailable() >= 12, "the MBAP request")
+            # Connected, the poller reads the bound register at once, framed as MBAP; the card shows it.
+            wait_for(lambda: peer.bytesAvailable() >= 12, "the poller's read")
             request = bytes(peer.readAll())
-            assert request[2:] == bytes.fromhex("0000000601030000 0002".replace(" ", "")), request.hex()
-            assert bus._status.text().startswith("已发送: 01 03 00 00 00 02 C4 0B（2 条链路）"), bus._status.text()
-
-            # The device answers with a Modbus TCP response, parsed like an RTU one; the
-            # transaction id finds the request, so registers are also named by address.
+            assert request[2:] == bytes.fromhex("000000060103 0000 0001".replace(" ", "")), request.hex()
+            block = "从站 1 · 功能码 3 · 地址 0–0 · 周期 60000 ms"
+            assert (card._status.text(), card._status.toolTip()) == ("● 已连接 · 1 块 · 轮询中", block), \
+                card._status.text()
             received = []
-            card._handler.dataReceived.connect(received.append)
-            peer.write(request[:2] + bytes.fromhex("000000070103040019 0001".replace(" ", "")))
+            link.dataReceived.connect(received.append)
+            peer.write(request[:2] + bytes.fromhex("00000005 010302 0019".replace(" ", "")))
             peer.flush()
             wait_for(lambda: received, "the response")
-            assert received == [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1,
-                                 "start": 0, "hr0": 25, "hr1": 1}], received
-            assert bus._status.text() == "设备已响应", bus._status.text()
-            if os.environ["APPLICATION_MODE"] == "export":  # the preview harness runs no bindings
+            assert received == [{"slave": 1, "fc": 3, "reg0": 25, "start": 0, "hr0": 25}], received
+            assert (card._status.text(), card._status.toolTip()) == ("● 已连接 · 1 块 · 正常", block), \
+                card._status.text()
+            if export:
                 assert widgets["value"]._value.text() == "25", widgets["value"]._value.text()
-            QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开
-            assert not card._handler.is_active
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            check_payloads([rtu, rtu])
-            assert bus._status.text() == "已发送: 01 03 00 00 00 02 C4 0B", bus._status.text()
-        ''')
 
-    def test_modbus_card_sends_ascii_frames_and_waits_for_replies_over_a_modbus_ascii_link(self):
+            # A Modbus-mode button: the serial port (line parser) gets RTU, the Modbus TCP link MBAP.
+            QTest.mouseClick(widgets["write"], Qt.LeftButton)
+            check_payloads([bytes.fromhex("010600000002080b")])
+            wait_for(lambda: peer.bytesAvailable() >= 12, "the MBAP write")
+            write = bytes(peer.readAll())
+            assert write[2:] == bytes.fromhex("000000060106 0000 0002".replace(" ", "")), write.hex()
+            peer.write(write)  # the device echoes the write
+            peer.flush()
+            wait_for(lambda: not link.modbus_master.busy(), "the echo")
+            assert card._status.text() == "● 已连接 · 1 块 · 正常", card._status.text()
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开
+            assert not link.is_active
+            assert (card._status.text(), card._status.toolTip()) == ("未连接", ""), card._status.text()
+
+            # A server waits for a client first (等待连接 is not shown), then reads from it.
+            device.close()
+            card._mode_combo.setCurrentText("服务端")
+            card._port_spin.setValue(device_port)
+            widgets["value"].hide()  # out of sight: nothing to read
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            assert link.is_connected, card._status.text()
+            assert (card._status.text(), card._status.toolTip()) == ("● 监听中 · 0 客户端", ""), card._status.text()
+            probe = QTcpSocket()
+            probe.connectToHost("127.0.0.1", link.port)
+            wait_for(lambda: link.peer_count == 1, "the client")
+            nothing = "● 监听中 · 1 客户端 · 没有 Modbus 绑定"
+            assert (card._status.text(), card._status.toolTip()) == (nothing, nothing), card._status.text()
+            # Back in sight, and a shorter period, which counts at once: the register is read now.
+            widgets["value"].show()
+            card.set_modbus_period(100)
+            assert card._status.text() == "● 监听中 · 1 客户端 · 1 块 · 轮询中", card._status.text()
+            assert card._status.toolTip() == "从站 1 · 功能码 3 · 地址 0–0 · 周期 100 ms", card._status.toolTip()
+            wait_for(lambda: probe.bytesAvailable() >= 12, "the read from the client")
+            assert bytes(probe.readAll())[7:] == bytes.fromhex("0300000001"), "an FC03 read of register 0"
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            assert not link.is_active and card._status.text() == "未连接"
+            probe.abort()
+        """)
+
+    def test_the_first_card_whose_link_is_connected_and_parses_modbus_sets_up_the_poller(self):
         self.run_both([
-            control("tcp", "TcpConfigCard", {"defaultParser": "modbus_ascii"}),
-            control("bus", "ModbusConfigCard", {"defaultSlave": 1, "defaultFunc": "03 读保持寄存器",
-                                                "defaultAddr": 100, "defaultValue": 2, "timeout": 60000}, 1),
-        ], r'''
+            control("tcp", "TcpConfigCard", {"defaultParser": "modbus_tcp", "modbusPeriod": 200,
+                                             "modbusTimeout": 300, "modbusSlave": 4}),
+            control("serial", "SerialConfigCard", {"defaultParser": "modbus", "modbusPeriod": 700,
+                                                   "modbusTimeout": 800, "modbusSlave": 9}, 1),
+        ], r"""
             import time
             from PyQt5.QtNetwork import QHostAddress, QTcpServer
             def wait_for(predicate, what):
@@ -206,7 +240,63 @@ class LinkCardTests(unittest.TestCase):
                 while not predicate() and time.monotonic() < deadline:
                     QTest.qWait(10)
                 assert predicate(), f"Timed out waiting for {what}"
-            card, bus = widgets["tcp"], widgets["bus"]
+            if os.environ["APPLICATION_MODE"] == "export":
+                from data_binding import ModbusPoller
+            else:
+                from app.core.modbus_poller import ModbusPoller
+            poller, = window.findChildren(ModbusPoller)
+            def settings():
+                return poller.default_period, poller.timeout, poller.default_slave
+            card, link = widgets["tcp"], widgets["tcp"]._handler
+            assert settings() == (500, 1000, 1), settings()  # no link parses Modbus yet
+            serial.configure({"parser": "modbus"})
+            serial.connected.emit("PLC")
+            # The TCP card comes first in the document, but its link is not connected.
+            assert settings() == (700, 800, 9), settings()
+            assert widgets["serial"]._status.text() == "● 已连接 · 没有 Modbus 绑定", widgets["serial"]._status.text()
+            device = QTcpServer()
+            assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
+            device_port = device.serverPort()
+            card._host_edit.setText("127.0.0.1")
+            card._port_spin.setValue(device_port)
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            wait_for(lambda: device.hasPendingConnections() and settings() == (200, 300, 4), "the TCP card's settings")
+            peer = device.nextPendingConnection()
+            assert card._status.text() == "● 已连接 · 没有 Modbus 绑定", card._status.text()
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开: the serial card's again
+            assert settings() == (700, 800, 9), settings()
+            serial.disconnect()
+            assert settings() == (500, 1000, 1), settings()
+            # A server that listens counts as connected before any device connects; with nothing to
+            # send to, the poller waits, which the card does not show.
+            device.close()
+            card._mode_combo.setCurrentText("服务端")
+            card._port_spin.setValue(device_port)
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            assert link.is_connected and settings() == (200, 300, 4), settings()
+            assert poller.status() == "等待连接", poller.status()
+            assert (card._status.text(), card._status.toolTip()) == ("● 监听中 · 0 客户端", ""), card._status.text()
+            card.set_modbus_slave(300)  # out of range: 247 at most, and it counts at once
+            assert settings() == (200, 300, 247), settings()
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            assert settings() == (500, 1000, 1), settings()
+        """)
+
+    def test_modbus_commands_go_out_as_ascii_frames_and_wait_for_replies_over_a_modbus_ascii_link(self):
+        self.run_both([
+            control("tcp", "TcpConfigCard", {"defaultParser": "modbus_ascii"}),
+            parity.control("read", "PushButton", {
+                "text": "读取", "commandMode": "Modbus", "mbSlave": 1, "mbFunc": "03 读保持寄存器",
+                "mbAddress": 100, "mbValue": 2}, 16),
+        ], r"""
+            import time
+            from PyQt5.QtNetwork import QHostAddress, QTcpServer
+            def wait_for(predicate, what):
+                deadline = time.monotonic() + 5
+                while not predicate() and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                assert predicate(), f"Timed out waiting for {what}"
+            card = widgets["tcp"]
             assert card._parser_combo.currentText() == "modbus_ascii"
             device = QTcpServer()
             assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
@@ -216,10 +306,11 @@ class LinkCardTests(unittest.TestCase):
             wait_for(lambda: device.hasPendingConnections() and card._handler.is_connected, "the link")
             peer = device.nextPendingConnection()
             assert card._handler.parser_type == "modbus_ascii"
-            assert bus._status.text() == "没有 Modbus 绑定", bus._status.text()
+            nothing = "● 已连接 · 没有 Modbus 绑定"
+            assert (card._status.text(), card._status.toolTip()) == (nothing, nothing), card._status.text()
 
-            # The Modbus ASCII link gets ':', uppercase hex, the LRC and CR LF; the card waits for the reply.
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            # The Modbus ASCII link gets ':', uppercase hex, the LRC and CR LF; its master waits for the reply.
+            QTest.mouseClick(widgets["read"], Qt.LeftButton)
             request = b":01030064000296\r\n"  # LRC 96: -(01+03+00+64+00+02)
             wait_for(lambda: peer.bytesAvailable() >= len(request), "the ASCII request")
             assert bytes(peer.readAll()) == request
@@ -232,14 +323,15 @@ class LinkCardTests(unittest.TestCase):
             wait_for(lambda: received, "the response")
             assert received == [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1,
                                  "start": 100, "hr100": 25, "hr101": 1}], received
-            assert bus._status.text() == "设备已响应", bus._status.text()
-            # No reply: the card says so once the timeout has passed, which the test decides.
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            assert not master.busy()
+            # No reply: the master gives up once the timeout has passed, which the test decides.
+            QTest.mouseClick(widgets["read"], Qt.LeftButton)
             assert master.busy()
             master._timer.timeout.emit()
-            assert bus._status.text() == "无响应（60000 ms 超时）", bus._status.text()
+            assert not master.busy()
+            assert card._status.text() == nothing, card._status.text()
             QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # 断开
-        ''')
+        """)
 
     def test_tcp_card_parses_hex_frames_with_its_own_frame_format(self):
         frame_format = {"header": "AA55", "footer": "", "lengthOffset": 2, "checksum": "和校验",

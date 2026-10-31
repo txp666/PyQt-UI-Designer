@@ -13,41 +13,6 @@ def control(name, kind, properties, row=0):
 class CompositeExportTests(unittest.TestCase):
     run_both = parity.PreviewExportParityTests.run_both
 
-    def test_modbus_card_preserves_configuration_and_sends_and_pauses_the_poller(self):
-        self.run_both([control("bus", "ModbusConfigCard", {
-            "title": "压力控制总线", "defaultSlave": 7,
-            "defaultFunc": "06 写单寄存器", "defaultAddr": 32,
-            "defaultValue": 125, "defaultPoll": 250,
-        })], r'''
-            from PyQt5.QtWidgets import QLabel
-            bus = widgets["bus"]
-            assert "压力控制总线" in [label.text() for label in bus.findChildren(QLabel)]
-            assert bus._poll_edit.text() == "250" and bus._poll_edit.placeholderText() == "默认 500"
-            # The serial link parses lines: the poller has nothing to read with.
-            assert (bus._status.text(), bus._poll_btn.text()) == ("等待连接", "停止"), bus._status.text()
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            frame = bytes.fromhex("07060020007d4847")
-            check_payloads([frame])  # no link parses Modbus: written at once, no reply awaited
-            assert bus._status.text().startswith("已发送: 07 06"), bus._status.text()
-            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
-            assert (bus._status.text(), bus._poll_btn.text()) == ("已暂停", "轮询"), bus._status.text()
-            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
-            assert (bus._status.text(), bus._poll_btn.text()) == ("等待连接", "停止"), bus._status.text()
-            # Malformed text must not turn into a write to address zero.
-            bus._addr_edit.setText("not-an-address")
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            check_payloads([frame])
-            assert bus._status.text() == "参数无效", bus._status.text()
-            bus._addr_edit.setText("32")
-            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            check_payloads([frame] * 2)
-            # The card's 轮询ms is the poller's default period from each keystroke on; no number is 500 ms.
-            assert bus._poller.default_period == 250
-            for text, period in (("abc", 500), ("300", 300), ("", 500), ("9999999999999999", 500), ("0", 500)):
-                bus._poll_edit.setText(text)
-                assert bus._poller.default_period == period, (text, bus._poller.default_period)
-        ''')
-
     def test_send_card_preserves_title_placeholder_and_all_newline_choices(self):
         self.run_both([control("send", "DataSendCard", {
             "title": "手动命令", "placeholder": "输入采样指令",

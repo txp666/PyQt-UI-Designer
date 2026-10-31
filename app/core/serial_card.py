@@ -13,19 +13,35 @@ from qfluentwidgets import (
     CheckBox, TextEdit, isDarkTheme, qconfig,
 )
 
+from .link_polling import ModbusLinkSettings, status_label
 from .serial_runtime import _list_all_ports
 from .signal_lifetime import SignalConnections
 
-class SerialConfigCard(CardWidget):
+class SerialConfigCard(ModbusLinkSettings, CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
     One button connects or disconnects the hub's serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
-    height is what the rows of its display mode need."""
+    height is what the rows of its display mode need. Like every link card it hands the Modbus
+    poller its settings and shows the poller's status while its link parses Modbus."""
 
     LINK = "serial"  # name of this card's link on a CommHub
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
+    PROPERTY_SETTERS = (
+        ("title", "set_title", "串口配置"),
+        ("displayMode", "set_display_mode", "完整"),
+        ("defaultBaud", "set_default_baud", "115200"),
+        ("defaultDatabits", "set_default_databits", "8"),
+        ("defaultParity", "set_default_parity", "None"),
+        ("defaultStopbits", "set_default_stopbits", "1"),
+        ("defaultFlow", "set_default_flow", "无"),
+        ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusPeriod", "set_modbus_period", 500),
+        ("modbusTimeout", "set_modbus_timeout", 1000),
+        ("modbusSlave", "set_modbus_slave", 1),
+        ("parserConfig", "set_parser_config", {}),
+    )
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -34,8 +50,11 @@ class SerialConfigCard(CardWidget):
         self._parser_config = {}
         self._connected = False
         self._handler = None
+        self._poll_tip = False  # the status tooltip is the Modbus poller's
+        self._compact_status = "未连接"  # what 单行 shows: nothing of the Modbus poller's status
         self._serial_connections = SignalConnections(self)
         self._theme_connections = SignalConnections(self)
+        self._init_modbus()
 
         self._root = QVBoxLayout(self)
         self._root.setContentsMargins(16, 12, 16, 12)
@@ -45,9 +64,9 @@ class SerialConfigCard(CardWidget):
         self._title_w = self._make_row()
         tl = self._title_w.layout()
         self._title = StrongBodyLabel("串口配置")
-        self._status = CaptionLabel("未连接")
+        self._status = status_label("未连接")
         self._status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
-        tl.addWidget(self._title); tl.addStretch(); tl.addWidget(self._status)
+        tl.addWidget(self._title); tl.addWidget(self._status, 1)
         self._root.addWidget(self._title_w)
 
         LW = 48
@@ -276,7 +295,7 @@ class SerialConfigCard(CardWidget):
         # A disabled preview parent also makes isEnabled() false: take the state, not that.
         self._sl_conn.setEnabled(True)
         self._sl_conn.setText(self._connect_btn.text())
-        self._sl_status.setText(self._status.text())
+        self._sl_status.setText(self._compact_status)
         self._sl_status.setTextColor(self._status.lightColor, self._status.darkColor)
 
     def _sync_from_sl(self):
@@ -335,8 +354,10 @@ class SerialConfigCard(CardWidget):
         self._set_status("错误", "#F44336")
         self._status.setToolTip(msg)
         self._sl_status.setToolTip(msg)
+        self._poll_tip = False
 
-    def _set_status(self, text: str, color: str):
+    def _set_status(self, text: str, color: str, compact=None):
+        """``compact``: what the 单行 row shows instead, when it is shorter."""
         colors = {
             "#888": ("#606060", "#b0b0b0"),
             "#4CAF50": ("#237b27", "#81c784"),
@@ -344,8 +365,9 @@ class SerialConfigCard(CardWidget):
             "#FF9800": ("#8a4b00", "#ffb74d"),
         }
         light, dark = colors.get(color, (color, color))
-        for label in (self._status, self._sl_status):
-            label.setText(text)
+        self._compact_status = text if compact is None else compact
+        for label, shown in ((self._status, text), (self._sl_status, self._compact_status)):
+            label.setText(shown)
             label.setTextColor(QColor(light), QColor(dark))
 
     # ---- ports / state ----
@@ -371,9 +393,24 @@ class SerialConfigCard(CardWidget):
                   self._stopbits_combo, self._flow_combo, self._parser_combo):
             w.setEnabled(editable)
         if connected:
-            self._set_status("● 已连接", "#4CAF50")
+            self._show_connected()
         else:
             self._set_status("未连接", "#888")
+            self._show_poll_tip(None)
+
+    def _show_connected(self):
+        """The connection, and the Modbus poller's status while the link parses Modbus. The 单行 row
+        has no status line, only room for the connection: it shows nothing of the poller's."""
+        connection = "● 已连接"
+        text, tip = self._with_poll_status(connection)
+        self._set_status(text, "#4CAF50", compact=connection)
+        self._show_poll_tip(tip)
+
+    def _show_poll_tip(self, tip):
+        """The poller's tooltip, or none once it is no longer shown; the card's own (an error's) stays."""
+        if tip is not None or self._poll_tip:
+            self._status.setToolTip(tip or "")
+        self._poll_tip = tip is not None
 
     # ---- property setters ----
 

@@ -1,13 +1,13 @@
 """Modbus master queue, one per link, shared by the designer and standalone exports.
 
-Every Modbus request a link carries goes through its master: a control's write, a request
-sent from the Modbus card, the Modbus poller's reads. The master puts one request on the
-wire, waits for the reply that answers it or for its timeout, then sends the next one, so
-a reply is never taken for the answer to another request. Writes go ahead of the reads
-waiting in the queue (behind earlier writes), so polling never holds up a button for more
-than the read already on the wire. A reply answers the request in flight when its slave and
-function code match (an exception, fc | 0x80, too) and so does the address it names: the
-start a read reply is named by (Modbus requests) or the address a write reply echoes.
+Every Modbus request a link carries goes through its master: a control's command, the
+Modbus poller's reads. The master puts one request on the wire, waits for the reply that
+answers it or for its timeout, then sends the next one, so a reply is never taken for the
+answer to another request. Writes go ahead of the reads waiting in the queue (behind
+earlier writes), so polling never holds up a button for more than the read already on the
+wire. A reply answers the request in flight when its slave and function code match (an
+exception, fc | 0x80, too) and so does the address it names: the start a read reply is
+named by (Modbus requests) or the address a write reply echoes.
 
 Also the block planner of the Modbus poller (modbus_poller): what bound widgets and chart
 curves read, merged into as few reads as the gap and length limits allow.

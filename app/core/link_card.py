@@ -5,15 +5,17 @@ connects, disconnects or cancels an attempt (at the end of the last row shown), 
 link signal wiring. A card is never shorter than its rows: its minimum height is what the
 rows of its display mode need. A subclass adds its option rows and tells its link how to
 connect. Cards work in the designer preview and, from the same source, in exported
-applications.
+applications. Like the serial card, a frame card has the Modbus polling settings and status
+of link_polling.ModbusLinkSettings.
 """
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy
 from qfluentwidgets import (
-    CardWidget, StrongBodyLabel, BodyLabel, CaptionLabel, PrimaryPushButton, qconfig,
+    CardWidget, StrongBodyLabel, BodyLabel, PrimaryPushButton, qconfig,
 )
 
+from .link_polling import ModbusLinkSettings, status_label
 from .signal_lifetime import SignalConnections
 
 STATUS_COLORS = {
@@ -24,7 +26,7 @@ STATUS_COLORS = {
 }
 
 
-class LinkConfigCard(CardWidget):
+class LinkConfigCard(ModbusLinkSettings, CardWidget):
     LINK = ""  # name of this card's link on a CommHub
     TITLE = "连接配置"
     LABEL_WIDTH = 56
@@ -44,6 +46,7 @@ class LinkConfigCard(CardWidget):
         self._full_only = []
         self._serial_connections = SignalConnections(self)
         self._theme_connections = SignalConnections(self)
+        self._init_modbus()
 
         self._root = QVBoxLayout(self)
         self._root.setContentsMargins(16, 12, 16, 12)
@@ -51,10 +54,9 @@ class LinkConfigCard(CardWidget):
 
         self._title_w = self._make_row()
         self._title = StrongBodyLabel(self.TITLE)
-        self._status = CaptionLabel("未连接")
+        self._status = status_label("未连接")
         self._title_w.layout().addWidget(self._title)
-        self._title_w.layout().addStretch()
-        self._title_w.layout().addWidget(self._status)
+        self._title_w.layout().addWidget(self._status, 1)
         self._root.addWidget(self._title_w)
 
         self._connect_btn = self._toggle_button()
@@ -222,9 +224,16 @@ class LinkConfigCard(CardWidget):
             editor.setEnabled(not connected)
         if connected:
             self._failed = False
-            self._set_status(self._connected_text(), "ok")
+            self._show_connected()
         elif not self._failed:
             self._set_status("未连接", "idle")
+
+    def _show_connected(self):
+        """The connection, and the Modbus poller's status while the link parses Modbus."""
+        text, tip = self._with_poll_status(self._connected_text())
+        self._set_status(text, "ok")
+        if tip is not None:
+            self._status.setToolTip(tip)
 
     def _set_status(self, text, kind):
         light, dark = STATUS_COLORS[kind]

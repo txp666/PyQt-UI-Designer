@@ -21,6 +21,9 @@ class MqttConfigCard(LinkConfigCard):
         ("defaultQos", "set_default_qos", "0"),
         ("defaultTls", "set_default_tls", False),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusPeriod", "set_modbus_period", 500),
+        ("modbusTimeout", "set_modbus_timeout", 1000),
+        ("modbusSlave", "set_modbus_slave", 1),
         ("parserConfig", "set_parser_config", {}),
     )
 

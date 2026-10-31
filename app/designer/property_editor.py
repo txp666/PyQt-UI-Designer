@@ -21,6 +21,7 @@ from app.core.signal_lifetime import SignalConnections
 from app.core.widget_registry import registry
 from app.core.binding_values import DEFAULT_MODBUS_AREA, MODBUS_AREAS
 from app.core.data_binding import BIND_PROPERTIES
+from app.core.modbus_master import MODBUS_PARSERS
 from app.core.project import LINK_CARD_TYPES
 from app.core.protocol_parser import (
     HEX_CHECKSUMS, HEX_ENDIANS, HEX_LENGTH_COVERS, LINE_ENCODINGS, LINE_KV_SEPARATORS, PARSER_TYPES,
@@ -43,6 +44,10 @@ _MODE_FIELDS = {
 }
 
 _SEND_TOGGLE_FIELDS = {"commandMode", "commands"}
+
+# A link card's Modbus polling settings, shown while its own parser is a Modbus one (they still count
+# when it uses the project's settings).
+_MODBUS_LINK_FIELDS = ("modbusPeriod", "modbusTimeout", "modbusSlave")
 
 # Chart per-curve fields visibility based on curveParseMode
 _CHART_PARSE_VIS = {
@@ -350,6 +355,7 @@ class PropertyEditor(ScrollArea):
             self._layout.addWidget(props_card)
 
             if item.type_name in LINK_CARD_TYPES:
+                self._apply_link_parser_visibility(item.properties.get("defaultParser", "项目设置"))
                 self._card_frame_section = self._card_frame_format()
                 self._layout.addWidget(self._card_frame_section)
 
@@ -499,7 +505,7 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_period_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_mb_period_label = BodyLabel("采集周期(ms)")
             for widget in (self._bind_mb_period_label, self._bind_mb_period_spin):
-                widget.setToolTip("0 = 用默认周期（500 ms，或 Modbus 卡片的轮询 ms）")
+                widget.setToolTip("0 = 用默认周期（链路卡片的「默认轮询(ms)」，默认 500）")
             binding_rows.add(self._bind_mb_period_label, self._bind_mb_period_spin)
 
             self._bind_expr_edit = LineEdit()
@@ -784,6 +790,12 @@ class PropertyEditor(ScrollArea):
             if name in self._prop_rows:
                 self._show_row(self._prop_rows[name][1], name in visible)
 
+    def _apply_link_parser_visibility(self, parser: str):
+        """A link card's 默认轮询 / 响应超时 / 默认从站 rows show while it parses Modbus itself."""
+        for name in _MODBUS_LINK_FIELDS:
+            if name in self._prop_rows:
+                self._show_row(self._prop_rows[name][1], parser in MODBUS_PARSERS)
+
     def _apply_send_toggle_visibility(self, enabled: bool):
         """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles.
         A Modbus-mode control sends whether or not the toggle is on, so its fields stay visible."""
@@ -894,6 +906,7 @@ class PropertyEditor(ScrollArea):
             self._sync_height_editor()  # another display mode needs another least height
         elif (prop_name == "defaultParser" and self._card_frame_section is not None
               and self._current_item.type_name in LINK_CARD_TYPES):
+            self._apply_link_parser_visibility(value)
             # Another mode shows other rows, and possibly the project's values.
             section = self._card_frame_format()
             self._layout.replaceWidget(self._card_frame_section, section)

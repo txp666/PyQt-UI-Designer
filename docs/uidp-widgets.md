@@ -293,6 +293,9 @@
 - `title`（标题，文本）默认 `"串口配置"`
 - `displayMode`（显示模式，选项）默认 `"完整"`，可选 `"完整"` `"简洁"` `"单行"`
 - `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
+- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
+- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
+- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
 - `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
 - `defaultBaud`（默认波特率，选项）默认 `"115200"`，可选 `"9600"` `"19200"` `"38400"` `"57600"` `"115200"` `"230400"` `"460800"` `"921600"`
 - `defaultDatabits`（默认数据位，选项）默认 `"8"`，可选 `"5"` `"6"` `"7"` `"8"`
@@ -310,6 +313,9 @@
 - `defaultHost`（默认地址，文本）默认 `"127.0.0.1"`
 - `defaultPort`（默认端口，整数）默认 `8080`，范围 1–65535
 - `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
+- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
+- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
+- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
 - `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
 
 #### `MqttConfigCard` MQTT 配置卡片
@@ -328,21 +334,10 @@
 - `defaultQos`（默认 QoS，选项）默认 `"0"`，可选 `"0"` `"1"` `"2"`
 - `defaultTls`（默认启用 TLS，true/false）默认 `false`
 - `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
+- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
+- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
+- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
 - `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
-
-#### `ModbusConfigCard` Modbus 配置卡片
-
-默认尺寸 380×180，最小 280×120
-
-- `title`（标题，文本）默认 `"Modbus 配置"`
-- `defaultSlave`（默认从站，整数）默认 `1`，范围 1–247
-- `defaultFunc`（默认功能码，选项）默认 `"03 读保持寄存器"`，可选 `"01 读线圈"` `"02 读离散输入"` `"03 读保持寄存器"` `"04 读输入寄存器"` `"05 写单线圈"` `"06 写单寄存器"` `"16 写多个寄存器"`
-- `defaultAddr`（默认地址，整数）默认 `0`，范围 0–65535
-- `defaultValue`（默认值/数量，文本）默认 `"1"`
-- `defaultPoll`（默认轮询(ms)，整数）默认 `0`，范围 0–60000
-- `mbDataType`（写入数据类型，选项）默认 `"uint16"`，可选 `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `mbRegOrder`（写入寄存器序，选项）默认 `"大端(AB CD)"`，可选 `"大端(AB CD)"` `"小端(CD AB)"`
-- `timeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
 
 #### `DataSendCard` 数据发送卡片
 
