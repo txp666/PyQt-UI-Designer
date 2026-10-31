@@ -1653,8 +1653,9 @@ designer preview and exported applications.
 Every link card hands the running application's Modbus poller (modbus_poller.py) its 默认轮询(ms),
 响应超时(ms) and 默认从站 (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which count while the
 card is the first in the document whose link is connected and parses Modbus. While its link is
-connected and parses Modbus, the card's status reads ``<connection> · <poller status>``, with the
-poller's blocks as its tooltip; 等待连接 is never shown there.
+connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
+``<connection> · <poller status>``, with the poller's blocks as its tooltip; 等待连接 is never shown
+there.
 """
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QSizePolicy
@@ -1746,7 +1747,7 @@ class ModbusLinkSettings:
 
     def _with_poll_status(self, text):
         """``text``, which describes the connection, then `` · `` and the poller's status while the
-        link parses Modbus; and the tooltip for it: the poller's blocks, one per line, or the whole
+        link parses Modbus and can send; and the tooltip for it: the poller's blocks, one per line, or the whole
         text without blocks. The tooltip is None when the poller's status is not shown."""
         poller = self._modbus_poller
         status = poller.shown_status(self._handler) if poller is not None else ""
@@ -1809,7 +1810,6 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         self._connected = False
         self._handler = None
         self._poll_tip = False  # the status tooltip is the Modbus poller's
-        self._compact_status = "未连接"  # what 单行 shows: nothing of the Modbus poller's status
         self._serial_connections = SignalConnections(self)
         self._theme_connections = SignalConnections(self)
         self._init_modbus()
@@ -1909,7 +1909,8 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         self._sl_conn.clicked.connect(self._on_toggle)
         self._sl_status = CaptionLabel("未连接")
         self._sl_status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
-        self._sl_status.setAlignment(Qt.AlignCenter)
+        # Left: a status that has to shrink (the poller's, see _show_connected) keeps its start.
+        self._sl_status.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._sl_status.setFixedHeight(H)
 
         for w, stretch in [(self._sl_port, 2), (self._sl_baud, 0),
@@ -2053,7 +2054,7 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         # A disabled preview parent also makes isEnabled() false: take the state, not that.
         self._sl_conn.setEnabled(True)
         self._sl_conn.setText(self._connect_btn.text())
-        self._sl_status.setText(self._compact_status)
+        self._sl_status.setText(self._status.text())
         self._sl_status.setTextColor(self._status.lightColor, self._status.darkColor)
 
     def _sync_from_sl(self):
@@ -2114,8 +2115,7 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         self._sl_status.setToolTip(msg)
         self._poll_tip = False
 
-    def _set_status(self, text: str, color: str, compact=None):
-        """``compact``: what the 单行 row shows instead, when it is shorter."""
+    def _set_status(self, text: str, color: str):
         colors = {
             "#888": ("#606060", "#b0b0b0"),
             "#4CAF50": ("#237b27", "#81c784"),
@@ -2123,10 +2123,10 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
             "#FF9800": ("#8a4b00", "#ffb74d"),
         }
         light, dark = colors.get(color, (color, color))
-        self._compact_status = text if compact is None else compact
-        for label, shown in ((self._status, text), (self._sl_status, self._compact_status)):
-            label.setText(shown)
+        for label in (self._status, self._sl_status):
+            label.setText(text)
             label.setTextColor(QColor(light), QColor(dark))
+        self._sl_status.setMinimumWidth(0)  # as wide as its text
 
     # ---- ports / state ----
 
@@ -2157,17 +2157,21 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
             self._show_poll_tip(None)
 
     def _show_connected(self):
-        """The connection, and the Modbus poller's status while the link parses Modbus. The 单行 row
-        has no status line, only room for the connection: it shows nothing of the poller's."""
+        """The connection, and the Modbus poller's status while the link parses Modbus, on the status
+        line and in the 单行 row alike. The row has little room: there the poller's part may shrink
+        away, cut at its end, but never the connection, so the button stays in sight."""
         connection = "● 已连接"
         text, tip = self._with_poll_status(connection)
-        self._set_status(text, "#4CAF50", compact=connection)
+        self._set_status(text, "#4CAF50")
+        if tip is not None:
+            self._sl_status.setMinimumWidth(self._sl_status.fontMetrics().horizontalAdvance(connection))
         self._show_poll_tip(tip)
 
     def _show_poll_tip(self, tip):
         """The poller's tooltip, or none once it is no longer shown; the card's own (an error's) stays."""
         if tip is not None or self._poll_tip:
-            self._status.setToolTip(tip or "")
+            for label in (self._status, self._sl_status):
+                label.setToolTip(tip or "")
         self._poll_tip = tip is not None
 
     # ---- property setters ----
