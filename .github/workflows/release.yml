@@ -1,5 +1,7 @@
 name: Release Build
 
+# Push a tag vX.Y.Z matching APP_VERSION. A tag with a suffix (v0.2.0-rc.1) builds the same
+# way but is published as a pre-release, which the in-app update check does not offer.
 on:
   push:
     tags: ['v*']
@@ -32,7 +34,7 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: python -c "import os; from app.common.metadata import APP_VERSION; assert os.environ['RELEASE_TAG'] == 'v' + APP_VERSION"
+        run: python -c "import os; from app.common.metadata import APP_VERSION; assert os.environ['RELEASE_TAG'].split('-')[0] == 'v' + APP_VERSION"
       - name: Regression and native GUI checks
         run: |
           python -m unittest discover -s tests -v
@@ -43,13 +45,16 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           BUILD_PLATFORM: ${{ matrix.platform }}
         run: |
-          python deploy.py --version "${RELEASE_TAG#v}" --archive-name "PyQt-UI-Designer-${RELEASE_TAG}-${BUILD_PLATFORM}"
+          base="${RELEASE_TAG%%-*}"
+          python deploy.py --version "${base#v}" --archive-name "PyQt-UI-Designer-${RELEASE_TAG}-${BUILD_PLATFORM}"
       - name: Verify packaged application
         shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           BUILD_PLATFORM: ${{ matrix.platform }}
-        run: python tests/smoke_dist.py "build/PyQt-UI-Designer-${RELEASE_TAG}-${BUILD_PLATFORM}.zip" --version "${RELEASE_TAG#v}"
+        run: |
+          base="${RELEASE_TAG%%-*}"
+          python tests/smoke_dist.py "build/PyQt-UI-Designer-${RELEASE_TAG}-${BUILD_PLATFORM}.zip" --version "${base#v}"
       - name: Store verified packages
         uses: actions/upload-artifact@v4
         with:
@@ -88,11 +93,22 @@ jobs:
           test "$(find release-assets -name '*.sha256' | wc -l)" -eq 3
           cd release-assets
           sha256sum -c *.sha256
+      - name: Release kind
+        id: kind
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          echo "notes=docs/release-notes/${RELEASE_TAG%%-*}.md" >> "$GITHUB_OUTPUT"
+          case "$RELEASE_TAG" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
-          body_path: docs/release-notes/${{ github.ref_name }}.md
+          body_path: ${{ steps.kind.outputs.notes }}
           files: release-assets/*
           fail_on_unmatched_files: true
-          make_latest: true
+          prerelease: ${{ steps.kind.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.kind.outputs.prerelease == 'false' }}
