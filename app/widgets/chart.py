@@ -3,6 +3,7 @@
 from PyQt5.QtWidgets import QWidget
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
+from app.core.binding_values import MODBUS_AREAS
 from app.core.chart_runtime import (
     RealtimeLineChart as RuntimeChart, build_cfgs_from_props, _CURVE_FIELD_MAP,
     _DEFAULT_CURVE_CFG,
@@ -67,7 +68,9 @@ REALTIME_CHART_META = WidgetMeta(
                 options=_HEX_BORDER),
         PropDef("curveFrameHeader", "帧头(HEX)", PropType.STRING, ""),
         PropDef("curveFrameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("curveRegIndex", "寄存器索引", PropType.INT, 0,
+        PropDef("curveMbArea", "寄存器区", PropType.ENUM, "响应内序号",
+                options=list(MODBUS_AREAS)),
+        PropDef("curveRegIndex", "寄存器索引/地址", PropType.INT, 0,
                 min_val=0, max_val=65535),
         PropDef("curveMbDataType", "数据类型(MB)", PropType.ENUM, "uint16",
                 options=_MB_DTYPES),
@@ -90,7 +93,7 @@ GAUGE_META = WidgetMeta(
     properties=[
         PropDef("title", "标题", PropType.STRING, "仪表"),
         PropDef("unit", "单位", PropType.STRING, ""),
-        PropDef("value", "当前值", PropType.FLOAT, 0.0, min_val=-99999, max_val=99999, bindable=True),
+        PropDef("value", "当前值", PropType.FLOAT, 0.0, min_val=-99999, max_val=99999),
         PropDef("minimum", "最小值", PropType.FLOAT, 0.0, min_val=-99999, max_val=99999),
         PropDef("maximum", "最大值", PropType.FLOAT, 100.0, min_val=-99999, max_val=99999),
     ],

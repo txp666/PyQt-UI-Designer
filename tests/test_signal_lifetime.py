@@ -226,8 +226,8 @@ class SignalLifetimeTests(unittest.TestCase):
                         if hasattr(widget, "set_serial_handler"):
                             widget.set_serial_handler(handler)
                             widget.set_serial_handler(handler)
-                    # DataTable plus chart, log and binding each subscribe exactly once.
-                    assert handler.receivers(handler.dataReceived) == 4
+                    # DataTable plus chart, log, Modbus card and binding each subscribe exactly once.
+                    assert handler.receivers(handler.dataReceived) == 5
                     window.deleteLater()
                     app.sendPostedEvents(None, QEvent.DeferredDelete)
                     assert [handler.receivers(s) for s in signals] == [0] * len(signals)

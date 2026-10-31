@@ -21,6 +21,7 @@ class MqttConfigCard(LinkConfigCard):
         ("defaultQos", "set_default_qos", "0"),
         ("defaultTls", "set_default_tls", False),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("parserConfig", "set_parser_config", {}),
     )
 
     def _build_rows(self):
@@ -66,7 +67,8 @@ class MqttConfigCard(LinkConfigCard):
             self.host, self.port, client_id=self._client_id_edit.text(),
             username=self._username_edit.text(), password=self._password_edit.text(),
             subscribe=self._subscribe_edit.text(), publish=self._publish_edit.text(),
-            qos=self.qos, tls=self._tls_check.isChecked(), parser_type=self.parser_type)
+            qos=self.qos, tls=self._tls_check.isChecked(), parser_type=self.parser_type,
+            parser_config=self.parser_config)
 
     # ---- fields ----
 

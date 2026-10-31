@@ -15,6 +15,7 @@ class TcpConfigCard(LinkConfigCard):
         ("defaultHost", "set_default_host", "127.0.0.1"),
         ("defaultPort", "set_default_port", 8080),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("parserConfig", "set_parser_config", {}),
     )
 
     def _build_rows(self):
@@ -41,7 +42,8 @@ class TcpConfigCard(LinkConfigCard):
             "0.0.0.0 表示所有网卡" if mode == "服务端" else "设备 IP 或主机名")
 
     def _connect_link(self, handler):
-        return handler.connect(self.host, self.port, mode=self.mode, parser_type=self.parser_type)
+        return handler.connect(self.host, self.port, mode=self.mode, parser_type=self.parser_type,
+                               parser_config=self.parser_config)
 
     def _attach_extra(self, handler):
         self._serial_connections.connect(handler.peersChanged, self._on_peers_changed)

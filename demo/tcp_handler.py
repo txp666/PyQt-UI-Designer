@@ -3,14 +3,15 @@
 Qt's own sockets keep everything on the GUI thread: no reader thread and no cross-thread
 queue. A client is one byte stream with one parser. A server accepts any number of peers,
 each with its own parser, so interleaved streams cannot corrupt each other's frames; a
-command is written to every connected peer.
+command is written to every connected peer. A parser that frames by silence gets a
+single-shot timer per stream, restarted by every read, that flushes it when it fires.
 """
 from functools import partial
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QAbstractSocket, QHostAddress, QTcpServer, QTcpSocket
 
-from serial_handler import create_parser
+from serial_handler import ModbusRequests, create_parser, text_encoding
 
 CLIENT, SERVER = "客户端", "服务端"
 _MODES = {CLIENT: CLIENT, SERVER: SERVER, "client": CLIENT, "server": SERVER}
@@ -25,6 +26,7 @@ def tcp_mode(value):
 
 
 class TcpHandler(QObject):
+    text_encoding = "utf-8"  # of the text this link receives, for the receive log
     dataReceived = pyqtSignal(dict)
     rawReceived = pyqtSignal(bytes)
     dataSent = pyqtSignal(bytes)
@@ -39,9 +41,11 @@ class TcpHandler(QObject):
         super().__init__(parent)
         self._socket = None
         self._server = None
-        self._peers = {}
+        self._peers = {}  # peer socket -> its parser
+        self._idle_timers = {}  # parser -> the timer that flushes it, for parsers that frame by silence
         self._parser = None
         self._parser_setup = ("line", {})
+        self.modbus_requests = ModbusRequests()  # shared by every peer's parser
         self._mode = CLIENT
         self._description = ""
         self._pending_error = ""
@@ -55,7 +59,7 @@ class TcpHandler(QObject):
 
     @property
     def parser_type(self):
-        """The parser in use; Modbus commands are framed to match (MBAP for modbus_tcp)."""
+        """The parser in use; Modbus commands are framed to match (MBAP for modbus_tcp, ASCII for modbus_ascii)."""
         return self._parser_setup[0]
 
     @property
@@ -107,7 +111,7 @@ class TcpHandler(QObject):
             selected_config = parser_config
             if selected_config is None:
                 selected_config = cfg["parserConfig"] if selected_parser == cfg["parser"] else {}
-            parser = create_parser(selected_parser, selected_config)
+            parser = create_parser(selected_parser, selected_config, self.modbus_requests)
         except (TypeError, ValueError) as exc:
             self.error.emit(f"TCP 参数无效: {exc}")
             return False
@@ -119,7 +123,10 @@ class TcpHandler(QObject):
             self.disconnect()
         self._parser_setup = (selected_parser, selected_config)
         self._parser = parser
+        self.text_encoding = text_encoding(selected_parser, selected_config)
         self._mode = mode
+        if mode == CLIENT:
+            self._watch_idle(parser)
         if mode == SERVER:
             return self._listen(host, port)
         socket = QTcpSocket(self)
@@ -159,6 +166,10 @@ class TcpHandler(QObject):
         self._socket = self._server = None
         self._peers = {}
         self._pending_error = ""
+        for timer in self._idle_timers.values():
+            timer.stop()
+            timer.deleteLater()
+        self._idle_timers = {}
         for peer in peers:
             self._drop(peer)
         if peers:
@@ -184,6 +195,7 @@ class TcpHandler(QObject):
         """Return success only after every target accepted the entire payload."""
         if not self.is_connected:
             return False
+        self.modbus_requests.note_frame(data, self.parser_type)
         try:
             if self._server is not None:
                 peers = [peer for peer in self._peers
@@ -255,7 +267,8 @@ class TcpHandler(QObject):
             peer = server.nextPendingConnection()
             if peer is None:
                 break
-            self._peers[peer] = create_parser(*self._parser_setup)
+            self._peers[peer] = parser = create_parser(*self._parser_setup, self.modbus_requests)
+            self._watch_idle(parser)
             peer.readyRead.connect(partial(self._on_peer_ready_read, peer))
             peer.disconnected.connect(partial(self._on_peer_disconnected, peer))
             self.peersChanged.emit(len(self._peers))
@@ -266,16 +279,43 @@ class TcpHandler(QObject):
             self._feed(parser, bytes(peer.readAll()))
 
     def _on_peer_disconnected(self, peer):
-        if self._peers.pop(peer, None) is None:
+        parser = self._peers.pop(peer, None)
+        if parser is None:
             return
+        timer = self._idle_timers.pop(parser, None)
+        if timer is not None:
+            timer.stop()
+            timer.deleteLater()
         peer.deleteLater()
         self.peersChanged.emit(len(self._peers))
+
+    # ---- receiving ----
+
+    def _watch_idle(self, parser):
+        if parser.idle_timeout <= 0:
+            return
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(parser.idle_timeout)
+        timer.timeout.connect(partial(self._on_idle, parser))
+        self._idle_timers[parser] = timer
+
+    def _on_idle(self, parser):
+        if parser in self._idle_timers:  # not a stream that has since been closed
+            self._publish(parser, parser.flush())
 
     def _feed(self, parser, data):
         if not data:
             return
-        self.rawReceived.emit(data)
-        for parsed in parser.feed(data):
-            self.dataReceived.emit(parsed)
+        self._publish(parser, parser.frames(data))
+        timer = self._idle_timers.get(parser)
+        if timer is not None:
+            timer.start()
+
+    def _publish(self, parser, units):
+        for unit in units:
+            self.rawReceived.emit(unit)
+            for parsed in parser.parse(unit):
+                self.dataReceived.emit(parsed)
 
 TcpHandler.DEFAULT_CONFIG = {'parser': 'line', 'parserConfig': {'separator': ','}}

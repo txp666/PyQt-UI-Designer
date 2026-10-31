@@ -27,12 +27,16 @@ class CompositeExportTests(unittest.TestCase):
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
             frame = bytes.fromhex("07060020007d4847")
             check_payloads([frame])
+            # The first request goes out at once. No link parses Modbus here, so no reply can be
+            # recognised: every tick sends again without waiting.
             QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
             assert bus._poll_timer.isActive()
             assert bus._poll_timer.interval() == 250
             assert not bus._send_btn.isEnabled()
-            bus._poll_timer.timeout.emit()
             check_payloads([frame, frame])
+            bus._poll_timer.timeout.emit()
+            check_payloads([frame] * 3)
+            assert bus._status.text().startswith("已发送: 07 06"), bus._status.text()
             QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
             assert not bus._poll_timer.isActive()
             assert bus._send_btn.isEnabled()
@@ -40,7 +44,7 @@ class CompositeExportTests(unittest.TestCase):
             address = getattr(bus, "_addr_edit", None) or bus._addr
             address.setText("not-an-address")
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            check_payloads([frame, frame])
+            check_payloads([frame] * 3)
             assert "整数" in bus._status.text()
             address.setText("32")
             bus._poll_edit.setText("9999999999999999")
@@ -48,7 +52,73 @@ class CompositeExportTests(unittest.TestCase):
             assert not bus._poll_timer.isActive()
             assert "60000" in bus._status.text()
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
-            check_payloads([frame, frame, frame])
+            check_payloads([frame] * 4)
+        ''')
+
+    def test_modbus_card_polls_its_table_one_reply_at_a_time(self):
+        self.run_both([
+            control("bus", "ModbusConfigCard", {
+                # The longest timeout: the test fires the reply timer itself.
+                "defaultPoll": 60000, "timeout": 60000, "pollList": "1,3,100,2\n# 线圈\n1，1，0，3",
+            }),
+            parity.control("value", "NumericDisplay", {"title": "设定"}, 16) | {"binding": {
+                "parseMode": "Modbus", "mbArea": "保持寄存器", "mbRegIndex": 101}},
+        ], r'''
+            from serial_handler import create_parser, modbus_crc
+            def rtu(pdu):
+                pdu = bytes.fromhex(pdu)
+                return pdu + modbus_crc(pdu)
+            # The device: replies parsed the way the serial link parses them, on the reads it noted.
+            serial.configure({"parser": "modbus"})
+            device = create_parser("modbus", {}, serial.modbus_requests)
+            def reply(pdu):
+                for data in device.feed(rtu(pdu)):
+                    serial.dataReceived.emit(data)
+            bus = widgets["bus"]
+            registers, coils = rtu("010300640002"), rtu("010100000003")
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)  # the first round starts at once
+            assert bus._status.text() == "轮询中 · 2 条", bus._status.text()
+            check_payloads([registers])
+            bus._poll_timer.timeout.emit()  # waiting for the first reply: no new round
+            check_payloads([registers])
+            reply("01030441ca6666")  # the next read goes out only after this reply
+            check_payloads([registers, coils])
+            bus._poll_timer.timeout.emit()  # still waiting for the coils: no new round
+            check_payloads([registers, coils])
+            reply("01010201ff")  # two bytes of coils for a read of three: it answers some other read
+            check_payloads([registers, coils])
+            assert bus._status.text() == "轮询中 · 2 条", bus._status.text()
+            reply("018102")
+            assert bus._status.text() == "第 2 条异常 02 非法数据地址 · 1/2", bus._status.text()
+            assert bus._status.toolTip() == bus._status.text()
+            if os.environ["APPLICATION_MODE"] == "export":  # the preview harness runs no bindings
+                assert widgets["value"]._value.text() == "26214", widgets["value"]._value.text()
+
+            bus._poll_timer.timeout.emit()
+            check_payloads([registers, coils, registers])
+            bus._reply_timer.timeout.emit()  # no reply in time: the round moves on to the coils
+            check_payloads([registers, coils, registers, coils])
+            reply("01010105")
+            assert bus._status.text() == "第 1 条无响应 · 1/2", bus._status.text()
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            assert not bus._poll_timer.isActive() and bus._send_btn.isEnabled()
+
+            # A manual request reports its reply too.
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            reply("010302002a")
+            assert bus._status.text() == "设备已响应", bus._status.text()
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            assert bus._reply_timer.isActive()
+            bus._reply_timer.timeout.emit()
+            assert bus._status.text() == "无响应（60000 ms 超时）", bus._status.text()
+            bus.set_poll_list("1,6,0,1")
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            assert not bus._poll_timer.isActive()
+            assert bus._status.text() == "轮询表第 1 条应为 从站,功能码(1–4),地址,数量", bus._status.text()
+            bus.set_poll_list("1,3,0,126")  # well formed, but one register too many: say so
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            assert not bus._poll_timer.isActive()
+            assert bus._status.text() == "轮询表第 1 条：Modbus 值或读取数量超出功能码允许范围", bus._status.text()
         ''')
 
     def test_send_card_preserves_title_placeholder_and_all_newline_choices(self):

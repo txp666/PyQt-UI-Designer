@@ -29,6 +29,7 @@ class SerialConfigCard(CardWidget):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._display_mode = "完整"
+        self._parser_config = {}
         self._connected = False
         self._handler = None
         self._serial_connections = SignalConnections(self)
@@ -101,7 +102,7 @@ class SerialConfigCard(CardWidget):
         self._parser_w = self._make_row()
         self._parser_w.layout().addWidget(BodyLabel("解析模式"))
         self._parser_combo = ComboBox()
-        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus", "modbus_tcp"])
+        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"])
         self._parser_w.layout().addWidget(self._parser_combo, 1)
         self._root.addWidget(self._parser_w)
 
@@ -275,7 +276,7 @@ class SerialConfigCard(CardWidget):
             parity=parity_map.get(self._parity_combo.currentText(), "N"),
             stopbits=float(self._stopbits_combo.currentText()),
             flowcontrol=flow_map.get(self._flow_combo.currentText(), "none"),
-            parser_type=None if self._parser_combo.currentText() == "项目设置" else self._parser_combo.currentText(),
+            parser_type=self.parser_type, parser_config=self.parser_config,
         )
         if not ok:
             for btn in (self._connect_btn, self._sl_conn):
@@ -341,6 +342,23 @@ class SerialConfigCard(CardWidget):
 
     def set_default_parser(self, value):
         self._parser_combo.setCurrentText(value)
+
+    def set_parser_config(self, value):
+        self._parser_config = dict(value) if isinstance(value, dict) else {}
+
+    @property
+    def parser_type(self):
+        """None selects the project's parser settings."""
+        text = self._parser_combo.currentText()
+        return None if text == "项目设置" else text
+
+    @property
+    def parser_config(self):
+        """The card's own frame format, or None for the link's rule: the project's settings
+        when the card uses the project's mode, the defaults otherwise."""
+        if self.parser_type is None or not self._parser_config:
+            return None
+        return dict(self._parser_config)
 
     def set_title(self, t): self._title.setText(t)
 

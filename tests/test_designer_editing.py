@@ -3,6 +3,8 @@ import copy
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 from types import ModuleType, SimpleNamespace
 import tempfile
 import unittest
@@ -26,7 +28,11 @@ from app.designer.canvas_item import CanvasItem
 from app.designer.property_editor import PropertyEditor
 from app.view.preview_interface import PreviewCanvas
 from app.widgets.basic import register_basic_widgets
+from app.widgets.composite import register_composite_widgets
 from app.widgets.layout import TabContainer, register_layout_widgets
+
+
+TOOLS = Path(__file__).resolve().parents[1] / "tools"
 
 
 class DesignerEditingTests(unittest.TestCase):
@@ -59,6 +65,28 @@ class DesignerEditingTests(unittest.TestCase):
         manager.load_to_scene(self.scene, str(self.path))
         self.assertEqual({item.widget_id: item.to_dict()
                           for item in self.scene.top_level_canvas_items()}, before)
+
+    def test_controls_show_the_binding_and_modbus_settings_they_use(self):
+        # Controls that show device state get a 数据绑定 card; a button has nothing to bind.
+        for type_name, binds in (("ToggleSwitch", True), ("Slider", True), ("SpinBox", True),
+                                 ("Label", True), ("PushButton", False)):
+            with self.subTest(type_name=type_name):
+                editor = PropertyEditor()
+                self.addCleanup(editor.deleteLater)
+                editor._load_item(self.make_item(type_name))
+                self.assertEqual(hasattr(editor, "_bind_mode_combo"), binds)
+        # A Modbus-mode control sends without the send toggle, so its Modbus settings stay visible.
+        editor = PropertyEditor()
+        self.addCleanup(editor.deleteLater)
+        editor.resize(360, 900)
+        editor._load_item(self.make_item("LineEdit", commandMode="Modbus", sendOnEnter=False))
+        editor.show()
+        self.app.processEvents()
+        mode, function, template = (editor._prop_rows[name][1] for name in ("commandMode", "mbFunc", "commandTemplate"))
+        self.assertTrue(mode.isVisible() and function.isVisible())
+        self.assertFalse(template.isVisible())
+        editor._on_prop_changed("commandMode", "文本")  # text mode does need the toggle
+        self.assertFalse(mode.isVisible() or function.isVisible() or template.isVisible())
 
     def test_renaming_tabs_preserves_active_page_widgets_and_child_visibility(self):
         tabs = self.make_item("TabWidget", tabNames="A\nB", currentTab=1)
@@ -335,6 +363,223 @@ class DesignerEditingTests(unittest.TestCase):
         self.assertEqual(nested.pos(), local_before)
         self.assertEqual(managed.pos(), managed_before)
         self.roundtrip()
+
+
+
+# The rows of the frame-format sections, in the order FluentHMI Studio shows them too.
+HEX_ROWS = ["帧头(HEX)", "帧尾(HEX)", "长度字段偏移", "长度字节数", "长度字节序", "长度含义",
+            "固定帧长", "校验", "校验起点", "校验字节序", "空闲超时(ms)", "字段表"]
+LINE_ROWS = ["分隔符", "行结束符", "键值分隔符", "编码"]
+
+
+class FrameFormatEditingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        register_basic_widgets()
+        register_composite_widgets()
+
+    def setUp(self):
+        self.scene = DesignScene()
+        self.addCleanup(self.scene.clear)
+        self.manager = ProjectManager()
+        self.editor = PropertyEditor()
+        self.addCleanup(self.editor.deleteLater)
+        self.editor.set_scene(self.scene)
+        self.editor.set_project_source(lambda: self.manager.current)
+        self.changes = []
+        record = lambda: self.changes.append(True)  # noqa: E731
+        signalBus.canvasChanged.connect(record)
+        self.addCleanup(signalBus.canvasChanged.disconnect, record)
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / "frames.uidp"
+
+    @staticmethod
+    def shown(rows):
+        return [label.text() for label, _editor in rows.values() if not label.isHidden()]
+
+    def test_project_section_shows_its_modes_rows_and_writes_the_project(self):
+        rows = self.editor._project_frame_rows
+        serial = lambda: self.manager.current.serial  # noqa: E731
+        parser = rows["parser"][1]
+        self.assertEqual([parser.itemText(i) for i in range(parser.count())],
+                         ["line", "hex", "modbus", "modbus_tcp", "modbus_ascii"])
+        self.assertEqual(self.shown(rows), ["解析模式", *LINE_ROWS])
+
+        # Line rows: the terminator is typed with backslash escapes and stored as the real characters.
+        terminator = rows["terminator"][1]
+        self.assertEqual([terminator.itemText(i) for i in range(terminator.count())], ["\\n", "\\r\\n", "\\r", ";"])
+        self.assertEqual((terminator.currentText(), rows["kvSeparator"][1].currentText(),
+                          rows["encoding"][1].currentText()), ("\\n", "=", "utf-8"))
+        terminator.setCurrentIndex(1)
+        self.assertEqual(serial()["parserConfig"]["terminator"], "\r\n")
+        self.assertTrue(self.changes, "editing the frame format modifies the project")
+        for typed, stored in (("\\t;", "\t;"), ("END", "END"), ("a\\\\b", "a\\b"), ("\\x", "\\x"), (";", ";")):
+            terminator.setText(typed)
+            self.assertEqual(serial()["parserConfig"]["terminator"], stored, typed)
+        terminator.setText("")
+        self.assertEqual(serial()["parserConfig"]["terminator"], ";", "an emptied box is not stored")
+        rows["kvSeparator"][1].setCurrentText(":")
+        rows["encoding"][1].setCurrentText("gbk")
+        self.assertEqual(serial()["parserConfig"],
+                         {"separator": ",", "terminator": ";", "kvSeparator": ":", "encoding": "gbk"})
+        terminator.setText("\\r\\n")
+        self.manager.save_from_scene(self.scene, str(self.path))
+        saved = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["serial"]["parserConfig"]["terminator"], "\r\n")
+        self.manager.load_to_scene(self.scene, str(self.path))
+        rows = self.editor._project_frame_rows  # loading rebuilds the section
+        self.assertEqual((rows["terminator"][1].currentText(), rows["kvSeparator"][1].currentText(),
+                          rows["encoding"][1].currentText()), ("\\r\\n", ":", "gbk"))
+        serial()["parserConfig"]["encoding"] = "GBK"  # the parser ignores case
+        self.editor._clear()
+        rows = self.editor._project_frame_rows
+        self.assertEqual(rows["encoding"][1].currentText(), "gbk")
+
+        for mode in ("modbus", "modbus_tcp", "modbus_ascii"):
+            rows["parser"][1].setCurrentText(mode)
+            self.assertEqual((serial()["parser"], self.shown(rows)), (mode, ["解析模式"]), "nothing to set for Modbus")
+
+        # Hex rows: the field table takes either comma, skips comments and points out a bad line.
+        rows["parser"][1].setCurrentText("hex")
+        self.assertEqual(self.shown(rows), ["解析模式", *HEX_ROWS])
+        self.assertEqual((rows["header"][1].text(), rows["footer"][1].text()), ("AA55", "55AA"))
+        rows["footer"][1].setText("")
+        rows["lengthOffset"][1].setValue(2)
+        rows["checksum"][1].setCurrentText("和校验")
+        rows["lengthSize"][1].setCurrentText("2")
+        rows["lengthSize"][1].setCurrentText("1")
+        fields = rows["fields"][1]
+        fields.text_edit.setPlainText("# 名字,偏移,长度,类型[,字节序]\ncmd,1,1,uint8\n\ntemp，2，2，int16，小端(LE)")
+        self.assertTrue(fields.hint.isHidden())
+        config = serial()["parserConfig"]
+        self.assertEqual(config["fields"], [["cmd", 1, 1, "uint8"], ["temp", 2, 2, "int16", "小端(LE)"]])
+        self.assertEqual((config["footer"], config["lengthOffset"], config["lengthSize"], config["checksum"]),
+                         ("", 2, 1, "和校验"))
+        for text, hint in (("cmd,1,1,uint8\ntemp,2,2,int16,LE", "第 2 行格式错误"),
+                           ("cmd,1,1,uint8\n# ok\nx,one,1,uint8", "第 3 行格式错误")):
+            fields.text_edit.setPlainText(text)
+            self.assertEqual((fields.hint.isHidden(), fields.hint.text()), (False, hint))
+        self.assertEqual(serial()["parserConfig"]["fields"], config["fields"], "the last good table is kept")
+
+        # Saving replaces the project object; the section keeps writing to the open one.
+        self.manager.save_from_scene(self.scene, str(self.path))
+        rows["idleTimeout"][1].setValue(20)
+        self.assertEqual(serial()["parserConfig"]["idleTimeout"], 20)
+        self.manager.save_from_scene(self.scene, str(self.path))
+        self.manager.load_to_scene(self.scene, str(self.path))
+        rows = self.editor._project_frame_rows
+        self.assertEqual((rows["parser"][1].currentText(), rows["lengthOffset"][1].value()), ("hex", 2))
+        self.assertEqual(rows["fields"][1].text_edit.toPlainText(), "cmd,1,1,uint8\ntemp,2,2,int16,小端(LE)")
+
+    def load_card(self, type_name):
+        item = CanvasItem(type_name, registry.get(type_name).get_default_props())
+        self.scene.add_canvas_item(item)
+        self.editor._load_item(item)
+        return item, self.editor._editors["defaultParser"]
+
+    def test_card_section_follows_the_cards_own_mode_and_writes_the_card(self):
+        for type_name in ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard"):
+            with self.subTest(type_name=type_name):
+                self.assertIn("modbus_ascii", registry.get(type_name).get_prop_def("defaultParser").options)
+                item, mode = self.load_card(type_name)
+                self.assertEqual(item.properties["parserConfig"], {})
+                self.assertNotIn("parserConfig", self.editor._prop_rows, "an object gets no ordinary row")
+                self.assertTrue(self.editor._card_frame_section.isHidden(), "项目设置 uses the project's")
+                for parser_type in ("modbus", "modbus_ascii"):
+                    mode.setCurrentText(parser_type)
+                    self.assertFalse(self.editor._card_frame_section.isHidden())
+                    self.assertEqual(self.shown(self.editor._card_frame_rows), [], "nothing to set for Modbus")
+                    self.assertEqual(item._inner_widget.parser_type, parser_type)
+                mode.setCurrentText("line")
+                rows = self.editor._card_frame_rows
+                self.assertEqual(self.shown(rows), LINE_ROWS)
+                rows["terminator"][1].setCurrentIndex(2)
+                rows["encoding"][1].setCurrentText("ascii")
+                self.assertEqual(item.properties["parserConfig"],
+                                 {"separator": ",", "terminator": "\r", "encoding": "ascii"})
+                self.scene.clear_all()
+
+                item, mode = self.load_card(type_name)
+                mode.setCurrentText("hex")
+                rows = self.editor._card_frame_rows
+                self.assertEqual(self.shown(rows), HEX_ROWS)
+                rows["header"][1].setText("7E")
+                rows["footer"][1].setText("")
+                rows["idleTimeout"][1].setValue(20)
+                rows["fields"][1].text_edit.setPlainText("a,0,1,uint8")
+                expected = {"header": "7E", "footer": "", "idleTimeout": 20, "fields": [["a", 0, 1, "uint8"]]}
+                self.assertEqual(item.properties["parserConfig"], expected)
+                self.assertEqual(item._inner_widget._parser_config, expected)
+                self.assertEqual(self.manager.current.serial["parserConfig"], {"separator": ","},
+                                 "the project's frame format is untouched")
+                mode.setCurrentText("项目设置")
+                self.assertTrue(self.editor._card_frame_section.isHidden())
+                mode.setCurrentText("hex")
+                self.assertEqual(self.editor._card_frame_rows["header"][1].text(), "7E")
+                self.manager.save_from_scene(self.scene, str(self.path))
+                self.manager.load_to_scene(self.scene, str(self.path))
+                loaded = self.scene.get_item_by_id(item.widget_id)
+                self.assertEqual(loaded.properties["parserConfig"], expected)
+                self.editor._load_item(loaded)
+                self.assertEqual(self.editor._card_frame_rows["idleTimeout"][1].value(), 20)
+                self.scene.clear_all()
+
+        # A card switched to the project's mode starts from the project's frame format.
+        serial = self.manager.current.serial
+        serial.update(parser="hex", parserConfig={"header": "7E", "footer": "", "idleTimeout": 20})
+        item, mode = self.load_card("TcpConfigCard")
+        mode.setCurrentText("hex")
+        rows = self.editor._card_frame_rows
+        self.assertEqual((rows["header"][1].text(), rows["idleTimeout"][1].value()), ("7E", 20))
+        rows["fields"][1].text_edit.setPlainText("a,0,1,uint8")
+        self.assertEqual(item.properties["parserConfig"],
+                         {"header": "7E", "footer": "", "idleTimeout": 20, "fields": [["a", 0, 1, "uint8"]]})
+        self.assertEqual(serial["parserConfig"], {"header": "7E", "footer": "", "idleTimeout": 20})
+
+    def test_projects_reject_bad_card_frame_formats(self):
+        def project(properties, parser="line"):
+            return {"serial": {"parser": parser}, "widgets": [
+                {"type": "MqttConfigCard", "id": "link", "properties": properties}]}
+        for document, message in (
+            (project({"parserConfig": [1]}), "卡片 link 的 parserConfig 必须是对象"),
+            (project({"defaultParser": "hex", "parserConfig": {"footer": ""}}),
+             "卡片 link: HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧"),
+            (project({"parserConfig": {"header": "XYZ"}}, parser="hex"), "卡片 link: HEX 帧头或帧尾不是十六进制"),
+            (project({"defaultParser": "line", "parserConfig": {"separator": ""}}, parser="hex"),
+             "卡片 link: 行分隔符不能为空"),
+            (project({"parserConfig": {"terminator": ""}}), "卡片 link: 行结束符不能为空"),
+            (project({"defaultParser": "line", "parserConfig": {"kvSeparator": "-"}}), "卡片 link: 键值分隔符只能是 = 或 :"),
+            (project({"parserConfig": {"encoding": "big5"}}), "卡片 link: 编码只能是 utf-8、gbk 或 ascii"),
+            ({"serial": {"parser": "line", "parserConfig": {"encoding": "utf8"}}}, "编码只能是 utf-8、gbk 或 ascii"),
+            (project({"parserConfig": None}), "卡片 link 的 parserConfig 必须是对象"),
+            (project({"defaultParser": "udp", "parserConfig": {}}), "卡片 link: 未知解析模式: udp"),
+            ({"widgets": [{"type": "SerialConfigCard", "properties": {"parserConfig": "AA55"}}]},
+             "卡片  的 parserConfig 必须是对象"),
+        ):
+            with self.subTest(message=message):
+                with self.assertRaises(ValueError) as caught:
+                    ProjectData.validate(document)
+                self.assertEqual(str(caught.exception), message)
+        for document in (
+            project({"defaultParser": "hex", "parserConfig": {"header": "7E", "idleTimeout": 5}}),
+            project({"defaultParser": "modbus_ascii", "parserConfig": {}}),
+            project({"parserConfig": {"terminator": ";", "kvSeparator": ":", "encoding": "GBK"}}, parser="line"),
+            project({"parserConfig": {}}),
+            project({"defaultParser": "udp"}),  # without parserConfig: the old checks only
+            {"widgets": [{"type": "Label", "properties": {"parserConfig": 1}}]},
+        ):
+            with self.subTest(valid=document):
+                ProjectData.validate(document)
+        # The check tool prints the same message, readable even where a pipe's code page has no Chinese.
+        path = Path(self.temp.name) / "bad.uidp"
+        path.write_text(json.dumps(project({"parserConfig": [1]}), ensure_ascii=False), encoding="utf-8")
+        result = subprocess.run([sys.executable, str(TOOLS / "check_uidp.py"), str(path)],
+                                capture_output=True, text=True, encoding="utf-8",
+                                env={**os.environ, "PYTHONIOENCODING": "cp1252"})
+        self.assertEqual((result.returncode, result.stdout.strip()), (1, "卡片 link 的 parserConfig 必须是对象"),
+                         result.stderr)
 
 
 if __name__ == "__main__":

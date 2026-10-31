@@ -11,6 +11,12 @@ from app.widgets.base import (
     WidgetMeta, WidgetCategory, PropDef, PropType, normalized_range_properties,
 )
 from app.core.widget_registry import registry
+from app.core.command_runtime import MODBUS_DATA_TYPES, MODBUS_FUNCTIONS, MODBUS_ORDERS
+
+
+def _modbus_functions(*codes):
+    """The function-code options a widget offers, named as MODBUS_FUNCTIONS names them."""
+    return [name for name, code in MODBUS_FUNCTIONS.items() if code in codes]
 
 
 # ---------------------------------------------------------------------------
@@ -41,10 +47,14 @@ PUSH_BUTTON_META = WidgetMeta(
                 options=["无", "\\r\\n", "\\n", "\\r"]),
         PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
         PropDef("mbFunc", "功能码", PropType.ENUM, "03 读保持寄存器",
-                options=["01 读线圈", "02 读离散输入", "03 读保持寄存器",
-                         "04 读输入寄存器", "05 写单线圈", "06 写单寄存器"]),
+                options=_modbus_functions(1, 2, 3, 4, 5, 6, 0x10)),
         PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("mbValue", "值/数量", PropType.INT, 1, min_val=0, max_val=65535),
+        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+                options=list(MODBUS_DATA_TYPES)),
+        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+                options=list(MODBUS_ORDERS)),
+        PropDef("mbValue", "值/数量", PropType.INT, 1,
+                min_val=-2147483648, max_val=2147483647),  # negative for int16 / int32 writes
         PropDef("notify", "按下通知", PropType.BOOL, False),
         PropDef("notifyTitle", "通知标题", PropType.STRING, "提示"),
         PropDef("notifyContent", "通知内容", PropType.STRING, "按钮已按下"),
@@ -62,7 +72,7 @@ LABEL_META = WidgetMeta(
     icon="FONT",
     default_width=120, default_height=30,
     properties=[
-        PropDef("text", "文本", PropType.STRING, "标签", bindable=True),
+        PropDef("text", "文本", PropType.STRING, "标签"),
         PropDef("fontSize", "字号", PropType.INT, 14, min_val=8, max_val=72),
         PropDef("bold", "加粗", PropType.BOOL, False),
         PropDef("alignment", "对齐", PropType.ENUM, "Left",
@@ -99,9 +109,12 @@ LINE_EDIT_META = WidgetMeta(
                 options=["无", "\\r\\n", "\\n", "\\r"]),
         PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
         PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
-                options=["03 读保持寄存器", "04 读输入寄存器",
-                         "05 写单线圈", "06 写单寄存器"]),
+                options=_modbus_functions(3, 4, 5, 6, 0x10)),
         PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+                options=list(MODBUS_DATA_TYPES)),
+        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+                options=list(MODBUS_ORDERS)),
     ],
 )
 
@@ -130,10 +143,14 @@ COMBO_BOX_META = WidgetMeta(
                 options=["无", "\\r\\n", "\\n", "\\r"]),
         PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
         PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
-                options=["03 读保持寄存器", "04 读输入寄存器",
-                         "05 写单线圈", "06 写单寄存器"]),
+                options=_modbus_functions(3, 4, 5, 6, 0x10)),
         PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("mbValue", "值/数量", PropType.INT, 1, min_val=0, max_val=65535),
+        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+                options=list(MODBUS_DATA_TYPES)),
+        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+                options=list(MODBUS_ORDERS)),
+        PropDef("mbValue", "值/数量", PropType.INT, 1,
+                min_val=-2147483648, max_val=2147483647),  # negative for int16 / int32 writes
     ],
 )
 
@@ -197,8 +214,12 @@ SLIDER_META = WidgetMeta(
                 options=["大端(BE)", "小端(LE)"]),
         PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
         PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
-                options=["05 写单线圈", "06 写单寄存器"]),
+                options=_modbus_functions(5, 6, 0x10)),
         PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+                options=list(MODBUS_DATA_TYPES)),
+        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+                options=list(MODBUS_ORDERS)),
     ],
 )
 
@@ -228,8 +249,12 @@ SPIN_BOX_META = WidgetMeta(
                 options=["大端(BE)", "小端(LE)"]),
         PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
         PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
-                options=["05 写单线圈", "06 写单寄存器"]),
+                options=_modbus_functions(5, 6, 0x10)),
         PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+                options=list(MODBUS_DATA_TYPES)),
+        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+                options=list(MODBUS_ORDERS)),
     ],
 )
 

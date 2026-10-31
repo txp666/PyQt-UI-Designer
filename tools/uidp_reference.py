@@ -35,6 +35,7 @@ WIDGETS = ALL_BASIC + ALL_LAYOUT + ALL_DISPLAY + ALL_CHART + ALL_COMM + ALL_COMP
 TYPE_TEXT = {
     PropType.STRING: "文本", PropType.INT: "整数", PropType.FLOAT: "小数", PropType.BOOL: "true/false",
     PropType.COLOR: "颜色", PropType.ENUM: "选项", PropType.TEXT: "多行文本", PropType.COMMAND: "命令",
+    PropType.OBJECT: "对象",
 }
 
 
@@ -79,6 +80,8 @@ def widget_reference() -> str:
                 line += f"，范围 {_number(prop.min_val)}–{_number(prop.max_val)}"
             if prop.options:
                 line += "，可选 " + " ".join(_json(option) for option in prop.options)
+            if prop.description:
+                line += "，" + prop.description
             out.append(line + "\n")
     return "".join(out)
 

@@ -4,15 +4,16 @@ paho-mqtt runs its network loop on its own thread and calls back from there. Eve
 callback only emits a queued Qt signal tagged with the connection's generation, so the
 GUI thread does all parsing and state changes, and a retired client's late callbacks are
 ignored. Each message is one complete frame: a line-mode payload without a trailing
-newline is still parsed, and a bare value is also published under its topic name so it
-can be bound by topic.
+terminator is still parsed, and a bare value is also published under its topic name so it
+can be bound by topic. A message is also one burst, so a parser that frames by silence is
+flushed as soon as the message has been read.
 """
 import re
 import uuid
 
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 
-from .protocol_parser import create_parser
+from .protocol_parser import ModbusRequests, create_parser, text_encoding
 from .tls_runtime import system_ssl_context
 
 try:
@@ -73,6 +74,7 @@ def _disconnect_text(code):
 
 
 class MqttHandler(QObject):
+    text_encoding = "utf-8"  # of the text this link receives, for the receive log
     dataReceived = pyqtSignal(dict)
     rawReceived = pyqtSignal(bytes)
     dataSent = pyqtSignal(bytes)
@@ -99,6 +101,7 @@ class MqttHandler(QObject):
         self._tls = False
         self._parser_setup = ("line", {})
         self._parsers = {}
+        self.modbus_requests = ModbusRequests()  # shared by every topic's parser
         self._description = ""
         self._connectResult.connect(self._on_connect_result, Qt.QueuedConnection)
         self._connectionLost.connect(self._on_connection_lost, Qt.QueuedConnection)
@@ -114,7 +117,7 @@ class MqttHandler(QObject):
 
     @property
     def parser_type(self):
-        """The parser in use; Modbus commands are framed to match (MBAP for modbus_tcp)."""
+        """The parser in use; Modbus commands are framed to match (MBAP for modbus_tcp, ASCII for modbus_ascii)."""
         return self._parser_setup[0]
 
     @property
@@ -205,6 +208,7 @@ class MqttHandler(QObject):
         self._tls = use_tls
         self._retain = bool(cfg["retain"])
         self._parser_setup = (selected_parser, selected_config)
+        self.text_encoding = text_encoding(selected_parser, selected_config)
         self._parsers = {}
         self._description = f"MQTT {host}:{port}"
         return True
@@ -233,6 +237,7 @@ class MqttHandler(QObject):
             self.error.emit("发送失败: 未设置发布主题")
             return False
         payload = bytes(data)
+        self.modbus_requests.note_frame(payload, self.parser_type)
         try:
             result = self._client.publish(self._publish_topic, payload, qos=self._qos,
                                           retain=self._retain)
@@ -301,16 +306,20 @@ class MqttHandler(QObject):
     def _on_message_arrived(self, generation, topic, payload):
         if generation != self._generation or not self._up:
             return
-        self.rawReceived.emit(payload)
         parser = self._parsers.get(topic)
         if parser is None:
             if len(self._parsers) >= 256:  # wildcard subscriptions can fan out widely
                 self._parsers = {}
-            parser = self._parsers[topic] = create_parser(*self._parser_setup)
-        data = payload
-        if self._parser_setup[0] == "line" and not payload.endswith(b"\n"):
-            data = payload + b"\n"
-        for parsed in parser.feed(data):
-            if set(parsed) == {"ch0"}:
-                parsed[topic] = parsed["ch0"]
-            self.dataReceived.emit(parsed)
+            parser = self._parsers[topic] = create_parser(*self._parser_setup, self.modbus_requests)
+        units = parser.frames(payload)
+        if parser.idle_timeout > 0:
+            units += parser.flush()
+        for unit in units:
+            self.rawReceived.emit(unit)
+            data = unit
+            if self._parser_setup[0] == "line" and not unit.endswith(parser.terminator):
+                data = unit + parser.terminator
+            for parsed in parser.parse(data):
+                if set(parsed) == {"ch0"}:
+                    parsed[topic] = parsed["ch0"]
+                self.dataReceived.emit(parsed)

@@ -27,7 +27,7 @@ from app.core.data_binding import bindingEngine
 from app.core.signal_lifetime import SignalConnections
 from app.core.slider_release import SendOnRelease
 from app.core.command_runtime import (
-    command_hex_frame, command_packed_frame, send_modbus_command,
+    MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, send_modbus_command,
 )
 
 
@@ -119,12 +119,6 @@ class PreviewCanvas(QWidget):
                 child.setFocusPolicy(Qt.StrongFocus)
 
     _NEWLINE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
-    _FC_MAP = {
-        "01 读线圈": 0x01, "02 读离散输入": 0x02,
-        "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
-        "05 写单线圈": 0x05, "06 写单寄存器": 0x06,
-    }
-
     @staticmethod
     def _command_error(error):
         signalBus.showNotification.emit("提示", str(error), "错误", 2000)
@@ -132,7 +126,7 @@ class PreviewCanvas(QWidget):
     @staticmethod
     def _send_modbus_frame(props: dict, value: int = None):
         """Send a Modbus request from widget properties over every connected link, framed
-        for each link (RTU, or MBAP where the link parses Modbus TCP).
+        for each link: RTU, or MBAP / ASCII where the link parses Modbus TCP / ASCII.
         If value is provided, it overrides mbValue from props."""
         from app.core.comm_manager import commHub
         if not commHub.is_connected:
@@ -142,9 +136,11 @@ class PreviewCanvas(QWidget):
             send_modbus_command(
                 commHub,
                 props.get("mbSlave", 1),
-                PreviewCanvas._FC_MAP.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
+                MODBUS_FUNCTIONS.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
                 props.get("mbAddress", 0),
                 value if value is not None else props.get("mbValue", 1),
+                props.get("mbDataType", "uint16"),
+                props.get("mbRegOrder", MODBUS_ORDERS[0]),
             )
         except ValueError as exc:
             PreviewCanvas._command_error(exc)

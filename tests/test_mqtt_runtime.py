@@ -108,7 +108,8 @@ class MqttLinkTests(unittest.TestCase):
     def runtimes(self, config=None, paho=FakePaho2):
         exported = {}
         with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
-                create_parser=protocol.create_parser)}):
+                create_parser=protocol.create_parser, text_encoding=protocol.text_encoding,
+                ModbusRequests=protocol.ModbusRequests)}):
             exec(_gen_mqtt_handler(config or {}), exported)
         host = patch.object(mqtt_runtime, "mqtt", paho)
         host.start()
@@ -193,6 +194,44 @@ class MqttLinkTests(unittest.TestCase):
             self.assertFalse(handler.send(b"x"))
             handler.disconnect()
             self.assertEqual(events.count(("disconnected",)), 1)
+
+    def test_each_message_is_framed_and_read_in_the_links_mode(self):
+        request = protocol.build_modbus_tcp_frame(1, 3, 100, count=2, transaction=0x0101)
+        reply = bytes.fromhex("01010000000701030400190001")
+        frames = [bytes.fromhex("aa550401f6ff3c35"), bytes.fromhex("aa5504021000283d")]
+        counted = {"header": "AA55", "footer": "", "lengthOffset": 2, "checksum": "和校验",
+                   "fields": [["cmd", 1, 1, "uint8"], ["temp", 2, 2, "int16", "小端(LE)"]]}
+        # Long enough that only the end of a message can be what ends its frame.
+        idle = {"header": "7E", "footer": "", "idleTimeout": 60000, "fields": [["a", 0, 1, "uint8"]]}
+        cases = [  # mode, frame format, sent, (topic, message) received, raw units, parsed messages
+            # A read this link published names the registers of its reply.
+            ("modbus_tcp", {}, [request], [("dev/1", reply)], [reply],
+             [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1, "start": 100, "hr100": 25, "hr101": 1}]),
+            # A message is a whole record: one without the link's terminator ends anyway.
+            ("line", {"terminator": ";", "kvSeparator": ":"}, [],
+             [("dev/1", b"a:1"), ("dev/1", b"b:2;"), ("dev/1", b"x:1;y:2")],
+             [b"a:1", b"b:2;", b"x:1;y:2"], [{"a": 1}, {"b": 2}, {"x": 1}, {"y": 2}]),
+            # Every frame in a message is published on its own.
+            ("hex", counted, [], [("dev/1", b"\x00" + b"".join(frames))], frames,
+             [{"cmd": 1, "temp": -10}, {"cmd": 2, "temp": 16}]),
+            # A message is one burst: its end ends a frame framed by silence.
+            ("hex", idle, [], [("dev/1", bytes.fromhex("7e0102")), ("dev/2", bytes.fromhex("7e05"))],
+             [bytes.fromhex("7e0102"), bytes.fromhex("7e05")], [{"a": 1}, {"a": 5}]),
+        ]
+        for namespace in self.runtimes():
+            for parser_type, frame_format, sent, received, units, messages in cases:
+                with self.subTest(parser=parser_type, frame_format=frame_format):
+                    handler = self.make(namespace)
+                    events = self.record(handler)
+                    client = self.connect(handler, subscribe="dev/#", publish="dev/cmd",
+                                          parser_type=parser_type, parser_config=frame_format)
+                    for data in sent:
+                        self.assertTrue(handler.send(data))
+                    for topic, payload in received:
+                        client.fire("on_message", FakeMessage(topic, payload))
+                    self.wait_for(lambda: len(self.of(events, "data")) == len(messages), "every message")
+                    self.assertEqual(self.of(events, "raw"), units)
+                    self.assertEqual(self.of(events, "data"), messages)
 
     def test_hex_frames_are_buffered_per_topic(self):
         config = {"parser": "hex", "parserConfig": {
@@ -305,7 +344,7 @@ class MqttLinkTests(unittest.TestCase):
             events = self.record(handler)
             for arguments in (
                 dict(host=""), dict(port=0), dict(port=70000), dict(qos=3),
-                dict(parser_type="hex", parser_config={"header": ""}),
+                dict(parser_type="hex", parser_config={"header": "XYZ"}),
             ):
                 with self.subTest(**arguments):
                     self.assertFalse(handler.connect(**arguments))
