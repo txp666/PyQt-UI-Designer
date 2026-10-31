@@ -116,6 +116,41 @@ class DesignerEditingTests(unittest.TestCase):
         editor._bind_mb_period_spin.setValue(250)
         self.assertEqual(editor._current_item.binding["mbPeriod"], 250)
 
+    def test_hidden_form_rows_leave_no_gap(self):
+        # Qt 5's form layout keeps the spacing of rows whose widgets are only hidden; with 解析模式 =
+        # Modbus that left a band under 解析模式 for the seven rows of the other modes.
+        from PyQt5.QtWidgets import QFormLayout, QWidget
+        editor = PropertyEditor()
+        self.addCleanup(editor.deleteLater)
+        editor._load_item(self.make_item("Label"))
+        editor._bind_mode_combo.setCurrentText("Modbus")
+        card = editor._bind_mode_combo.parentWidget()
+        form = card.layout()
+        shown = [form.itemAt(row, QFormLayout.SpanningRole) or form.itemAt(row, QFormLayout.LabelRole)
+                 for row in range(form.rowCount())]
+        self.assertFalse(editor._bind_key_edit.isVisibleTo(card) or editor._bind_offset_spin.isVisibleTo(card))
+        # The same rows, freshly made, in a form of their own.
+        reference = QWidget()
+        self.addCleanup(reference.deleteLater)
+        alone = QFormLayout(reference)
+        alone.setContentsMargins(form.contentsMargins())
+        alone.setSpacing(form.spacing())
+        for row in range(form.rowCount()):
+            label = form.itemAt(row, QFormLayout.LabelRole) or form.itemAt(row, QFormLayout.SpanningRole)
+            field = form.itemAt(row, QFormLayout.FieldRole)
+            twin = type(label.widget())(label.widget().text())
+            if field is None:
+                alone.addRow(twin)
+            else:
+                alone.addRow(twin, type(field.widget())())
+        self.assertEqual(len(shown), 10, "title, 解析模式, seven Modbus rows, 转换表达式")
+        self.assertEqual(form.sizeHint().height(), alone.sizeHint().height())
+        # Rows come back in their place when the mode changes back.
+        editor._bind_mode_combo.setCurrentText("键值匹配")
+        row, _role = form.getWidgetPosition(editor._bind_key_edit)
+        self.assertEqual((row, form.getWidgetPosition(editor._bind_expr_edit)[0]), (2, 3))
+        self.assertTrue(editor._bind_key_label.isVisibleTo(card))
+
     def test_renaming_tabs_preserves_active_page_widgets_and_child_visibility(self):
         tabs = self.make_item("TabWidget", tabNames="A\nB", currentTab=1)
         active = self.make_item("PushButton", 30, 70)

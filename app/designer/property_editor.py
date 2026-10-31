@@ -122,6 +122,39 @@ def hex_fields_from_text(text: str):
     return fields, None
 
 
+class _FormRows:
+    """The rows of one QFormLayout, in their order. Hiding a row takes it out of the layout and showing
+    it puts it back in its place, so a hidden row takes no room: Qt 5's form layout keeps the vertical
+    spacing of a row whose widgets are only hidden, which left blank bands between the rows shown."""
+
+    def __init__(self, form):
+        self.form = form
+        self._rows = []  # [label, field, in the layout]
+
+    def add(self, label, field=None):
+        if field is None:
+            self.form.addRow(label)
+        else:
+            self.form.addRow(label, field)
+        self._rows.append([label, field, True])
+
+    def __contains__(self, field):
+        return any(row[1] is field for row in self._rows)
+
+    def set_visible(self, field, visible):
+        index, row = next((index, row) for index, row in enumerate(self._rows) if row[1] is field)
+        label, field, shown = row
+        if shown != visible:
+            position = sum(1 for other in self._rows[:index] if other[2])
+            if visible:
+                self.form.insertRow(position, label, field)
+            else:
+                self.form.takeRow(position)  # the widgets stay with the card, out of the layout
+            row[2] = visible
+        label.setVisible(visible)
+        field.setVisible(visible)
+
+
 def _int_setting(value, default):
     return value if isinstance(value, int) and not isinstance(value, bool) else default
 
@@ -161,6 +194,7 @@ class PropertyEditor(ScrollArea):
         self._project_frame_rows = {}  # parserConfig key -> (label, editor) of 默认帧格式
         self._card_frame_section = None  # a link card's 帧格式 card, and its rows
         self._card_frame_rows = {}
+        self._row_forms = []  # the _FormRows of the forms shown, whose rows come and go
 
         self._empty_label = BodyLabel("选择一个控件以编辑属性")
         self._empty_label.setAlignment(Qt.AlignCenter)
@@ -299,7 +333,8 @@ class PropertyEditor(ScrollArea):
             props_layout = QFormLayout(props_card)
             props_layout.setContentsMargins(12, 8, 12, 8)
             props_layout.setSpacing(6)
-            props_layout.addRow(StrongBodyLabel("属性"))
+            props_rows = self._rows_of(props_layout)
+            props_rows.add(StrongBodyLabel("属性"))
 
             for prop_def in meta.properties:
                 editor = self._create_editor(prop_def, item.properties.get(prop_def.name, prop_def.default))
@@ -308,7 +343,7 @@ class PropertyEditor(ScrollArea):
                     if BIND_PROPERTIES.get(item.type_name) == prop_def.name:
                         label.setText(f"{prop_def.label} ⚡")
                         label.setToolTip("可绑定到串口数据")
-                    props_layout.addRow(label, editor)
+                    props_rows.add(label, editor)
                     self._editors[prop_def.name] = editor
                     self._prop_rows[prop_def.name] = (label, editor)
 
@@ -349,7 +384,8 @@ class PropertyEditor(ScrollArea):
             binding_layout = QFormLayout(binding_card)
             binding_layout.setContentsMargins(12, 8, 12, 8)
             binding_layout.setSpacing(6)
-            binding_layout.addRow(StrongBodyLabel("数据绑定"))
+            binding_rows = self._rows_of(binding_layout)
+            binding_rows.add(StrongBodyLabel("数据绑定"))
 
             bd = item.binding or {}
 
@@ -359,28 +395,28 @@ class PropertyEditor(ScrollArea):
             if cur_pm in ["键值匹配", "JSON路径", "HEX字节提取", "Modbus"]:
                 self._bind_mode_combo.setCurrentText(cur_pm)
             self._bind_mode_combo.currentTextChanged.connect(self._on_bind_mode_changed)
-            binding_layout.addRow(BodyLabel("解析模式"), self._bind_mode_combo)
+            binding_rows.add(BodyLabel("解析模式"), self._bind_mode_combo)
 
             self._bind_key_edit = LineEdit()
             self._bind_key_edit.setPlaceholderText("字段名 (如 temperature)")
             self._bind_key_edit.setText(bd.get("key", ""))
             self._bind_key_edit.textChanged.connect(self._on_binding_changed)
             self._bind_key_label = BodyLabel("绑定字段")
-            binding_layout.addRow(self._bind_key_label, self._bind_key_edit)
+            binding_rows.add(self._bind_key_label, self._bind_key_edit)
 
             self._bind_json_edit = LineEdit()
             self._bind_json_edit.setPlaceholderText("路径 (如 data.sensors.0.temp)")
             self._bind_json_edit.setText(bd.get("jsonPath", ""))
             self._bind_json_edit.textChanged.connect(self._on_binding_changed)
             self._bind_json_label = BodyLabel("JSON路径")
-            binding_layout.addRow(self._bind_json_label, self._bind_json_edit)
+            binding_rows.add(self._bind_json_label, self._bind_json_edit)
 
             self._bind_offset_spin = SpinBox()
             self._bind_offset_spin.setRange(0, 9999)
             self._bind_offset_spin.setValue(int(bd.get("byteOffset", 0)))
             self._bind_offset_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_offset_label = BodyLabel("字节偏移")
-            binding_layout.addRow(self._bind_offset_label, self._bind_offset_spin)
+            binding_rows.add(self._bind_offset_label, self._bind_offset_spin)
 
             self._bind_dtype_combo = ComboBox()
             self._bind_dtype_combo.addItems([
@@ -390,7 +426,7 @@ class PropertyEditor(ScrollArea):
             self._bind_dtype_combo.setCurrentText(dt)
             self._bind_dtype_combo.currentTextChanged.connect(self._on_binding_changed)
             self._bind_dtype_label = BodyLabel("数据类型")
-            binding_layout.addRow(self._bind_dtype_label, self._bind_dtype_combo)
+            binding_rows.add(self._bind_dtype_label, self._bind_dtype_combo)
 
             self._bind_order_combo = ComboBox()
             self._bind_order_combo.addItems(["大端(BE)", "小端(LE)"])
@@ -398,35 +434,35 @@ class PropertyEditor(ScrollArea):
             self._bind_order_combo.setCurrentText(bo)
             self._bind_order_combo.currentTextChanged.connect(self._on_binding_changed)
             self._bind_order_label = BodyLabel("字节序")
-            binding_layout.addRow(self._bind_order_label, self._bind_order_combo)
+            binding_rows.add(self._bind_order_label, self._bind_order_combo)
 
             self._bind_header_edit = LineEdit()
             self._bind_header_edit.setPlaceholderText("如 AA 55")
             self._bind_header_edit.setText(bd.get("frameHeader", ""))
             self._bind_header_edit.textChanged.connect(self._on_binding_changed)
             self._bind_header_label = BodyLabel("帧头(HEX)")
-            binding_layout.addRow(self._bind_header_label, self._bind_header_edit)
+            binding_rows.add(self._bind_header_label, self._bind_header_edit)
 
             self._bind_tail_edit = LineEdit()
             self._bind_tail_edit.setPlaceholderText("如 0D 0A")
             self._bind_tail_edit.setText(bd.get("frameTail", ""))
             self._bind_tail_edit.textChanged.connect(self._on_binding_changed)
             self._bind_tail_label = BodyLabel("帧尾(HEX)")
-            binding_layout.addRow(self._bind_tail_label, self._bind_tail_edit)
+            binding_rows.add(self._bind_tail_label, self._bind_tail_edit)
 
             self._bind_mb_area_combo = ComboBox()
             self._bind_mb_area_combo.addItems(list(MODBUS_AREAS))
             self._bind_mb_area_combo.setCurrentText(bd.get("mbArea", "响应内序号"))
             self._bind_mb_area_combo.currentTextChanged.connect(self._on_mb_area_changed)
             self._bind_mb_area_label = BodyLabel("寄存器区")
-            binding_layout.addRow(self._bind_mb_area_label, self._bind_mb_area_combo)
+            binding_rows.add(self._bind_mb_area_label, self._bind_mb_area_combo)
 
             self._bind_mb_reg_spin = SpinBox()
             self._bind_mb_reg_spin.setRange(0, 65535)
             self._bind_mb_reg_spin.setValue(int(bd.get("mbRegIndex", 0)))
             self._bind_mb_reg_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_mb_reg_label = BodyLabel("寄存器索引")
-            binding_layout.addRow(self._bind_mb_reg_label, self._bind_mb_reg_spin)
+            binding_rows.add(self._bind_mb_reg_label, self._bind_mb_reg_spin)
             self._show_mb_area(self._bind_mb_area_combo.currentText())
 
             self._bind_mb_dtype_combo = ComboBox()
@@ -435,28 +471,28 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_dtype_combo.setCurrentText(bd.get("mbDataType", "uint16"))
             self._bind_mb_dtype_combo.currentTextChanged.connect(self._on_binding_changed)
             self._bind_mb_dtype_label = BodyLabel("数据类型")
-            binding_layout.addRow(self._bind_mb_dtype_label, self._bind_mb_dtype_combo)
+            binding_rows.add(self._bind_mb_dtype_label, self._bind_mb_dtype_combo)
 
             self._bind_mb_regorder_combo = ComboBox()
             self._bind_mb_regorder_combo.addItems(["大端(AB CD)", "小端(CD AB)"])
             self._bind_mb_regorder_combo.setCurrentText(bd.get("mbRegOrder", "大端(AB CD)"))
             self._bind_mb_regorder_combo.currentTextChanged.connect(self._on_binding_changed)
             self._bind_mb_regorder_label = BodyLabel("寄存器序")
-            binding_layout.addRow(self._bind_mb_regorder_label, self._bind_mb_regorder_combo)
+            binding_rows.add(self._bind_mb_regorder_label, self._bind_mb_regorder_combo)
 
             self._bind_mb_fc_spin = SpinBox()
             self._bind_mb_fc_spin.setRange(-1, 255)
             self._bind_mb_fc_spin.setValue(int(bd.get("mbFcFilter", -1)))
             self._bind_mb_fc_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_mb_fc_label = BodyLabel("功能码过滤(-1=全部)")
-            binding_layout.addRow(self._bind_mb_fc_label, self._bind_mb_fc_spin)
+            binding_rows.add(self._bind_mb_fc_label, self._bind_mb_fc_spin)
 
             self._bind_mb_slave_spin = SpinBox()
             self._bind_mb_slave_spin.setRange(-1, 247)
             self._bind_mb_slave_spin.setValue(int(bd.get("mbSlaveFilter", -1)))
             self._bind_mb_slave_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_mb_slave_label = BodyLabel("从站过滤(-1=全部)")
-            binding_layout.addRow(self._bind_mb_slave_label, self._bind_mb_slave_spin)
+            binding_rows.add(self._bind_mb_slave_label, self._bind_mb_slave_spin)
 
             # How often the Modbus card's 自动 polling reads this binding's block.
             self._bind_mb_period_spin = SpinBox()
@@ -466,13 +502,13 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_period_label = BodyLabel("采集周期(ms)")
             for widget in (self._bind_mb_period_label, self._bind_mb_period_spin):
                 widget.setToolTip("0 = 用 Modbus 卡片的轮询 ms")
-            binding_layout.addRow(self._bind_mb_period_label, self._bind_mb_period_spin)
+            binding_rows.add(self._bind_mb_period_label, self._bind_mb_period_spin)
 
             self._bind_expr_edit = LineEdit()
             self._bind_expr_edit.setPlaceholderText("表达式 (如 value * 0.1)")
             self._bind_expr_edit.setText(bd.get("expression", ""))
             self._bind_expr_edit.textChanged.connect(self._on_binding_changed)
-            binding_layout.addRow(BodyLabel("转换表达式"), self._bind_expr_edit)
+            binding_rows.add(BodyLabel("转换表达式"), self._bind_expr_edit)
 
             self._layout.addWidget(binding_card)
             self._apply_bind_mode_visibility(cur_pm)
@@ -485,6 +521,19 @@ class PropertyEditor(ScrollArea):
         self._project_frame_rows = {}
         self._card_frame_section = None
         self._card_frame_rows = {}
+        self._row_forms = []
+
+    def _rows_of(self, form):
+        rows = _FormRows(form)
+        self._row_forms.append(rows)
+        return rows
+
+    def _show_row(self, field, visible):
+        """Show or hide the form row of ``field`` (an editor), taking no room while hidden."""
+        for rows in self._row_forms:
+            if field in rows:
+                rows.set_visible(field, visible)
+                return
 
     def _frame_format_section(self, title, mode, config, write, with_mode=False):
         """A card with the frame-format rows for ``config``, showing those of ``mode``.
@@ -496,7 +545,8 @@ class PropertyEditor(ScrollArea):
         form = QFormLayout(card)
         form.setContentsMargins(12, 8, 12, 8)
         form.setSpacing(6)
-        form.addRow(StrongBodyLabel(title))
+        form_rows = self._rows_of(form)
+        form_rows.add(StrongBodyLabel(title))
         rows = {}
 
         def add(key, text, editor, tip=""):
@@ -504,7 +554,7 @@ class PropertyEditor(ScrollArea):
             if tip:
                 label.setToolTip(tip)
                 editor.setToolTip(tip)
-            form.addRow(label, editor)
+            form_rows.add(label, editor)
             rows[key] = (label, editor)
 
         def combo(key, options, default, convert=str, normal=str):
@@ -599,13 +649,10 @@ class PropertyEditor(ScrollArea):
         box.text_edit.textChanged.connect(changed)
         return box
 
-    @staticmethod
-    def _show_frame_rows(rows, mode):
+    def _show_frame_rows(self, rows, mode):
         shown = _FRAME_KEYS.get(mode, ())
-        for key, (label, editor) in rows.items():
-            visible = key == "parser" or key in shown
-            label.setVisible(visible)
-            editor.setVisible(visible)
+        for key, (_label, editor) in rows.items():
+            self._show_row(editor, key == "parser" or key in shown)
 
     def _write_project_frame(self, key, value):
         project = self._project()
@@ -737,16 +784,12 @@ class PropertyEditor(ScrollArea):
         visible = _MODE_VISIBILITY.get(mode, set())
         for name in _MODE_FIELDS:
             if name in self._prop_rows:
-                label, editor = self._prop_rows[name]
-                show = name in visible
-                label.setVisible(show)
-                editor.setVisible(show)
+                self._show_row(self._prop_rows[name][1], name in visible)
 
     def _apply_poll_mode_visibility(self, mode: str):
         """A Modbus card's 轮询表 row shows only when it polls by its table."""
         if "pollList" in self._prop_rows:
-            for widget in self._prop_rows["pollList"]:
-                widget.setVisible(mode == "轮询表")
+            self._show_row(self._prop_rows["pollList"][1], mode == "轮询表")
 
     def _apply_send_toggle_visibility(self, enabled: bool):
         """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles.
@@ -756,15 +799,11 @@ class PropertyEditor(ScrollArea):
         if not enabled and mode != "Modbus":
             for name in all_fields:
                 if name in self._prop_rows:
-                    label, editor = self._prop_rows[name]
-                    label.setVisible(False)
-                    editor.setVisible(False)
+                    self._show_row(self._prop_rows[name][1], False)
         else:
             for name in _SEND_TOGGLE_FIELDS:
                 if name in self._prop_rows:
-                    label, editor = self._prop_rows[name]
-                    label.setVisible(True)
-                    editor.setVisible(True)
+                    self._show_row(self._prop_rows[name][1], True)
             self._apply_mode_visibility(mode)
 
     def _apply_chart_parse_visibility(self, mode: str):
@@ -772,10 +811,7 @@ class PropertyEditor(ScrollArea):
         visible = _CHART_PARSE_VIS.get(mode, set())
         for name in _CHART_PARSE_ALL:
             if name in self._prop_rows:
-                label, editor = self._prop_rows[name]
-                show = name in visible
-                label.setVisible(show)
-                editor.setVisible(show)
+                self._show_row(self._prop_rows[name][1], name in visible)
 
     def _load_curve_editors(self, item: CanvasItem):
         """Fill per-curve editors from ``_curve_{ci}_{field}`` stored properties."""
@@ -944,24 +980,15 @@ class PropertyEditor(ScrollArea):
         is_json = mode == "JSON路径"
         is_hex = mode == "HEX字节提取"
         is_mb = mode == "Modbus"
-        for w in (self._bind_key_label, self._bind_key_edit):
-            w.setVisible(is_kv)
-        for w in (self._bind_json_label, self._bind_json_edit):
-            w.setVisible(is_json)
-        for w in (self._bind_offset_label, self._bind_offset_spin,
-                  self._bind_dtype_label, self._bind_dtype_combo,
-                  self._bind_order_label, self._bind_order_combo,
-                  self._bind_header_label, self._bind_header_edit,
-                  self._bind_tail_label, self._bind_tail_edit):
-            w.setVisible(is_hex)
-        for w in (self._bind_mb_area_label, self._bind_mb_area_combo,
-                  self._bind_mb_reg_label, self._bind_mb_reg_spin,
-                  self._bind_mb_dtype_label, self._bind_mb_dtype_combo,
-                  self._bind_mb_regorder_label, self._bind_mb_regorder_combo,
-                  self._bind_mb_fc_label, self._bind_mb_fc_spin,
-                  self._bind_mb_slave_label, self._bind_mb_slave_spin,
-                  self._bind_mb_period_label, self._bind_mb_period_spin):
-            w.setVisible(is_mb)
+        for field, shown in ((self._bind_key_edit, is_kv), (self._bind_json_edit, is_json),
+                             *((field, is_hex) for field in (
+                                 self._bind_offset_spin, self._bind_dtype_combo, self._bind_order_combo,
+                                 self._bind_header_edit, self._bind_tail_edit)),
+                             *((field, is_mb) for field in (
+                                 self._bind_mb_area_combo, self._bind_mb_reg_spin, self._bind_mb_dtype_combo,
+                                 self._bind_mb_regorder_combo, self._bind_mb_fc_spin,
+                                 self._bind_mb_slave_spin, self._bind_mb_period_spin))):
+            self._show_row(field, shown)
 
     def _show_mb_area(self, area: str):
         # 响应内序号 counts registers within one response; a register table takes an address.
