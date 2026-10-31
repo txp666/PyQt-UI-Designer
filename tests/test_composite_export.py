@@ -175,7 +175,7 @@ class CompositeExportTests(unittest.TestCase):
                 "从站 1 · 功能码 1 · 地址 0–3 · 周期 500 ms",
                 "从站 1 · 功能码 3 · 地址 100–105 · 周期 500 ms",
                 "从站 1 · 功能码 3 · 地址 200–201 · 周期 500 ms")), bus._status.toolTip()
-            assert bus._poll_timer.interval() == 500 and not bus._send_btn.isEnabled()
+            assert bus._poll_timer.interval() == 500 and bus._send_btn.isEnabled()
             check_payloads([coils])
             bus._poll_timer.timeout.emit()  # waiting for the reply
             check_payloads([coils])
@@ -256,6 +256,42 @@ class CompositeExportTests(unittest.TestCase):
             assert bus._status.text() == "自动 · 没有 Modbus 绑定", bus._status.text()
             serial.disconnect()
             assert not bus._polling and bus._status.text() == "未连接", bus._status.text()
+        ''')
+
+    def test_modbus_card_sends_while_polling_automatically(self):
+        self.run_both([
+            control("bus", "ModbusConfigCard", {"pollMode": "自动", "defaultPoll": 500, "timeout": 60000,
+                                                "defaultAddr": 10}),
+            parity.control("value", "NumericDisplay", {}, 5) | {"binding": {
+                "parseMode": "Modbus", "mbArea": "保持寄存器", "mbRegIndex": 0}},
+        ], _AUTO_SETUP + r'''
+            from qfluentwidgets import InfoBar
+            bus = widgets["bus"]
+            read, manual = rtu("010300000001"), rtu("0103000a0001")
+            bus._now = lambda: clock[0]
+            serial.configure({"parser": "modbus"})
+            serial.connected.emit("PLC")
+            reply("0103020005")
+            assert bus._status.text() == "自动 · 1 块 · 正常", bus._status.text()
+            assert bus._send_btn.isEnabled(), "自动 polls on and on: 发送 stays usable"
+            clock[0] = 500
+            bus._poll_timer.timeout.emit()
+            check_payloads([read, read])
+            # 发送 queues behind the read on the wire, and the status line keeps the polling state.
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            check_payloads([read, read])
+            assert bus._status.text() == "自动 · 1 块 · 正常", bus._status.text()
+            assert bus._request is not None and bus._manual is not None and bus._manual is not bus._request
+            reply("0103020005")
+            check_payloads([read, read, manual])
+            reply("0103020009")  # the manual read's reply is not taken for a block
+            assert bus._status.text() == "自动 · 1 块 · 正常", bus._status.text()
+            assert "设备已响应" in [bar.content for bar in bus.window().findChildren(InfoBar)]
+            QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            assert bus._status.text().startswith("已发送: 01 03 00 0A"), bus._status.text()
+            reply("0103020009")
+            assert bus._status.text() == "设备已响应", bus._status.text()
         ''')
 
     def test_projects_from_before_automatic_polling_keep_their_poll_table(self):

@@ -140,29 +140,23 @@ class CommandLifecycleTests(unittest.TestCase):
         })], r"""
             card = widgets["serial"]
             assert card._display_mode == "单行"
-            for connect, disconnect in ((card._connect_btn, card._disconnect_btn),
-                                        (card._sl_conn, card._sl_disconn)):
-                assert connect.isEnabled()
-                assert not disconnect.isEnabled()
+            for button in (card._connect_btn, card._sl_conn):  # one button: 连接, then 断开
+                assert button.isEnabled() and button.text() == "连接"
             window.setEnabled(False)
             card.set_display_mode("完整")
             card.set_display_mode("单行")
             window.setEnabled(True)
-            assert card._sl_conn.isEnabled()
-            assert not card._sl_disconn.isEnabled()
+            assert card._sl_conn.isEnabled() and card._sl_conn.text() == "连接"
             serial.connected.emit("TEST")
             window.setEnabled(False)
             card.set_display_mode("完整")
             card.set_display_mode("单行")
             window.setEnabled(True)
-            for connect, disconnect in ((card._connect_btn, card._disconnect_btn),
-                                        (card._sl_conn, card._sl_disconn)):
-                assert not connect.isEnabled()
-                assert disconnect.isEnabled()
+            for button in (card._connect_btn, card._sl_conn):
+                assert button.isEnabled() and button.text() == "断开"
             assert not card._baud_combo.isEnabled()
             serial.disconnect()
-            assert card._connect_btn.isEnabled()
-            assert not card._disconnect_btn.isEnabled()
+            assert card._connect_btn.isEnabled() and card._connect_btn.text() == "连接"
             assert card._baud_combo.isEnabled()
         """)
 
@@ -185,16 +179,14 @@ class CommandLifecycleTests(unittest.TestCase):
                 QTest.mouseClick(window._run_btn, Qt.LeftButton)
                 app.processEvents()
                 card = window._preview_canvas._widgets[0]
-                assert card._sl_conn.isEnabled(), cycle
-                assert not card._sl_disconn.isEnabled(), cycle
+                assert card._sl_conn.isEnabled() and card._sl_conn.text() == "连接", cycle
                 card._sl_port.clear()
                 card._sl_port.addItem("TEST test port")
                 port = Port()
                 with patch.object(pyserial, "Serial", return_value=port):
                     QTest.mouseClick(card._sl_conn, Qt.LeftButton)
                 assert serialManager.is_connected, cycle
-                assert not card._sl_conn.isEnabled()
-                assert card._sl_disconn.isEnabled()
+                assert card._sl_conn.isEnabled() and card._sl_conn.text() == "断开"
                 QTest.mouseClick(window._stop_btn, Qt.LeftButton)
                 assert not serialManager.is_connected
                 assert not port.is_open
@@ -245,7 +237,7 @@ class CommandLifecycleTests(unittest.TestCase):
                 assert serial.is_connected
                 assert samples[-1] == expected, samples
                 assert not failures, failures
-                QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+                QTest.mouseClick(card._connect_btn, Qt.LeftButton)  # now 断开
                 assert not serial.is_connected
             assert config["parserConfig"]["fields"] == [["temperature", 0, 2, "uint16"]]
         """)

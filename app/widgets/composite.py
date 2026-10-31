@@ -398,7 +398,7 @@ SERIAL_CONFIG_META = WidgetMeta(
     display_name="串口配置卡片",
     category=WidgetCategory.COMPOSITE,
     icon="CONNECT",
-    default_width=360, default_height=340,
+    default_width=360, default_height=320,
     min_width=200, min_height=50,
     properties=[
         PropDef("title", "标题", PropType.STRING, "串口配置"),
@@ -425,7 +425,7 @@ TCP_CONFIG_META = WidgetMeta(
     display_name="TCP 配置卡片",
     category=WidgetCategory.COMPOSITE,
     icon="GLOBE",
-    default_width=360, default_height=290,
+    default_width=360, default_height=250,
     min_width=240, min_height=50,
     properties=[
         PropDef("title", "标题", PropType.STRING, "TCP 配置"),
@@ -446,7 +446,7 @@ MQTT_CONFIG_META = WidgetMeta(
     display_name="MQTT 配置卡片",
     category=WidgetCategory.COMPOSITE,
     icon="CLOUD",
-    default_width=380, default_height=430,
+    default_width=380, default_height=390,
     min_width=260, min_height=50,
     properties=[
         PropDef("title", "标题", PropType.STRING, "MQTT 配置"),

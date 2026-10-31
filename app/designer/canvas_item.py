@@ -18,6 +18,8 @@ from app.core.widget_registry import registry
 HANDLE_SIZE = 8
 HANDLE_HALF = HANDLE_SIZE / 2
 MIN_SIZE = 30
+# The link cards: never shorter than their rows, and each can carry its own frame format.
+LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard")
 
 LAYOUT_TYPES = {"HBoxLayout", "VBoxLayout", "FlexLayout", "GroupBox", "TabWidget", "CardContainer"}
 
@@ -60,7 +62,7 @@ class ResizeHandle(QGraphicsRectItem):
         d = self.direction
         meta = registry.get(self._parent_item.type_name)
         mw = meta.min_width if meta else MIN_SIZE
-        mh = meta.min_height if meta else MIN_SIZE
+        mh = self._parent_item.min_height()
 
         if "r" in d:
             r.setWidth(max(mw, r.width() + delta.x()))
@@ -362,6 +364,28 @@ class CanvasItem(QGraphicsRectItem):
     def set_grid_size(self, size: int):
         self._grid_size = size
 
+    def min_height(self):
+        """The least height the item takes: its type's, and for a link card what its rows need in the
+        current display mode, so the fields never overlap."""
+        meta = registry.get(self.type_name)
+        height = meta.min_height if meta else MIN_SIZE
+        if self.type_name in LINK_CARD_TYPES:
+            height = max(height, self._inner_widget.minimumSizeHint().height())
+        return height
+
+    def fit_min_height(self, rows_only=False):
+        """Grow to min_height(), as after a link card's display mode changed. ``rows_only`` grows a
+        link card to what its rows need and no further, as when a project opens: a 48 px 单行 strip
+        of an old file stays 48."""
+        r = self.rect()
+        height = self.min_height()
+        if rows_only:
+            if self.type_name not in LINK_CARD_TYPES:
+                return
+            height = self._inner_widget.minimumSizeHint().height()
+        if r.height() < height:
+            self.set_rect(QRectF(0, 0, r.width(), height))
+
     def set_rect(self, rect: QRectF):
         self.setRect(rect)
         self._sync_proxy_size()
@@ -445,7 +469,9 @@ class CanvasItem(QGraphicsRectItem):
                     if int(key[11:]) >= count:
                         del self.properties[key]
 
-        if layout:
+        if self.type_name in LINK_CARD_TYPES:
+            self.fit_min_height()  # taller rows grow the card; fewer rows leave its height alone
+        elif layout:
             layout.activate()
             new_hint_h = layout.sizeHint().height()
             if old_hint_h > 0 and new_hint_h > 0 and abs(new_hint_h - old_hint_h) > 5:
@@ -540,6 +566,7 @@ class CanvasItem(QGraphicsRectItem):
         geo = data.get("geometry", {})
         item.setPos(geo.get("x", 0), geo.get("y", 0))
         item.set_rect(QRectF(0, 0, geo.get("w", 120), geo.get("h", 40)))
+        item.fit_min_height(rows_only=True)  # a link card saved shorter than its rows would draw them overlapping
         item.binding = data.get("binding")
         item.tab_index = data.get("tabIndex", 0)
         for child_data in data.get("children", []):

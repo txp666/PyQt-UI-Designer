@@ -284,7 +284,7 @@ class PropertyEditor(ScrollArea):
             ("宽度", rect.width(), "geo_w"), ("高度", rect.height(), "geo_h"),
         ]:
             spin = SpinBox()
-            minimum = {"geo_w": meta.min_width, "geo_h": meta.min_height}.get(attr, 0)
+            minimum = {"geo_w": meta.min_width, "geo_h": item.min_height()}.get(attr, 0)
             spin.setRange(minimum, 9999)
             spin.setValue(int(val))
             spin.valueChanged.connect(lambda v, a=attr: self._on_geo_changed(a, v))
@@ -863,6 +863,8 @@ class PropertyEditor(ScrollArea):
             self._apply_send_toggle_visibility(bool(value))
         elif prop_name == "pollMode":
             self._apply_poll_mode_visibility(value)
+        elif prop_name == "displayMode" and self._current_item.type_name in LINK_CARD_TYPES:
+            self._sync_height_editor()  # another display mode needs another least height
         elif (prop_name == "defaultParser" and self._card_frame_section is not None
               and self._current_item.type_name in LINK_CARD_TYPES):
             # Another mode shows other rows, and possibly the project's values.
@@ -897,6 +899,15 @@ class PropertyEditor(ScrollArea):
             elif prop_name == "curveParseMode":
                 self._apply_chart_parse_visibility(value)
 
+    def _sync_height_editor(self):
+        editor = self._editors.get("geo_h")
+        if editor is None or not self._current_item:
+            return
+        updating, self._updating = self._updating, True
+        editor.setMinimum(self._current_item.min_height())
+        editor.setValue(int(self._current_item.rect().height()))
+        self._updating = updating
+
     def _on_text_prop_changed(self, prop_name: str, editor):
         if self._updating or not self._current_item:
             return
@@ -921,7 +932,7 @@ class PropertyEditor(ScrollArea):
             item.set_rect(QRectF(0, 0, value, rect.height()))
         elif attr == "geo_h":
             from PyQt5.QtCore import QRectF
-            value = max(meta.min_height if meta else 1, value)
+            value = max(item.min_height(), value)
             item.set_rect(QRectF(0, 0, rect.width(), value))
 
         signalBus.canvasChanged.emit()

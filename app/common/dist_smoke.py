@@ -236,7 +236,7 @@ class DistributionSmokeTest:
         self._wait_for(lambda: self.tcp_client.is_connected and self.hub.tcp.peer_count == 1,
                        "the loopback TCP client")
         assert "1 客户端" in card._status.text(), card._status.text()
-        assert not card._connect_btn.isEnabled() and card._disconnect_btn.isEnabled()
+        assert card._connect_btn.isEnabled() and card._connect_btn.text() == "断开"
         assert self.tcp_client.send(b"tcp_temperature=31.5\n")
         receive, log = self.widgets["all_DataRecvCard"], self.widgets["all_LogBox"]
         self._wait_for(lambda: "tcp_temperature=31.5" in receive._output.toPlainText(),
@@ -256,7 +256,7 @@ class DistributionSmokeTest:
         self.tcp_client.deleteLater()
         self.hub.tcp.disconnect()
         assert not self.hub.tcp.is_active and self.hub.is_connected
-        assert card._connect_btn.isEnabled() and not card._disconnect_btn.isEnabled()
+        assert card._connect_btn.isEnabled() and card._connect_btn.text() == "连接"
         assert card._status.text() == "未连接", card._status.text()
 
     def _change_theme_and_title(self):

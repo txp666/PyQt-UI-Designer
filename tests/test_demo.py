@@ -117,8 +117,7 @@ def exercise_application():
                 assert serial.is_connected and serial._thread.isRunning()
                 assert type(serial._thread).__name__ == "SerialReaderThread"
                 assert type(serial._parser).__name__ == "LineParser"
-                assert not card._sl_conn.isEnabled()
-                assert card._sl_disconn.isEnabled()
+                assert card._sl_conn.isEnabled() and card._sl_conn.text() == "断开"
                 QTest.mouseClick(widgets["reserved"], Qt.LeftButton)
                 widgets["protocol_info"].selectAll()
                 QTest.keyClicks(widgets["protocol_info"], "changed")
@@ -201,13 +200,12 @@ def exercise_application():
                 assert len(sent) == 9, sent
                 old_thread = serial._thread
                 state["old_port"] = serial._port
-                card._sl_disconn.click()
+                card._sl_conn.click()  # 断开
                 assert not serial.is_connected
                 assert serial._thread is None
                 assert not old_thread.isRunning()
                 assert not state["old_port"].is_open
-                assert card._sl_conn.isEnabled()
-                assert not card._sl_disconn.isEnabled()
+                assert card._sl_conn.isEnabled() and card._sl_conn.text() == "连接"
                 state.update(phase="settle", disconnected_at=time.monotonic())
             elif phase == "settle" and time.monotonic() - state["disconnected_at"] > 0.1:
                 state.update(phase="disconnected", disconnected_count=len(samples))

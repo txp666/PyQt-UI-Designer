@@ -1,6 +1,6 @@
 # coding: utf-8
 """Composite card widgets: SerialConfigCard, DataSendCard, DataRecvCard, LogBox, ProgressRing."""
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import QSize, Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter, QFont
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
@@ -18,8 +18,10 @@ from .signal_lifetime import SignalConnections
 
 class SerialConfigCard(CardWidget):
     """Serial port configuration card with three display modes:
-    完整 (full), 简洁 (simple: port+baud+buttons), 单行 (single-line toolbar).
-    Buttons drive the hub's serial link so the card works in preview mode."""
+    完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
+    One button connects or disconnects the hub's serial link, at the end of the last row shown,
+    so the card works in preview mode. The card is never shorter than its rows: its minimum
+    height is what the rows of its display mode need."""
 
     LINK = "serial"  # name of this card's link on a CommHub
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
@@ -106,16 +108,9 @@ class SerialConfigCard(CardWidget):
         self._parser_w.layout().addWidget(self._parser_combo, 1)
         self._root.addWidget(self._parser_w)
 
-        # ---- button row ----
-        self._btn_w = self._make_row()
-        btl = self._btn_w.layout()
-        self._connect_btn = PrimaryPushButton(FIF.CONNECT, "连接")
-        self._disconnect_btn = PushButton(FIF.CLOSE, "断开")
-        self._disconnect_btn.setEnabled(False)
-        self._connect_btn.clicked.connect(self._on_connect)
-        self._disconnect_btn.clicked.connect(self._on_disconnect)
-        btl.addWidget(self._connect_btn, 1); btl.addWidget(self._disconnect_btn, 1)
-        self._root.addWidget(self._btn_w)
+        # ---- the 连接 / 断开 button, at the end of the last row shown ----
+        self._connect_btn = self._toggle_button()
+        self._connect_btn.clicked.connect(self._on_toggle)
 
         # ---- single-line row (hidden by default) ----
         self._sl_w = QWidget()
@@ -132,21 +127,16 @@ class SerialConfigCard(CardWidget):
         self._sl_search = ToolButton(FIF.SEARCH)
         self._sl_search.clicked.connect(self.refresh_ports)
         self._sl_search.setFixedSize(H, H)
-        self._sl_conn = PrimaryPushButton("连接")
-        self._sl_conn.setFixedSize(56, H)
-        self._sl_disconn = PushButton("断开")
-        self._sl_disconn.setFixedSize(56, H)
-        self._sl_disconn.setEnabled(False)
-        self._sl_conn.clicked.connect(self._on_connect)
-        self._sl_disconn.clicked.connect(self._on_disconnect)
+        self._sl_conn = self._toggle_button()
+        self._sl_conn.setFixedHeight(H)
+        self._sl_conn.clicked.connect(self._on_toggle)
         self._sl_status = CaptionLabel("未连接")
         self._sl_status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         self._sl_status.setAlignment(Qt.AlignCenter)
         self._sl_status.setFixedHeight(H)
 
         for w, stretch in [(self._sl_port, 2), (self._sl_baud, 0),
-                           (self._sl_search, 0), (self._sl_conn, 0),
-                           (self._sl_disconn, 0), (self._sl_status, 0)]:
+                           (self._sl_search, 0), (self._sl_conn, 0), (self._sl_status, 0)]:
             sl.addWidget(w, stretch, Qt.AlignVCenter)
 
         self._sl_w.setFixedHeight(H)
@@ -154,6 +144,7 @@ class SerialConfigCard(CardWidget):
         self._sl_w.hide()
 
         self._root.addStretch(1)
+        self._place_button()
 
         self.refresh_ports()
         self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
@@ -170,6 +161,48 @@ class SerialConfigCard(CardWidget):
             self._serial_connections.connect(handler.disconnected, self._on_serial_disconnected)
             self._serial_connections.connect(handler.error, self._on_serial_error)
             self.set_connected(handler.is_connected)
+
+    @staticmethod
+    def _toggle_button():
+        """连接 / 断开 in one button, as wide as the widest of 连接 / 断开 / 取消, so its row stays put."""
+        button = PrimaryPushButton("连接")
+        width = 0
+        for text in ("连接", "断开", "取消"):
+            button.setText(text)
+            width = max(width, button.sizeHint().width())
+        button.setText("连接")
+        button.setFixedWidth(width)
+        return button
+
+    def _shown_rows(self):
+        if self._display_mode == "单行":
+            return [self._sl_w]
+        rows = [self._title_w, self._port_w, self._baud_w]
+        if self._display_mode == "完整":
+            rows += [self._params_w, self._flow_w, self._parser_w]
+        return rows
+
+    def _place_button(self):
+        """The button goes at the right end of the last field row shown (单行 has its own)."""
+        if self._display_mode != "单行":
+            row = self._shown_rows()[-1]
+            button = self._connect_btn
+            if button.parentWidget() is not row:
+                if button.parentWidget() is not None and button.parentWidget().layout() is not None:
+                    button.parentWidget().layout().removeWidget(button)
+                row.layout().addWidget(button)
+                button.setVisible(True)
+        self.setMinimumHeight(self.content_height())
+
+    def content_height(self):
+        """What the shown rows need, with the margins and the spacing between them."""
+        rows = self._shown_rows()
+        margins = self._root.contentsMargins()
+        return (margins.top() + margins.bottom() + sum(row.sizeHint().height() for row in rows)
+                + self._root.spacing() * (len(rows) - 1))
+
+    def minimumSizeHint(self):
+        return QSize(super().minimumSizeHint().width(), self.content_height())
 
     @staticmethod
     def _make_row(spacing=8):
@@ -220,7 +253,6 @@ class SerialConfigCard(CardWidget):
         self._params_w.setVisible(mode == "完整")
         self._flow_w.setVisible(mode == "完整")
         self._parser_w.setVisible(mode == "完整")
-        self._btn_w.setVisible(not is_sl)
         self._sl_w.setVisible(is_sl)
         if is_sl:
             self._root.setContentsMargins(8, 6, 8, 6)
@@ -230,6 +262,7 @@ class SerialConfigCard(CardWidget):
             self._root.setContentsMargins(16, 12, 16, 12)
             self._root.setSpacing(10)
             self._sync_from_sl()
+        self._place_button()
         self.update()
         self.adjustSize()
         self.updateGeometry()
@@ -240,10 +273,9 @@ class SerialConfigCard(CardWidget):
             self._sl_port.addItem(self._port_combo.itemText(i), self._port_combo.itemData(i))
         self._sl_port.setCurrentIndex(self._port_combo.currentIndex())
         self._sl_baud.setCurrentIndex(self._baud_combo.currentIndex())
-        # A disabled preview parent also makes isEnabled() false. Preserve
-        # connection state instead of making that inherited state permanent.
-        self._sl_conn.setEnabled(not self._connected)
-        self._sl_disconn.setEnabled(self._connected)
+        # A disabled preview parent also makes isEnabled() false: take the state, not that.
+        self._sl_conn.setEnabled(True)
+        self._sl_conn.setText(self._connect_btn.text())
         self._sl_status.setText(self._status.text())
         self._sl_status.setTextColor(self._status.lightColor, self._status.darkColor)
 
@@ -254,6 +286,12 @@ class SerialConfigCard(CardWidget):
         self._baud_combo.setCurrentIndex(self._sl_baud.currentIndex())
 
     # ---- connect / disconnect ----
+
+    def _on_toggle(self):
+        if self._connected:
+            self._on_disconnect()
+        else:
+            self._on_connect()
 
     def _on_connect(self):
         port = self.port
@@ -325,9 +363,8 @@ class SerialConfigCard(CardWidget):
         self._connected = connected
         editable = not connected
         for btn in (self._connect_btn, self._sl_conn):
-            btn.setEnabled(editable)
-        for btn in (self._disconnect_btn, self._sl_disconn):
-            btn.setEnabled(connected)
+            btn.setEnabled(True)
+            btn.setText("断开" if connected else "连接")
         for w in (self._port_combo, self._sl_port, self._baud_combo, self._sl_baud,
                   self._search_btn, self._sl_search,
                   self._databits_combo, self._parity_combo,

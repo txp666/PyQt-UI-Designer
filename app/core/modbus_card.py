@@ -25,7 +25,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QGridLayout, QHBoxLayout, QSizePolicy, QVBoxLayout
 from qfluentwidgets import (
-    BodyLabel, CaptionLabel, CardWidget, ComboBox, LineEdit, PrimaryPushButton, PushButton,
+    BodyLabel, CaptionLabel, CardWidget, ComboBox, InfoBar, LineEdit, PrimaryPushButton, PushButton,
     StrongBodyLabel,
 )
 
@@ -135,7 +135,8 @@ class ModbusConfigCard(CardWidget):
         self._default_slave = 1  # the slave of bindings that filter none, in 自动 polling
         self._needs = None     # what the bindings and curves read; the running application sets it
         self._poll_list = ""
-        self._request = None   # the card's request awaiting its reply (_CardRequest)
+        self._request = None   # the polling read awaiting its reply (_CardRequest)
+        self._manual = None    # the request 发送 sent, awaiting its reply (_CardRequest)
         self._reply_slot = [self._on_request_done]
         self.destroyed.connect(partial(_forget, self._reply_slot))
         self._polling = False
@@ -305,7 +306,8 @@ class ModbusConfigCard(CardWidget):
             return []
         sent = _CardRequest(kind, block)
         accepted = modbus_dispatch(self._handler, validated, self._timeout, priority,
-                                   partial(_relay, self._reply_slot, sent), owner=self,
+                                   partial(_relay, self._reply_slot, sent),
+                                   owner=None if kind == "manual" else self,  # stopping drops polling reads only
                                    modbus_only=kind == "block")
         if not accepted:
             self._stop_poll()
@@ -313,18 +315,26 @@ class ModbusConfigCard(CardWidget):
             return []
         sent.waiting = sum(1 for _frame, master in accepted if master is not None)
         if sent.waiting:
-            self._request = sent
+            if kind == "manual":
+                self._manual = sent
+            else:
+                self._request = sent
         return [frame for frame, _master in accepted]
 
+    def _auto_polling(self):
+        return self._polling and self._poll_mode == "自动"
+
     def _on_send_clicked(self):
+        """发送: one request from the fields, queued ahead of polling reads. While 自动 polling
+        runs, the status line keeps the polling state and the result comes as a notification."""
         frames = self._send(self._field_request(), "write", "manual")
-        if frames:
+        if frames and not self._auto_polling():
             self._set_status(modbus_sent_status(frames))
 
     # -- replies ----------------------------------------------------------------
 
     def _on_request_done(self, request, result):
-        if request is not self._request or request.done:
+        if request.done or request not in (self._request, self._manual):
             return  # superseded, or the card stopped polling
         if result.ok:
             request.success = request.success or result
@@ -334,11 +344,12 @@ class ModbusConfigCard(CardWidget):
         if request.waiting > 0:
             return  # another link has it still
         request.done = True
-        self._request = None
         result = request.success or request.failure
         if request.kind == "manual":
-            self._set_status("设备已响应" if result.ok else result.problem)
+            self._manual = None
+            self._manual_done(result)
             return
+        self._request = None
         if not self._polling:
             return
         if result.ok:
@@ -351,6 +362,14 @@ class ModbusConfigCard(CardWidget):
             self._block_done(request.block, problem)
         else:
             self._replied(problem)
+
+    def _manual_done(self, result):
+        text = "设备已响应" if result.ok else result.problem
+        if not self._auto_polling():
+            self._set_status(text)
+            return
+        show = InfoBar.info if result.ok else InfoBar.warning
+        show(title="Modbus", content=text, duration=2000, parent=self.window())
 
     def _replied(self, problem):
         """A request of a poll table round is done."""
@@ -458,7 +477,7 @@ class ModbusConfigCard(CardWidget):
             return
         self._set_status(self._auto_status or f"自动 · {len(blocks)} 块 · 轮询中", tip)
         if self._request is not None or any(master.busy() for master in masters):
-            return
+            return  # a read, a write or 发送's request is on the wire
         now = self._now()
         due, index = min((self._due[tuple(block)], index) for index, block in enumerate(blocks))
         if due > now + DUE_EARLY:
@@ -493,6 +512,8 @@ class ModbusConfigCard(CardWidget):
                 self._set_status(str(exc))
                 return
         self._request = None
+        if self._poll_mode == "轮询表":
+            self._manual = None  # 发送 is off while a poll table runs, its result unreported as before
         self._next = 0
         self._period = interval
         self._blocks, self._due, self._results, self._auto_status = None, {}, {}, None
@@ -501,7 +522,7 @@ class ModbusConfigCard(CardWidget):
         self._poll_timer.start(interval)
         self._polling = True
         self._poll_btn.setText("停止")
-        self._send_btn.setEnabled(False)
+        self._send_btn.setEnabled(self._poll_mode == "自动")  # 自动 polls on and on; 发送 stays usable
         if self._poll_mode == "自动":
             self._auto_tick()  # the first block goes out right away
             return

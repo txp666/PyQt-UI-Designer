@@ -9,14 +9,13 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from app.designer.canvas import DesignScene
-from app.designer.canvas_item import CanvasItem
+from app.designer.canvas_item import CanvasItem, LINK_CARD_TYPES  # noqa: F401  (re-exported)
 from app.common.signal_bus import signalBus
 from app.core.widget_registry import registry
 from PyQt5.QtCore import QSignalBlocker
 
 PROJECT_VERSION = "1.0"
-# Link cards that can carry their own frame format (properties.parserConfig).
-LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard")
+# LINK_CARD_TYPES: the link cards, which can carry their own frame format (properties.parserConfig).
 
 
 def _with_legacy_cards(items):
