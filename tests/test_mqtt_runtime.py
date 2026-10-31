@@ -108,7 +108,8 @@ class MqttLinkTests(unittest.TestCase):
     def runtimes(self, config=None, paho=FakePaho2):
         exported = {}
         with patch.dict(sys.modules, {"serial_handler": SimpleNamespace(
-                create_parser=protocol.create_parser)}):
+                create_parser=protocol.create_parser, text_encoding=protocol.text_encoding,
+                ModbusRequests=protocol.ModbusRequests)}):
             exec(_gen_mqtt_handler(config or {}), exported)
         host = patch.object(mqtt_runtime, "mqtt", paho)
         host.start()
@@ -194,6 +195,34 @@ class MqttLinkTests(unittest.TestCase):
             handler.disconnect()
             self.assertEqual(events.count(("disconnected",)), 1)
 
+    def test_modbus_reads_published_are_paired_with_their_replies(self):
+        config = {"parser": "modbus_tcp", "parserConfig": {}}
+        for namespace in self.runtimes(config):
+            handler = self.make(namespace, config)
+            events = self.record(handler)
+            client = self.connect(handler, host="broker.local", subscribe="plc/reply", publish="plc/cmd")
+            request = protocol.build_modbus_tcp_frame(1, 3, 100, count=2, transaction=0x0101)
+            self.assertTrue(handler.send(request))
+            self.assertEqual(client.published[-1][:2], ("plc/cmd", request))
+            client.fire("on_message", FakeMessage("plc/reply", bytes.fromhex("010100000007010304001900 01")))
+            self.wait_for(lambda: self.of(events, "data"), "the reply")
+            self.assertEqual(self.of(events, "data"), [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1,
+                                                        "start": 100, "hr100": 25, "hr101": 1}])
+
+    def test_a_line_message_ends_with_the_configured_terminator(self):
+        # A message is a whole record: one without the link's terminator gets it, not a newline.
+        config = {"parser": "line", "parserConfig": {"terminator": ";", "kvSeparator": ":"}}
+        for namespace in self.runtimes(config):
+            handler = self.make(namespace, config)
+            events = self.record(handler)
+            client = self.connect(handler, subscribe="dev/#")
+            for payload in (b"a:1", b"b:2;", b"c:3\n", b"7", b'{"t": 1}', b"x:1;y:2"):
+                client.fire("on_message", FakeMessage("dev/1", payload))
+            self.wait_for(lambda: len(self.of(events, "data")) == 7, "every record")
+            self.assertEqual(self.of(events, "data"), [
+                {"a": 1}, {"b": 2}, {"c": 3}, {"ch0": 7, "dev/1": 7}, {"t": 1}, {"x": 1}, {"y": 2}])
+            self.assertEqual(self.of(events, "raw"), [b"a:1", b"b:2;", b"c:3\n", b"7", b'{"t": 1}', b"x:1;y:2"])
+
     def test_hex_frames_are_buffered_per_topic(self):
         config = {"parser": "hex", "parserConfig": {
             "header": "AA55", "footer": "55AA", "fields": [["v", 0, 2, "uint16"]]}}
@@ -206,6 +235,29 @@ class MqttLinkTests(unittest.TestCase):
             client.fire("on_message", FakeMessage("dev/1", bytes.fromhex("0155aa")))
             self.wait_for(lambda: len(self.of(events, "data")) == 2, "both frames")
             self.assertEqual(self.of(events, "data"), [{"v": 2}, {"v": 1}])
+
+    def test_hex_messages_publish_each_frame_and_a_message_ends_a_quiet_frame(self):
+        counted = {"header": "AA55", "footer": "", "lengthOffset": 2, "checksum": "和校验",
+                   "fields": [["cmd", 1, 1, "uint8"], ["temp", 2, 2, "int16", "小端(LE)"]]}
+        frames = [bytes.fromhex("aa550401f6ff3c35"), bytes.fromhex("aa5504021000283d")]
+        idle = {"header": "7E", "footer": "", "idleTimeout": 20, "fields": [["a", 0, 1, "uint8"]]}
+        for namespace in self.runtimes():
+            handler = self.make(namespace)
+            events = self.record(handler)
+            client = self.connect(handler, subscribe="dev/#", parser_type="hex", parser_config=counted)
+            client.fire("on_message", FakeMessage("dev/1", b"\x00" + b"".join(frames)))
+            self.wait_for(lambda: len(self.of(events, "data")) == 2, "both frames")
+            self.assertEqual(self.of(events, "raw"), frames)
+            self.assertEqual(self.of(events, "data"), [{"cmd": 1, "temp": -10}, {"cmd": 2, "temp": 16}])
+            handler.disconnect()
+            del events[:]
+            # A message is one burst: a frame ended by silence is complete when the message is.
+            client = self.connect(handler, subscribe="dev/#", parser_type="hex", parser_config=idle)
+            client.fire("on_message", FakeMessage("dev/1", bytes.fromhex("7e0102")))
+            client.fire("on_message", FakeMessage("dev/2", bytes.fromhex("7e05")))
+            self.wait_for(lambda: len(self.of(events, "data")) == 2, "both messages")
+            self.assertEqual(self.of(events, "raw"), [bytes.fromhex("7e0102"), bytes.fromhex("7e05")])
+            self.assertEqual(self.of(events, "data"), [{"a": 1}, {"a": 5}])
 
     def test_connection_loss_keeps_reconnecting_and_stale_callbacks_are_ignored(self):
         for namespace in self.runtimes():
@@ -305,7 +357,7 @@ class MqttLinkTests(unittest.TestCase):
             events = self.record(handler)
             for arguments in (
                 dict(host=""), dict(port=0), dict(port=70000), dict(qos=3),
-                dict(parser_type="hex", parser_config={"header": ""}),
+                dict(parser_type="hex", parser_config={"header": "XYZ"}),
             ):
                 with self.subTest(**arguments):
                     self.assertFalse(handler.connect(**arguments))

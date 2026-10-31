@@ -26,12 +26,13 @@ class LinkConfigCard(CardWidget):
     LINK = ""  # name of this card's link on a CommHub
     TITLE = "连接配置"
     LABEL_WIDTH = 56
-    PARSERS = ["项目设置", "line", "hex", "modbus", "modbus_tcp"]
+    PARSERS = ["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._display_mode = "完整"
+        self._parser_config = {}
         self._connected = False
         self._failed = False
         self._handler = None
@@ -203,8 +204,19 @@ class LinkConfigCard(CardWidget):
         if index >= 0:
             self._parser_combo.setCurrentIndex(index)
 
+    def set_parser_config(self, value):
+        self._parser_config = dict(value) if isinstance(value, dict) else {}
+
     @property
     def parser_type(self):
         """None selects the project's parser settings."""
         text = self._parser_combo.currentText()
         return None if text == "项目设置" else text
+
+    @property
+    def parser_config(self):
+        """The card's own frame format, or None for the link's rule: the project's settings
+        when the card uses the project's mode, the defaults otherwise."""
+        if self.parser_type is None or not self._parser_config:
+            return None
+        return dict(self._parser_config)

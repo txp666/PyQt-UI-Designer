@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PyQt5.QtCore import QEvent, QTimer
+from PyQt5.QtCore import QEvent, Qt, QTimer
 from PyQt5.QtTest import QSignalSpy
 from PyQt5.QtWidgets import QApplication
 from PyQt5 import sip
@@ -22,6 +22,12 @@ from app.core.code_generator import _realtime_chart_class, generate_project
 from app.core.project import ProjectData
 from app.core.protocol_parser import RawFrameBuffer
 from types import SimpleNamespace
+
+
+def click_legend_sample(chart, index):
+    """Click a curve's sample in the chart legend, as a user does to hide or show that curve."""
+    sample = chart._legend.items[index][0]
+    sample.mouseClickEvent(SimpleNamespace(button=lambda: Qt.LeftButton, accept=lambda: None))
 
 
 class ChartTests(unittest.TestCase):
@@ -149,7 +155,8 @@ class ChartTests(unittest.TestCase):
                 with self.subTest(runtime=cls.__module__, format=extension):
                     chart = self.make_chart(cls)
                     chart.configure(cfgs)
-                    chart._checkboxes[1].setChecked(False)
+                    click_legend_sample(chart, 1)
+                    self.assertFalse(chart._curves[1].isVisible())
                     chart.append_value(0, 999)
                     chart.on_raw(bytes.fromhex("aa5501"))
                     with tempfile.TemporaryDirectory() as folder:
@@ -164,7 +171,7 @@ class ChartTests(unittest.TestCase):
                                 writer.writerows(zip(*reordered.values()))
                         chart.load_data(path)
                     self.assertEqual(chart._cfgs, cfgs)
-                    self.assertFalse(chart._checkboxes[1].isChecked())
+                    self.assertFalse(chart._curves[1].isVisible(), "loading keeps a hidden curve hidden")
                     self.assertEqual([list(h.values()) for h in chart._data],
                                      list(recorded.values()))
                     chart.on_parsed({"custom_temperature": 12,

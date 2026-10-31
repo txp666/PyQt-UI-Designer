@@ -266,9 +266,7 @@ class CommandLifecycleTests(unittest.TestCase):
                         raise OSError("device unplugged during write")
                     return outcome
                 port.write = failing_write
-                QTest.mouseClick(bus._poll_btn, Qt.LeftButton)
-                assert bus._poll_timer.isActive()
-                bus._poll_timer.timeout.emit()
+                QTest.mouseClick(bus._poll_btn, Qt.LeftButton)  # the first request goes out at once
                 assert not bus._poll_timer.isActive()
                 assert bus._send_btn.isEnabled()
                 assert "发送失败" in bus._status.text(), bus._status.text()

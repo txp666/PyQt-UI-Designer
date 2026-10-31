@@ -16,7 +16,7 @@ from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
 from app.core.binding_values import (
     binding_boolean, binding_decimals, binding_float, binding_integer, binding_led,
-    binding_register,
+    modbus_value,
 )
 
 # The property a binding writes into, per widget type (docs/uidp-format.md lists it with each widget).
@@ -53,7 +53,7 @@ class BindingEntry:
                  frame_header: str = "", frame_tail: str = "",
                  mb_reg_index: int = 0, mb_slave_filter: int = -1,
                  mb_data_type: str = "uint16", mb_reg_order: str = "大端(AB CD)",
-                 mb_fc_filter: int = -1,
+                 mb_fc_filter: int = -1, mb_area: str = "响应内序号",
                  led_on_value: str = "1", led_off_value: str = "0",
                  decimals: str = "自动"):
         self.widget_id = widget_id
@@ -78,6 +78,7 @@ class BindingEntry:
         self.mb_data_type = mb_data_type
         self.mb_reg_order = mb_reg_order
         self.mb_fc_filter = mb_fc_filter
+        self.mb_area = mb_area
 
     @staticmethod
     def _hex_to_bytes(s: str) -> bytes:
@@ -107,50 +108,9 @@ class BindingEntry:
         return None
 
     def _extract_modbus(self, data: dict) -> Any:
-        """Extract register/coil value from ModbusRTUParser output.
-
-        Supports single-register types (uint16, int16) and dual-register
-        types (uint32, int32, float32) with configurable register order.
-        """
-        if self.mb_slave_filter >= 0:
-            if data.get("slave") != self.mb_slave_filter:
-                return None
-        fc = data.get("fc", 0)
-        if self.mb_fc_filter >= 0 and fc != self.mb_fc_filter:
-            return None
-        idx = self.mb_reg_index
-
-        if fc in (0x01, 0x02):
-            return data.get(f"coil{idx}")
-
-        dt = self.mb_data_type
-        r0 = data.get(f"reg{idx}")
-        if r0 is None:
-            return None
-        r0 = binding_register(r0)
-
-        if dt == "uint16":
-            return r0
-        if dt == "int16":
-            return r0 - 65536 if r0 > 32767 else r0
-
-        r1 = data.get(f"reg{idx + 1}")
-        if r1 is None:
-            return None
-        r1 = binding_register(r1)
-        if self.mb_reg_order == "大端(AB CD)":
-            high, low = r0, r1
-        else:
-            high, low = r1, r0
-        raw_bytes = high.to_bytes(2, "big") + low.to_bytes(2, "big")
-
-        if dt == "uint32":
-            return int.from_bytes(raw_bytes, "big")
-        if dt == "int32":
-            return int.from_bytes(raw_bytes, "big", signed=True)
-        if dt == "float32":
-            return struct.unpack(">f", raw_bytes)[0]
-        return r0
+        """Extract register/coil value from Modbus parser output (binding_values.modbus_value)."""
+        return modbus_value(data, self.mb_reg_index, self.mb_data_type, self.mb_reg_order,
+                            self.mb_fc_filter, self.mb_slave_filter, self.mb_area)
 
     def _strip_frame(self, raw: bytes) -> Optional[bytes]:
         """Match frame header/tail and return the payload between them.
@@ -340,6 +300,7 @@ class DataBindingEngine(QObject):
                 mb_data_type=binding.get("mbDataType", "uint16"),
                 mb_reg_order=binding.get("mbRegOrder", "大端(AB CD)"),
                 mb_fc_filter=int(binding.get("mbFcFilter", -1)),
+                mb_area=binding.get("mbArea", "响应内序号"),
                 led_on_value=str(props.get("onValue", "1")),
                 led_off_value=str(props.get("offValue", "0")),
                 decimals=str(props.get("decimals", "自动")),

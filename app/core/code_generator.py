@@ -211,6 +211,9 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
     ).replace(
         "from .protocol_parser import build_modbus_tcp_frame",
         "from serial_handler import build_modbus_tcp_frame",
+    ).replace(
+        "from .protocol_parser import build_modbus_ascii_frame",
+        "from serial_handler import build_modbus_ascii_frame",
     ))
 
     # custom widget classes needed (recursive)
@@ -363,11 +366,11 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
                 return
             self._comm_hub.send(frame)
 
-    def _send_modbus(self, slave, func, address, value=1):
-        # One request per connected link: RTU, or MBAP where the link parses Modbus TCP.
+    def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):
+        # One request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
-                send_modbus_command(self._comm_hub, slave, func, address, value)
+                send_modbus_command(self._comm_hub, slave, func, address, value, data_type, reg_order)
             except ValueError as exc:
                 self._command_error(exc)
 
@@ -432,11 +435,6 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=
 
 _NEWLINE_CODE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
 _NOTIFY_TYPE_MAP = {"成功": "success", "信息": "info", "警告": "warning", "错误": "error"}
-_FC_NAME_MAP = {
-    "01 读线圈": 0x01, "02 读离散输入": 0x02,
-    "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
-    "05 写单线圈": 0x05, "06 写单寄存器": 0x06,
-}
 
 
 def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
@@ -474,22 +472,20 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
             return f"self._send_hex_command({raw_expr}, {repr(fh)}, {repr(ft)})"
         return f"self._send_text_command({raw_expr}, {repr(suffix)})"
 
-    def _modbus_send(val_expr: str) -> str:
+    def _modbus_send(val_expr: str, default_func="06 写单寄存器") -> str:
+        from app.core.command_runtime import MODBUS_FUNCTIONS, MODBUS_ORDERS
         slave = int(props.get("mbSlave", 1))
-        fc = _FC_NAME_MAP.get(props.get("mbFunc", "06 写单寄存器"), 0x06)
+        fc = MODBUS_FUNCTIONS.get(props.get("mbFunc", default_func), MODBUS_FUNCTIONS[default_func])
         addr = int(props.get("mbAddress", 0))
-        return f"self._send_modbus({slave}, {fc}, {addr}, {val_expr})"
+        typed = (props.get("mbDataType", "uint16"), props.get("mbRegOrder", MODBUS_ORDERS[0]))
+        extra = "" if typed == ("uint16", MODBUS_ORDERS[0]) else f", {typed[0]!r}, {typed[1]!r}"
+        return f"self._send_modbus({slave}, {fc}, {addr}, {val_expr}{extra})"
 
     if wtype == "PushButton":
         cmd = props.get("command", "").strip()
         if mode == "Modbus":
-            slave = int(props.get("mbSlave", 1))
-            fc = _FC_NAME_MAP.get(props.get("mbFunc", "03 读保持寄存器"), 0x03)
-            addr = int(props.get("mbAddress", 0))
-            val = int(props.get("mbValue", 1))
-            result.append(
-                f"        {w_ref}.clicked.connect("
-                f"lambda: self._send_modbus({slave}, {fc}, {addr}, {val}))")
+            send = _modbus_send(int(props.get("mbValue", 1)), "03 读保持寄存器")
+            result.append(f"        {w_ref}.clicked.connect(lambda: {send})")
         elif cmd:
             result.append(
                 f"        {w_ref}.clicked.connect("
@@ -712,6 +708,7 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
             ("defaultStopbits", "set_default_stopbits", "1"),
             ("defaultFlow", "set_default_flow", "无"),
             ("defaultParser", "set_default_parser", "项目设置"),
+            ("parserConfig", "set_parser_config", {}),
         ):
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
         return "; ".join(code)
@@ -732,15 +729,9 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                 f"self.widgets[{wid!r}].set_title({p('title', '数据接收')}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 1000)})")
     if wtype == "ModbusConfigCard":
+        from app.core.modbus_card import ModbusConfigCard
         code = [f"self.widgets[{wid!r}] = ModbusConfigCard({pv})"]
-        for prop, method, default in (
-            ("title", "set_title", "Modbus 配置"),
-            ("defaultSlave", "set_default_slave", 1),
-            ("defaultFunc", "set_default_fc", "03 读保持寄存器"),
-            ("defaultAddr", "set_default_addr", 0),
-            ("defaultValue", "set_default_value", 1),
-            ("defaultPoll", "set_default_poll", 0),
-        ):
+        for prop, method, default in ModbusConfigCard.PROPERTY_SETTERS:
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
         return "; ".join(code)
 
@@ -749,7 +740,7 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
 
 def _gen_serial_handler(serial_config: dict) -> str:
     runtime = runtime_source("serial_runtime.py").replace(
-        "from .protocol_parser import BaseParser, create_parser", "")
+        "from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding", "")
     return (runtime_source("protocol_parser.py") + "\n" + runtime +
             f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
 
@@ -762,13 +753,15 @@ def _link_config(serial_config: dict) -> dict:
 
 def _gen_tcp_handler(serial_config: dict) -> str:
     runtime = runtime_source("tcp_runtime.py").replace(
-        "from .protocol_parser import create_parser", "from serial_handler import create_parser")
+        "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
+        "from serial_handler import ModbusRequests, create_parser, text_encoding")
     return runtime + f"\nTcpHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
 
 
 def _gen_mqtt_handler(serial_config: dict) -> str:
     runtime = runtime_source("mqtt_runtime.py").replace(
-        "from .protocol_parser import create_parser", "from serial_handler import create_parser",
+        "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
+        "from serial_handler import ModbusRequests, create_parser, text_encoding",
     ).replace("from .tls_runtime import system_ssl_context", "")
     return (runtime_source("tls_runtime.py") + "\n" + runtime
             + f"\nMqttHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n")
@@ -818,6 +811,7 @@ def _extract_bindings(widgets: list) -> list:
                         "mbRegOrder": b.get("mbRegOrder", "大端(AB CD)"),
                         "mbFcFilter": int(b.get("mbFcFilter", -1)),
                         "mbSlaveFilter": int(b.get("mbSlaveFilter", -1)),
+                        "mbArea": b.get("mbArea", "响应内序号"),
                     }
                     if w["type"] == "LEDIndicator":
                         entry["onValue"] = str(props.get("onValue", "1"))
@@ -978,45 +972,10 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
             lines.append(f"        value = _resolve_path(data, {repr(jp)})")
             lines.append(f"        if value is not None:")
         elif pm == "Modbus":
-            reg_idx = b.get("mbRegIndex", 0)
-            slave_filter = b.get("mbSlaveFilter", -1)
-            fc_filter = b.get("mbFcFilter", -1)
-            mb_dt = b.get("mbDataType", "uint16")
-            mb_ro = b.get("mbRegOrder", "大端(AB CD)")
-            if slave_filter >= 0:
-                lines.append(f"        if data.get('slave') != {slave_filter}: value = None")
-            if fc_filter >= 0:
-                cond = f"data.get('fc') != {fc_filter}"
-                if slave_filter >= 0:
-                    lines.append(f"        elif {cond}: value = None")
-                else:
-                    lines.append(f"        if {cond}: value = None")
-            guard = "elif" if (slave_filter >= 0 or fc_filter >= 0) else "if"
-            lines.append(f"        {guard} data.get('fc', 0) in (1, 2):")
-            lines.append(f"            value = data.get(f'coil{reg_idx}')")
-            if mb_dt in ("uint16", "int16"):
-                lines.append(f"        else:")
-                lines.append(f"            value = data.get(f'reg{reg_idx}')")
-                lines.append(f"            if value is not None: value = binding_register(value)")
-                if mb_dt == "int16":
-                    lines.append(f"            if value is not None and value > 32767: value = value - 65536")
-            else:
-                lines.append(f"        else:")
-                lines.append(f"            _r0 = data.get(f'reg{reg_idx}')")
-                lines.append(f"            _r1 = data.get(f'reg{reg_idx + 1}')")
-                lines.append(f"            if _r0 is None or _r1 is None: value = None")
-                lines.append(f"            else:")
-                lines.append(f"                _r0, _r1 = binding_register(_r0), binding_register(_r1)")
-                if mb_ro == "大端(AB CD)":
-                    lines.append(f"                _raw = _r0.to_bytes(2,'big') + _r1.to_bytes(2,'big')")
-                else:
-                    lines.append(f"                _raw = _r1.to_bytes(2,'big') + _r0.to_bytes(2,'big')")
-                if mb_dt == "uint32":
-                    lines.append(f"                value = int.from_bytes(_raw, 'big')")
-                elif mb_dt == "int32":
-                    lines.append(f"                value = int.from_bytes(_raw, 'big', signed=True)")
-                elif mb_dt == "float32":
-                    lines.append(f"                value = struct.unpack('>f', _raw)[0]")
+            args = (b.get("mbRegIndex", 0), b.get("mbDataType", "uint16"),
+                    b.get("mbRegOrder", "大端(AB CD)"), b.get("mbFcFilter", -1),
+                    b.get("mbSlaveFilter", -1), b.get("mbArea", "响应内序号"))
+            lines.append(f"        value = modbus_value(data, {', '.join(map(repr, args))})")
             lines.append(f"        if value is not None:")
     elif source == "raw":
         off = b["byteOffset"]
@@ -1176,7 +1135,7 @@ class NumericDisplay(QWidget):
 def _realtime_chart_class() -> str:
     runtime = runtime_source("chart_runtime.py").replace(
         "from .chart_history import ChartHistory", "").replace(
-        "from .binding_values import binding_register", "").replace(
+        "from .binding_values import modbus_value", "").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
         "from .protocol_parser import RawFrameBuffer",
         "from serial_handler import RawFrameBuffer")
@@ -1398,6 +1357,8 @@ class DataRecvCard(CardWidget):
         opt = QHBoxLayout(); opt.setSpacing(8)
         self._hex_cb = CheckBox("HEX显示"); opt.addWidget(self._hex_cb)
         self._scroll_cb = CheckBox("自动滚动"); self._scroll_cb.setChecked(True); opt.addWidget(self._scroll_cb)
+        for check in (self._hex_cb, self._scroll_cb):  # macOS would lay them out by a smaller rect
+            check.setAttribute(Qt.WA_LayoutUsesWidgetRect)
         opt.addStretch()
         self._clear_btn = PushButton("清空"); self._clear_btn.setFixedWidth(60)
         self._clear_btn.clicked.connect(self._clear); opt.addWidget(self._clear_btn)
@@ -1430,7 +1391,8 @@ class DataRecvCard(CardWidget):
         if self._hex_cb.isChecked():
             txt = " ".join(f"{b:02X}" for b in data)
         else:
-            txt = data.decode("utf-8", errors="replace").rstrip("\\r\\n")
+            decode = getattr(self._handler, "decode_raw", None)  # the hub knows the link's encoding
+            txt = (decode(data) if decode else data.decode("utf-8", errors="replace")).rstrip("\\r\\n")
             if not txt: return
         self._text.append(f\'<span style="color:#9399b2">[{ts}]</span> \'
                           f\'<span style="color:#a6e3a1">&lt;&lt; {_log_html(txt)}</span>\')
@@ -1468,106 +1430,6 @@ class DataRecvCard(CardWidget):
 
 
 def _modbus_config_card_class() -> str:
-    return '''
-def _modbus_crc(data):
-    crc = 0xFFFF
-    for b in data:
-        crc ^= b
-        for _ in range(8):
-            crc = (crc>>1)^0xA001 if crc&1 else crc>>1
-    return crc.to_bytes(2,"little")
-
-class ModbusConfigCard(CardWidget):
-    """Modbus RTU configuration card for generated code."""
-    _FC = {"01 读线圈":1,"02 读离散输入":2,"03 读保持寄存器":3,
-           "04 读输入寄存器":4,"05 写单线圈":5,"06 写单寄存器":6}
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._poll_timer = QTimer(self); self._poll_timer.timeout.connect(self._do_send)
-        self._polling = False; self._handler = None
-        self._serial_connections = SignalConnections(self)
-        root = QVBoxLayout(self); root.setContentsMargins(16,12,16,12); root.setSpacing(8)
-        LW = 56
-        hdr = QHBoxLayout()
-        self._title_lbl = StrongBodyLabel("Modbus 配置"); hdr.addWidget(self._title_lbl)
-        hdr.addStretch()
-        self._status = CaptionLabel("就绪")
-        self._status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
-        hdr.addWidget(self._status); root.addLayout(hdr)
-        g = QGridLayout(); g.setHorizontalSpacing(8); g.setVerticalSpacing(8)
-        lbl_s = BodyLabel("从站"); lbl_s.setFixedWidth(LW); g.addWidget(lbl_s, 0, 0)
-        self._slave = LineEdit(); self._slave.setText("1"); g.addWidget(self._slave, 0, 1)
-        lbl_f = BodyLabel("功能码"); lbl_f.setFixedWidth(LW); g.addWidget(lbl_f, 0, 2)
-        self._fc = ComboBox(); self._fc.addItems(list(self._FC.keys()))
-        self._fc.setCurrentIndex(2); self._fc.currentTextChanged.connect(self._on_fc)
-        g.addWidget(self._fc, 0, 3)
-        lbl_a = BodyLabel("地址"); lbl_a.setFixedWidth(LW); g.addWidget(lbl_a, 1, 0)
-        self._addr = LineEdit(); self._addr.setText("0"); g.addWidget(self._addr, 1, 1)
-        self._val_lbl = BodyLabel("数量"); self._val_lbl.setFixedWidth(LW); g.addWidget(self._val_lbl, 1, 2)
-        self._val = LineEdit(); self._val.setText("1"); g.addWidget(self._val, 1, 3)
-        lbl_p = BodyLabel("轮询ms"); lbl_p.setFixedWidth(LW); g.addWidget(lbl_p, 2, 0)
-        self._poll_edit = LineEdit(); self._poll_edit.setText("0")
-        self._poll_edit.setPlaceholderText("0=不轮询"); g.addWidget(self._poll_edit, 2, 1)
-        br = QHBoxLayout()
-        self._send_btn = PrimaryPushButton("发送"); self._send_btn.clicked.connect(self._do_send)
-        self._poll_btn = PushButton("轮询"); self._poll_btn.clicked.connect(self._toggle_poll)
-        br.addWidget(self._send_btn, 1); br.addWidget(self._poll_btn, 1)
-        g.addLayout(br, 2, 2, 1, 2)
-        g.setColumnStretch(1, 1); g.setColumnStretch(3, 1)
-        root.addLayout(g)
-    def _on_fc(self, t):
-        fc = self._FC.get(t, 3)
-        self._val_lbl.setText("写入值" if fc in (5,6) else "数量")
-    def set_serial_handler(self, h):
-        if h is self._handler: return
-        self._serial_connections.clear()
-        self._stop_poll()
-        self._handler = h
-        if h is not None:
-            self._serial_connections.connect(h.connected, self._on_connected)
-            self._serial_connections.connect(h.disconnected, self._on_disconnected)
-    def _on_connected(self, port): self._status.setText(f"已连接: {port}")
-    def _on_disconnected(self):
-        self._stop_poll()
-        self._status.setText("未连接")
-    def _iv(self, e, d=0):
-        try: return int(e.text().strip())
-        except: return d
-    def _do_send(self):
-        if not self._handler or not self._handler.is_connected:
-            self._status.setText("未连接"); return
-        try:
-            fc = self._FC.get(self._fc.currentText(), 3)
-            frames = send_modbus_command(
-                self._handler, self._slave.text(), fc, self._addr.text(), self._val.text())
-            if frames:
-                text = f"已发送: {frames[0].hex(' ').upper()}"
-                if len(frames) > 1: text += f"（{len(frames)} 条链路）"
-                self._status.setText(text)
-            else:
-                self._stop_poll()
-                self._status.setText("发送失败，请检查连接")
-        except ValueError as exc:
-            self._stop_poll()
-            self._status.setText(str(exc))
-    def _toggle_poll(self):
-        if self._polling: self._stop_poll()
-        else:
-            iv = self._iv(self._poll_edit, 0)
-            if not 1 <= iv <= 60000:
-                self._status.setText("轮询间隔应为 1–60000 ms"); return
-            self._poll_timer.start(iv); self._polling = True
-            self._poll_btn.setText("停止"); self._send_btn.setEnabled(False)
-    def _stop_poll(self):
-        self._poll_timer.stop(); self._polling = False
-        self._poll_btn.setText("轮询"); self._send_btn.setEnabled(True)
-    def set_title(self, t): self._title_lbl.setText(t)
-    def set_default_slave(self, value): self._slave.setText(str(int(value)))
-    def set_default_fc(self, value):
-        index = self._fc.findText(value)
-        if index >= 0: self._fc.setCurrentIndex(index)
-    def set_default_addr(self, value): self._addr.setText(str(int(value)))
-    def set_default_value(self, value): self._val.setText(str(int(value)))
-    def set_default_poll(self, value): self._poll_edit.setText(str(int(value)))
-'''
+    return runtime_source("modbus_card.py").replace(
+        "from .command_runtime import MODBUS_FUNCTIONS, MODBUS_ORDERS, modbus_request, send_modbus_command",
+        "").replace("from .signal_lifetime import SignalConnections", "")

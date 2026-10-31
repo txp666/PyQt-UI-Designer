@@ -203,7 +203,7 @@ LED_META = WidgetMeta(
         PropDef("label", "标签", PropType.STRING, "状态"),
         PropDef("color", "颜色", PropType.ENUM, "green",
                 options=["green", "red", "yellow", "blue", "gray"]),
-        PropDef("on", "点亮", PropType.BOOL, True, bindable=True),
+        PropDef("on", "点亮", PropType.BOOL, True),
         PropDef("onValue", "亮值", PropType.STRING, "1"),
         PropDef("offValue", "灭值", PropType.STRING, "0"),
     ],
@@ -217,7 +217,7 @@ NUMERIC_DISPLAY_META = WidgetMeta(
     default_width=160, default_height=90,
     properties=[
         PropDef("title", "标题", PropType.STRING, "温度"),
-        PropDef("value", "数值", PropType.STRING, "0.00", bindable=True),
+        PropDef("value", "数值", PropType.STRING, "0.00"),
         PropDef("unit", "单位", PropType.STRING, "°C"),
         PropDef("fontSize", "字号", PropType.INT, 28, min_val=12, max_val=72),
         PropDef("displayFormat", "显示格式", PropType.ENUM, "自动",
@@ -235,7 +235,7 @@ PROGRESS_BAR_META = WidgetMeta(
     default_width=250, default_height=20,
     min_height=10,
     properties=[
-        PropDef("value", "当前值", PropType.INT, 50, min_val=0, max_val=100, bindable=True),
+        PropDef("value", "当前值", PropType.INT, 50, min_val=0, max_val=100),
         PropDef("maximum", "最大值", PropType.INT, 100, min_val=1, max_val=99999),
     ],
 )

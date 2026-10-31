@@ -8,6 +8,7 @@ from app.core import command_runtime
 from app.core.command_runtime import (
     command_modbus_frame, command_modbus_tcp_frame, send_modbus_command,
 )
+from app.core.protocol_parser import modbus_crc
 
 
 class CommandRuntimeTests(unittest.TestCase):
@@ -115,6 +116,39 @@ class CommandRuntimeTests(unittest.TestCase):
                 check_payloads(frames)
         """)
 
+    def test_controls_write_typed_values_over_fc16(self):
+        fc16 = {"commandMode": "Modbus", "mbSlave": 1, "mbFunc": "16 写多个寄存器", "mbAddress": 100}
+        self.run_both([
+            parity.control("spin", "SpinBox", {**fc16, "mbDataType": "float32", "maximum": 999}),
+            parity.control("text", "LineEdit", {**fc16, "mbDataType": "int32",
+                                                "mbRegOrder": "小端(CD AB)"}, 1),
+            parity.control("button", "PushButton", {**fc16, "mbValue": 7}, 2),
+            parity.control("short", "SpinBox", {**fc16, "mbFunc": "06 写单寄存器",
+                                                "mbDataType": "int16", "minimum": -99}, 3),
+        ], r"""
+            from serial_handler import modbus_crc
+            def rtu(pdu):
+                pdu = bytes.fromhex(pdu)
+                return pdu + modbus_crc(pdu)
+            frames = []
+            widgets["spin"].setValue(25)
+            frames.append(rtu("0110006400020441c80000"))
+            check_payloads(frames)
+            widgets["text"].setText("-2")
+            QTest.keyClick(widgets["text"], Qt.Key_Return)
+            frames.append(rtu("01100064000204fffeffff"))
+            check_payloads(frames)
+            widgets["text"].setText("2.5")  # not an int32: nothing is sent
+            QTest.keyClick(widgets["text"], Qt.Key_Return)
+            check_payloads(frames)
+            QTest.mouseClick(widgets["button"], Qt.LeftButton)
+            frames.append(rtu("0110006400010200 07".replace(" ", "")))
+            check_payloads(frames)
+            widgets["short"].setValue(-5)
+            frames.append(rtu("01060064fffb"))
+            check_payloads(frames)
+        """)
+
     def test_empty_text_input_does_not_send_a_partial_template(self):
         self.run_both([
             parity.control("text", "LineEdit", {
@@ -167,6 +201,27 @@ class CommandRuntimeTests(unittest.TestCase):
                     command_modbus_tcp_frame(slave, function, address, value)
         self.assertEqual(command_modbus_frame(2, 3, 7, 125).hex(), "02030007007d3419")
 
+    def test_typed_register_writes_use_fc06_or_fc16_and_reject_values_that_do_not_fit(self):
+        for request, pdu in (
+                ((1, 16, 100, 25.3, "float32"), "0110006400020441ca6666"),
+                ((1, 16, 100, "25.3", "float32", "小端(CD AB)"), "011000640002046666 41ca"),
+                ((1, 16, 0, -2, "int32"), "01100000000204ffff fffe"),
+                ((1, 16, 0, 70000, "uint32"), "011000000002040001 1170"),
+                ((1, 16, 5, 42), "0110000500010200 2a"),
+                ((1, 6, 7, -1, "int16"), "01060007ffff")):
+            with self.subTest(request=request):
+                pdu = bytes.fromhex(pdu.replace(" ", ""))
+                self.assertEqual(command_modbus_frame(*request), pdu + modbus_crc(pdu))
+        self.assertEqual(
+            command_modbus_tcp_frame(1, 16, 100, 25.3, 0x1234, "float32").hex(),
+            "12340000000b" + "0110006400020441ca6666")
+        for request in ((1, 6, 7, 1, "float32"), (1, 16, 65535, 1, "uint32"),
+                        (1, 16, 0, 1e39, "float32"), (1, 16, 0, "nan", "float32"),
+                        (1, 16, 0, 40000, "int16"), (1, 16, 0, "1.5", "int32"),
+                        (1, 16, 0, 1, "double")):
+            with self.subTest(request=request), self.assertRaises(ValueError):
+                command_modbus_frame(*request)
+
     def test_modbus_tcp_requests_carry_mbap_headers_and_rolling_transactions(self):
         for slave, function, address, value, expected in (
                 (2, 3, 7, 125, "02030007007d"), (1, 1, 0, 8, "010100000008"),
@@ -189,14 +244,19 @@ class CommandRuntimeTests(unittest.TestCase):
                 return self.accept
 
         serial, tcp, idle, failing = Link("line"), Link("modbus_tcp"), Link("modbus_tcp", False), Link("modbus", accept=False)
-        hub = SimpleNamespace(connected_links=[serial, tcp, failing], is_connected=True)
+        ascii_link = Link("modbus_ascii")
+        hub = SimpleNamespace(connected_links=[serial, tcp, failing, ascii_link], is_connected=True)
         command_runtime._transaction[0] = 41
         sent = send_modbus_command(hub, 2, 6, 7, 42)
         rtu = bytes.fromhex("02060007002ab9e7")
         self.assertEqual(serial.sent, [rtu])
         self.assertEqual(tcp.sent, [bytes.fromhex("002a000000060206000700" + "2a")])
         self.assertEqual(failing.sent, [rtu])
-        self.assertEqual(sent, [rtu, tcp.sent[0]], "only accepted frames are reported")
+        # Modbus ASCII: uppercase hex pairs of the RTU bytes without CRC, then the LRC, CR LF.
+        self.assertEqual(ascii_link.sent, [b":02060007002AC7\r\n"])
+        self.assertEqual(sent, [rtu, tcp.sent[0], ascii_link.sent[0]], "only accepted frames are reported")
+        send_modbus_command(ascii_link, 1, 16, 100, 25.3, "float32")
+        self.assertEqual(ascii_link.sent[-1], b":0110006400020441CA6666AE\r\n")
         self.assertEqual(idle.sent, [])
         with self.assertRaises(ValueError):
             send_modbus_command(hub, 2, 6, 7, "not a number")

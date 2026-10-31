@@ -170,13 +170,16 @@ class LinkCardTests(unittest.TestCase):
             assert request[2:] == bytes.fromhex("0000000601030000 0002".replace(" ", "")), request.hex()
             assert bus._status.text().startswith("已发送: 01 03 00 00 00 02 C4 0B（2 条链路）"), bus._status.text()
 
-            # The device answers with a Modbus TCP response, parsed like an RTU one.
+            # The device answers with a Modbus TCP response, parsed like an RTU one; the
+            # transaction id finds the request, so registers are also named by address.
             received = []
             card._handler.dataReceived.connect(received.append)
             peer.write(request[:2] + bytes.fromhex("000000070103040019 0001".replace(" ", "")))
             peer.flush()
             wait_for(lambda: received, "the response")
-            assert received == [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1}], received
+            assert received == [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1,
+                                 "start": 0, "hr0": 25, "hr1": 1}], received
+            assert bus._status.text() == "设备已响应", bus._status.text()
             if os.environ["APPLICATION_MODE"] == "export":  # the preview harness runs no bindings
                 assert widgets["value"]._value.text() == "25", widgets["value"]._value.text()
             QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
@@ -184,6 +187,98 @@ class LinkCardTests(unittest.TestCase):
             QTest.mouseClick(bus._send_btn, Qt.LeftButton)
             check_payloads([rtu, rtu])
             assert bus._status.text() == "已发送: 01 03 00 00 00 02 C4 0B", bus._status.text()
+        ''')
+
+    def test_modbus_card_sends_ascii_frames_and_waits_for_replies_over_a_modbus_ascii_link(self):
+        self.run_both([
+            control("tcp", "TcpConfigCard", {"defaultParser": "modbus_ascii"}),
+            control("bus", "ModbusConfigCard", {"defaultSlave": 1, "defaultFunc": "03 读保持寄存器",
+                                                "defaultAddr": 100, "defaultValue": 2, "timeout": 300}, 1),
+        ], r'''
+            import time
+            from PyQt5.QtNetwork import QHostAddress, QTcpServer
+            def wait_for(predicate, what):
+                deadline = time.monotonic() + 5
+                while not predicate() and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                assert predicate(), f"Timed out waiting for {what}"
+            card, bus = widgets["tcp"], widgets["bus"]
+            assert card._parser_combo.currentText() == "modbus_ascii"
+            device = QTcpServer()
+            assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
+            card._host_edit.setText("127.0.0.1")
+            card._port_spin.setValue(device.serverPort())
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            wait_for(lambda: device.hasPendingConnections() and card._handler.is_connected, "the link")
+            peer = device.nextPendingConnection()
+            assert card._handler.parser_type == "modbus_ascii"
+            assert bus._expects_replies()
+
+            # The Modbus ASCII link gets ':', uppercase hex, the LRC and CR LF; the card waits for the reply.
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            request = b":01030064000296\r\n"  # LRC 96: -(01+03+00+64+00+02)
+            wait_for(lambda: peer.bytesAvailable() >= len(request), "the ASCII request")
+            assert bytes(peer.readAll()) == request
+            assert bus._waiting is not None and bus._reply_timer.isActive()
+            received = []
+            card._handler.dataReceived.connect(received.append)
+            peer.write(b":01030400190001DE\r\n")
+            peer.flush()
+            wait_for(lambda: received, "the response")
+            assert received == [{"slave": 1, "fc": 3, "reg0": 25, "reg1": 1,
+                                 "start": 100, "hr100": 25, "hr101": 1}], received
+            assert bus._status.text() == "设备已响应", bus._status.text()
+            # No reply: the card says so once the timeout has passed.
+            QTest.mouseClick(bus._send_btn, Qt.LeftButton)
+            wait_for(lambda: bus._status.text().startswith("无响应"), "the timeout")
+            assert bus._status.text() == "无响应（300 ms 超时）", bus._status.text()
+            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+        ''')
+
+    def test_tcp_card_parses_hex_frames_with_its_own_frame_format(self):
+        frame_format = {"header": "AA55", "footer": "", "lengthOffset": 2, "checksum": "和校验",
+                        "fields": [["cmd", 1, 1, "uint8"], ["temp", 2, 2, "int16", "小端(LE)"]]}
+        self.run_both([
+            control("tcp", "TcpConfigCard", {"defaultParser": "hex", "parserConfig": frame_format}),
+            parity.control("cmd", "Label", {"text": "-"}, 16) | {
+                "binding": {"parseMode": "键值匹配", "key": "cmd"}},
+            # The link publishes whole frames, so the binding counts from the header's first byte.
+            parity.control("temp", "Label", {"text": "-"}, 17) | {
+                "binding": {"parseMode": "HEX字节提取", "byteOffset": 4, "dataType": "int16",
+                            "byteOrder": "小端(LE)"}},
+        ], r'''
+            import time
+            from PyQt5.QtNetwork import QHostAddress, QTcpServer
+            def wait_for(predicate, what):
+                deadline = time.monotonic() + 5
+                while not predicate() and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                assert predicate(), f"Timed out waiting for {what}"
+            card = widgets["tcp"]
+            assert card.parser_config["lengthOffset"] == 2, card.parser_config
+            device = QTcpServer()
+            assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
+            card._host_edit.setText("127.0.0.1")
+            card._port_spin.setValue(device.serverPort())
+            raw, received = [], []
+            card._handler.rawReceived.connect(raw.append)
+            card._handler.dataReceived.connect(received.append)
+            QTest.mouseClick(card._connect_btn, Qt.LeftButton)
+            wait_for(lambda: device.hasPendingConnections() and card._handler.is_connected, "the link")
+            peer = device.nextPendingConnection()
+            frames = [bytes.fromhex("aa550401f6ff3c35"), bytes.fromhex("aa5504021000283d")]
+            wire = bytes.fromhex("1234") + frames[0] + frames[0][:-1] + b"\x30" + frames[1]
+            peer.write(wire[:6]); peer.flush()
+            QTest.qWait(30)
+            peer.write(wire[6:]); peer.flush()
+            wait_for(lambda: len(received) == 2, "two frames")
+            assert raw == frames, raw
+            assert received == [{"cmd": 1, "temp": -10}, {"cmd": 2, "temp": 16}], received
+            if os.environ["APPLICATION_MODE"] == "export":  # the preview harness runs no bindings
+                assert widgets["cmd"].text() == "2", widgets["cmd"].text()
+                assert widgets["temp"].text() == "16", widgets["temp"].text()
+            QTest.mouseClick(card._disconnect_btn, Qt.LeftButton)
+            check_payloads([])
         ''')
 
     def test_mqtt_card_preserves_configuration_and_publishes_commands(self):
