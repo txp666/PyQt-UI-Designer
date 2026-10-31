@@ -178,7 +178,9 @@ class DesignerEditingTests(unittest.TestCase):
             else:
                 alone.addRow(twin, type(field.widget())())
         self.assertEqual(len(shown), 10, "title, 解析模式, seven Modbus rows, 转换表达式")
-        self.assertEqual(form.sizeHint().height(), alone.sizeHint().height())
+        # A leftover row would add its 6 px spacing; a couple of pixels is platform font metrics.
+        self.assertLessEqual(abs(form.sizeHint().height() - alone.sizeHint().height()), 3,
+                             (form.sizeHint().height(), alone.sizeHint().height()))
         # Rows come back in their place when the mode changes back.
         editor._bind_mode_combo.setCurrentText("键值匹配")
         row, _role = form.getWidgetPosition(editor._bind_key_edit)
