@@ -5,6 +5,7 @@ import time
 from typing import List, Dict
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QObject
 from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding
+from .modbus_master import ModbusMaster
 
 try:
     import serial
@@ -124,6 +125,7 @@ class SerialHandler(QObject):
         self._thread = None
         self._parser = None
         self.modbus_requests = ModbusRequests()  # names responses by register address
+        self.modbus_master = ModbusMaster(self)  # one Modbus request on the wire at a time
         self.configure(config or self.DEFAULT_CONFIG)
 
     def configure(self, config):

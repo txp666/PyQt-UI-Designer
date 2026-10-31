@@ -17,7 +17,7 @@ from qfluentwidgets import (
 
 from .chart_history import ChartHistory
 from .protocol_parser import RawFrameBuffer
-from .binding_values import modbus_value
+from .binding_values import modbus_need, modbus_value
 from .signal_lifetime import SignalConnections
 
 try:
@@ -702,6 +702,22 @@ class RealtimeLineChart(QWidget):
                         self.append_value(i, float(val))
                     except (ValueError, TypeError, OverflowError, struct.error):
                         pass
+
+    def modbus_needs(self):
+        """What the Modbus curves read, for the Modbus card's 自动 polling: (slave, table, address,
+        count, period) each, read at the card's 轮询ms. A curve counts whether or not it is on screen."""
+        needs = []
+        for cfg in self._cfgs:
+            if cfg.get("parseMode") != "Modbus":
+                continue
+            try:
+                need = modbus_need(cfg.get("mbArea", "响应内序号"), int(cfg.get("regIndex", 0)),
+                                   cfg.get("mbDataType", "uint16"), int(cfg.get("mbSlaveFilter", -1)))
+            except (TypeError, ValueError):
+                continue
+            if need is not None:
+                needs.append(need)
+        return needs
 
     @staticmethod
     def _extract_modbus(cfg: dict, data: dict):

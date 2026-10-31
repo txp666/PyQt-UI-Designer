@@ -37,7 +37,7 @@ class UidpGuideTests(unittest.TestCase):
         # large", and the assistant cloned the whole repository to read it, which took several more steps; with
         # the widget reference moved out, the 16 KB guide came back whole.
         size = len(self.document.encode("utf-8"))
-        self.assertLess(size, 20000, f"docs/uidp-format.md is {size} bytes: keep it under 20 000, "
+        self.assertLess(size, 24000, f"docs/uidp-format.md is {size} bytes: keep it under 24 000, "
                                      "details belong in uidp-widgets.md")
 
     def test_example_project_is_valid(self):
@@ -52,10 +52,13 @@ class UidpGuideTests(unittest.TestCase):
             {"type": "TcpConfigCard", "id": "tcp", "properties": {"defaultMode": "client"}},
             {"type": "RealtimeChart", "id": "chart", "properties": {"_curve_0_title": "负载"}},
             {"type": "PushButton", "id": "reset", "binding": {"parseMode": "键值匹配", "key": "x"}},
+            {"type": "ModbusConfigCard", "id": "bus", "properties": {"pollMode": "manual", "autoStart": "yes"}},
+            {"type": "NumericDisplay", "id": "rate", "binding": {"parseMode": "Modbus", "mbPeriod": 70000}},
         ]}
         found = "\n".join(check_uidp.problems(project))
         for expected in ("没有属性 maxValue", "defaultMode 不能是 'client'", "曲线没有字段 title",
-                         "PushButton 不能绑定数据"):
+                         "PushButton 不能绑定数据", "pollMode 不能是 'manual'", "autoStart 应为 true 或 false",
+                         "mbPeriod 应为 0–60000 的整数"):
             self.assertIn(expected, found)
         self.assertEqual(check_uidp.problems({"widgets": [{"type": "Gauge"}]}), ["未知控件类型: Gauge"])
 

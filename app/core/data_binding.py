@@ -16,7 +16,7 @@ from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
 from app.core.binding_values import (
     binding_boolean, binding_decimals, binding_float, binding_integer, binding_led,
-    modbus_value,
+    modbus_need, modbus_value,
 )
 
 # The property a binding writes into, per widget type (docs/uidp-format.md lists it with each widget).
@@ -54,6 +54,7 @@ class BindingEntry:
                  mb_reg_index: int = 0, mb_slave_filter: int = -1,
                  mb_data_type: str = "uint16", mb_reg_order: str = "大端(AB CD)",
                  mb_fc_filter: int = -1, mb_area: str = "响应内序号",
+                 mb_period: int = 0,
                  led_on_value: str = "1", led_off_value: str = "0",
                  decimals: str = "自动"):
         self.widget_id = widget_id
@@ -79,6 +80,7 @@ class BindingEntry:
         self.mb_reg_order = mb_reg_order
         self.mb_fc_filter = mb_fc_filter
         self.mb_area = mb_area
+        self.mb_period = mb_period  # 采集周期 ms for the Modbus card's 自动 polling; 0: the card's 轮询ms
 
     @staticmethod
     def _hex_to_bytes(s: str) -> bytes:
@@ -301,12 +303,32 @@ class DataBindingEngine(QObject):
                 mb_reg_order=binding.get("mbRegOrder", "大端(AB CD)"),
                 mb_fc_filter=int(binding.get("mbFcFilter", -1)),
                 mb_area=binding.get("mbArea", "响应内序号"),
+                mb_period=int(binding.get("mbPeriod", 0)),
                 led_on_value=str(props.get("onValue", "1")),
                 led_off_value=str(props.get("offValue", "0")),
                 decimals=str(props.get("decimals", "自动")),
             )
             self._bindings.append(entry)
             self._walk_bindings(wd.get("children", []))
+
+    def modbus_needs(self):
+        """What the Modbus card's 自动 polling reads: (widget_id, slave, table, address, count,
+        period, visible) for each Modbus binding to a register table, and for each Modbus curve of
+        a chart (always visible). A binding counts while its widget is on screen: not on a hidden
+        tab page."""
+        needs = []
+        for b in self._bindings:
+            if b.parse_mode != "Modbus":
+                continue
+            need = modbus_need(b.mb_area, b.mb_reg_index, b.mb_data_type, b.mb_slave_filter, b.mb_period)
+            if need is not None:
+                widget = self._widget_map.get(b.widget_id)
+                needs.append((b.widget_id, *need, widget is not None and widget.isVisible()))
+        for widget_id, widget in self._widget_map.items():
+            curves = getattr(widget, "modbus_needs", None)  # charts read their own curves
+            if callable(curves):
+                needs.extend((widget_id, *need, True) for need in curves())
+        return needs
 
     @staticmethod
     def _default_bind_prop(type_name: str) -> str:

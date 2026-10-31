@@ -160,6 +160,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **Text mode**: optional line ending
 - **HEX mode**: frame header and trailer, and packing values by data type
 - **Modbus mode**: builds frames automatically and can poll; the frame format is chosen per link: links whose parser mode is `modbus_tcp` send MBAP frames, `modbus_ascii` links send ASCII frames, the others send RTU frames with a CRC. FC16 write multiple registers writes int16, 32-bit integers and float32 values by data type
+- **Automatic Modbus polling**: bind widgets to register addresses and the Modbus card merges neighbouring addresses into read blocks, polls the widgets on screen at each binding's own period and starts as soon as the link connects; control writes go out between two reads instead of colliding with them
 - **Modbus poll table**: the Modbus card reads several address blocks from its poll table one request at a time, each waiting for its reply or the timeout, and shows missing replies and the exception codes a device returns
 - **Command templates**: insert a widget's current value with the `{value}` placeholder
 

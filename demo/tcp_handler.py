@@ -12,6 +12,7 @@ from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QAbstractSocket, QHostAddress, QTcpServer, QTcpSocket
 
 from serial_handler import ModbusRequests, create_parser, text_encoding
+from serial_handler import ModbusMaster
 
 CLIENT, SERVER = "客户端", "服务端"
 _MODES = {CLIENT: CLIENT, SERVER: SERVER, "client": CLIENT, "server": SERVER}
@@ -46,6 +47,7 @@ class TcpHandler(QObject):
         self._parser = None
         self._parser_setup = ("line", {})
         self.modbus_requests = ModbusRequests()  # shared by every peer's parser
+        self.modbus_master = ModbusMaster(self)  # one Modbus request at a time, answered by any peer
         self._mode = CLIENT
         self._description = ""
         self._pending_error = ""
@@ -68,6 +70,11 @@ class TcpHandler(QObject):
             return self._server.isListening()
         return (self._socket is not None
                 and self._socket.state() == QAbstractSocket.ConnectedState)
+
+    @property
+    def can_send(self):
+        """Connected, and a server has a client to send to."""
+        return self.is_connected and (self._server is None or bool(self._peers))
 
     @property
     def is_active(self):

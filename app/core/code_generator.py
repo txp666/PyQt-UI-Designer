@@ -206,15 +206,7 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
     lines.append(runtime_source("signal_lifetime.py"))
     lines.append(runtime_source("qt_window_lifetime.py"))
     lines.append(runtime_source("command_runtime.py").replace(
-        "from .protocol_parser import build_modbus_frame",
-        "from serial_handler import build_modbus_frame",
-    ).replace(
-        "from .protocol_parser import build_modbus_tcp_frame",
-        "from serial_handler import build_modbus_tcp_frame",
-    ).replace(
-        "from .protocol_parser import build_modbus_ascii_frame",
-        "from serial_handler import build_modbus_ascii_frame",
-    ))
+        "from .modbus_master import (", "from serial_handler import ("))
 
     # custom widget classes needed (recursive)
     def _collect_types(items):
@@ -729,7 +721,8 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                 f"self.widgets[{wid!r}].set_title({p('title', '数据接收')}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 1000)})")
     if wtype == "ModbusConfigCard":
-        from app.core.modbus_card import ModbusConfigCard
+        from app.core.modbus_card import ModbusConfigCard, modbus_card_properties
+        props = modbus_card_properties(props)
         code = [f"self.widgets[{wid!r}] = ModbusConfigCard({pv})"]
         for prop, method, default in ModbusConfigCard.PROPERTY_SETTERS:
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
@@ -739,9 +732,13 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
 
 
 def _gen_serial_handler(serial_config: dict) -> str:
+    # The parsers, the Modbus master every link owns, then the serial link.
+    master = runtime_source("modbus_master.py").replace(
+        "from .protocol_parser import build_modbus_ascii_frame, build_modbus_frame, build_modbus_tcp_frame", "")
     runtime = runtime_source("serial_runtime.py").replace(
-        "from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding", "")
-    return (runtime_source("protocol_parser.py") + "\n" + runtime +
+        "from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding", "").replace(
+        "from .modbus_master import ModbusMaster", "")
+    return (runtime_source("protocol_parser.py") + "\n" + master + "\n" + runtime +
             f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
 
 
@@ -754,7 +751,8 @@ def _link_config(serial_config: dict) -> dict:
 def _gen_tcp_handler(serial_config: dict) -> str:
     runtime = runtime_source("tcp_runtime.py").replace(
         "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
-        "from serial_handler import ModbusRequests, create_parser, text_encoding")
+        "from serial_handler import ModbusRequests, create_parser, text_encoding").replace(
+        "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster")
     return runtime + f"\nTcpHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
 
 
@@ -762,7 +760,8 @@ def _gen_mqtt_handler(serial_config: dict) -> str:
     runtime = runtime_source("mqtt_runtime.py").replace(
         "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
         "from serial_handler import ModbusRequests, create_parser, text_encoding",
-    ).replace("from .tls_runtime import system_ssl_context", "")
+    ).replace("from .tls_runtime import system_ssl_context", "").replace(
+        "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster")
     return (runtime_source("tls_runtime.py") + "\n" + runtime
             + f"\nMqttHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n")
 
@@ -812,6 +811,7 @@ def _extract_bindings(widgets: list) -> list:
                         "mbFcFilter": int(b.get("mbFcFilter", -1)),
                         "mbSlaveFilter": int(b.get("mbSlaveFilter", -1)),
                         "mbArea": b.get("mbArea", "响应内序号"),
+                        "mbPeriod": int(b.get("mbPeriod", 0)),
                     }
                     if w["type"] == "LEDIndicator":
                         entry["onValue"] = str(props.get("onValue", "1"))
@@ -826,6 +826,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
     has_parsed = any(b["parseMode"] in ("键值匹配", "JSON路径", "Modbus") for b in bindings)
     has_hex = any(b["parseMode"] == "HEX字节提取" for b in bindings)
     has_chart = widget_types and "RealtimeChart" in widget_types
+    has_modbus_card = widget_types and "ModbusConfigCard" in widget_types
 
     lines = [
         '# coding: utf-8',
@@ -886,6 +887,11 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
         '            if hasattr(w, "set_serial_handler"):',
         '                w.set_serial_handler(hub)  # connection cards pick their own link',
     ]
+    if has_modbus_card:
+        lines += [
+            '            if hasattr(w, "set_modbus_needs"):  # the Modbus card polls what bindings show',
+            '                w.set_modbus_needs(self.modbus_needs)',
+        ]
     if has_chart:
         lines += [
             '            if isinstance(w, RealtimeLineChart):',
@@ -948,10 +954,40 @@ def _gen_data_binding(bindings: list, widget_types: set = None) -> str:
             lines.append(f'    def _raw_binding_{index}(self, raw):')
             _gen_binding_apply(lines, b, source="raw")
 
-    if not has_parsed and not has_hex:
+    if has_modbus_card:
+        lines += _gen_modbus_needs(bindings)
+    elif not has_parsed and not has_hex:
         lines.append('    pass')
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _gen_modbus_needs(bindings: list) -> list:
+    """DataBinding.modbus_needs: what the Modbus card's 自动 polling reads, as data_binding's engine lists it."""
+    from app.core.binding_values import modbus_need
+    needs = []
+    for b in bindings:
+        if b["parseMode"] == "Modbus":
+            need = modbus_need(b["mbArea"], b["mbRegIndex"], b["mbDataType"], b["mbSlaveFilter"], b["mbPeriod"])
+            if need is not None:
+                needs.append((b["widget_id"], *need))
+    return [
+        '    # (widget id, slave, table, address, count, period) of each Modbus binding to a register table',
+        f'    _MODBUS_NEEDS = {needs!r}',
+        '',
+        '    def modbus_needs(self):',
+        '        """Bindings count while their widget is on screen; chart curves always."""',
+        '        needs = []',
+        '        for widget_id, *need in self._MODBUS_NEEDS:',
+        '            w = self.ui.widgets.get(widget_id)',
+        '            needs.append((widget_id, *need, w is not None and w.isVisible()))',
+        '        for widget_id, w in self.ui.widgets.items():',
+        '            curves = getattr(w, "modbus_needs", None)  # charts read their own curves',
+        '            if callable(curves):',
+        '                needs.extend((widget_id, *need, True) for need in curves())',
+        '        return needs',
+        '',
+    ]
 
 
 def _gen_binding_apply(lines: list, b: dict, source: str):
@@ -1135,7 +1171,7 @@ class NumericDisplay(QWidget):
 def _realtime_chart_class() -> str:
     runtime = runtime_source("chart_runtime.py").replace(
         "from .chart_history import ChartHistory", "").replace(
-        "from .binding_values import modbus_value", "").replace(
+        "from .binding_values import modbus_need, modbus_value", "").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
         "from .protocol_parser import RawFrameBuffer",
         "from serial_handler import RawFrameBuffer")
@@ -1431,5 +1467,6 @@ class DataRecvCard(CardWidget):
 
 def _modbus_config_card_class() -> str:
     return runtime_source("modbus_card.py").replace(
-        "from .command_runtime import MODBUS_FUNCTIONS, MODBUS_ORDERS, modbus_request, send_modbus_command",
-        "").replace("from .signal_lifetime import SignalConnections", "")
+        "from .command_runtime import MODBUS_FUNCTIONS, MODBUS_ORDERS, modbus_request", "").replace(
+        "from .modbus_master import", "from serial_handler import").replace(
+        "from .signal_lifetime import SignalConnections", "")

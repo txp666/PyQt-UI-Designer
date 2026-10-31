@@ -144,6 +144,11 @@ class TitleBarLifecycleMixin:
 import math
 import struct
 
+from serial_handler import (  # noqa: F401  (_transaction: the MBAP counter, for callers of this module)
+    _transaction, modbus_dispatch, modbus_frame as _modbus_frame, next_modbus_transaction,
+)
+
+
 def _command_hex(text):
     """Accept whitespace and a leading half-byte, but never drop invalid fields."""
     compact = "".join(str(text).split())
@@ -233,33 +238,9 @@ def modbus_request(slave, func, address, value, data_type="uint16", reg_order="�
     return slave, func, address, value
 
 
-def _modbus_frame(request, transaction=None, ascii_frame=False):
-    """A validated request as an RTU frame, as a Modbus TCP ADU given its transaction id, or
-    as a Modbus ASCII frame."""
-    slave, func, address, value = request
-    registers, value = (value, 0) if func == 0x10 else ((), value)
-    if transaction is not None:
-        from serial_handler import build_modbus_tcp_frame
-        return build_modbus_tcp_frame(slave, func, address, value, value, transaction, registers)
-    if ascii_frame:
-        from serial_handler import build_modbus_ascii_frame
-        return build_modbus_ascii_frame(slave, func, address, value, value, registers)
-    from serial_handler import build_modbus_frame
-    return build_modbus_frame(slave, func, address, value, value, registers)
-
-
 def command_modbus_frame(slave, func, address, value, data_type="uint16", reg_order="大端(AB CD)"):
     """A validated Modbus RTU request frame (CRC16 appended)."""
     return _modbus_frame(modbus_request(slave, func, address, value, data_type, reg_order))
-
-
-_transaction = [0]
-
-
-def next_modbus_transaction():
-    """Successive MBAP transaction identifiers, wrapping at 16 bits."""
-    _transaction[0] = (_transaction[0] + 1) & 0xFFFF
-    return _transaction[0]
 
 
 def command_modbus_tcp_frame(slave, func, address, value, transaction=None,
@@ -275,21 +256,13 @@ def send_modbus_command(hub, slave, func, address, value, data_type="uint16", re
     """Validate once, then send the request over every connected link, framed for that link.
 
     A link parsing Modbus TCP gets an MBAP frame, one parsing Modbus ASCII an ASCII frame,
-    every other link an RTU frame. Returns the frames that were accepted; an invalid request
-    raises before anything is sent.
+    every other link an RTU frame. A link that parses Modbus queues the request in its
+    ModbusMaster ahead of any polling reads, with a 1000 ms timeout, so it never collides
+    with a read on the wire; the others are written at once. Returns the frames that were
+    accepted (queued, or written); an invalid request raises before anything is sent.
     """
     request = modbus_request(slave, func, address, value, data_type, reg_order)
-    links = getattr(hub, "connected_links", None)
-    if links is None:  # a single link rather than a hub
-        links = [hub] if hub.is_connected else []
-    frames = []
-    for link in links:
-        parser_type = getattr(link, "parser_type", "")
-        if parser_type == "modbus_tcp":
-            frames.append((link, _modbus_frame(request, next_modbus_transaction())))
-        else:
-            frames.append((link, _modbus_frame(request, ascii_frame=parser_type == "modbus_ascii")))
-    return [frame for link, frame in frames if link.send(frame)]
+    return [frame for frame, _master in modbus_dispatch(hub, request, 1000, "write")]
 
 """Preserve the designer's tab-relative coordinates in real Qt tab pages."""
 from PyQt5.QtCore import QObject, QEvent, QPoint, QRect, QTimer
@@ -524,6 +497,20 @@ def binding_register(value):
 # the tables name them by register address (hr100), which the request for each response gives.
 MODBUS_AREAS = {"响应内序号": None, "保持寄存器": "hr", "输入寄存器": "ir",
                 "线圈": "co", "离散输入": "di"}
+# The registers a value of each type takes; coils and discrete inputs are one bit each.
+MODBUS_REGISTERS = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2}
+
+
+def modbus_need(area, address, data_type="uint16", slave_filter=-1, period=0):
+    """What a Modbus binding or chart curve reads, for the Modbus card's 自动 polling:
+    ``(slave, table, address, count, period)``, or None for 响应内序号, which takes whatever
+    response comes. A slave of 0 or less stands for the card's 默认从站, a period of 0 for
+    its 轮询ms."""
+    table = MODBUS_AREAS.get(area)
+    if table is None:
+        return None
+    count = 1 if table in ("co", "di") else MODBUS_REGISTERS.get(data_type, 1)
+    return int(slave_filter), table, int(address), count, max(0, min(60000, int(period)))
 
 
 def modbus_value(data, index, data_type="uint16", reg_order="大端(AB CD)",
@@ -1373,6 +1360,22 @@ class RealtimeLineChart(QWidget):
                         self.append_value(i, float(val))
                     except (ValueError, TypeError, OverflowError, struct.error):
                         pass
+
+    def modbus_needs(self):
+        """What the Modbus curves read, for the Modbus card's 自动 polling: (slave, table, address,
+        count, period) each, read at the card's 轮询ms. A curve counts whether or not it is on screen."""
+        needs = []
+        for cfg in self._cfgs:
+            if cfg.get("parseMode") != "Modbus":
+                continue
+            try:
+                need = modbus_need(cfg.get("mbArea", "响应内序号"), int(cfg.get("regIndex", 0)),
+                                   cfg.get("mbDataType", "uint16"), int(cfg.get("mbSlaveFilter", -1)))
+            except (TypeError, ValueError):
+                continue
+            if need is not None:
+                needs.append(need)
+        return needs
 
     @staticmethod
     def _extract_modbus(cfg: dict, data: dict):

@@ -320,6 +320,7 @@ class PropertyEditor(ScrollArea):
 
             cur_mode = item.properties.get("commandMode", "文本")
             self._apply_mode_visibility(cur_mode)
+            self._apply_poll_mode_visibility(item.properties.get("pollMode", "自动"))
 
             if ("sendOnEnter" in self._prop_rows
                     or "sendOnSelect" in self._prop_rows
@@ -456,6 +457,16 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_slave_spin.valueChanged.connect(self._on_binding_changed)
             self._bind_mb_slave_label = BodyLabel("从站过滤(-1=全部)")
             binding_layout.addRow(self._bind_mb_slave_label, self._bind_mb_slave_spin)
+
+            # How often the Modbus card's 自动 polling reads this binding's block.
+            self._bind_mb_period_spin = SpinBox()
+            self._bind_mb_period_spin.setRange(0, 60000)
+            self._bind_mb_period_spin.setValue(_int_setting(bd.get("mbPeriod", 0), 0))
+            self._bind_mb_period_spin.valueChanged.connect(self._on_binding_changed)
+            self._bind_mb_period_label = BodyLabel("采集周期(ms)")
+            for widget in (self._bind_mb_period_label, self._bind_mb_period_spin):
+                widget.setToolTip("0 = 用 Modbus 卡片的轮询 ms")
+            binding_layout.addRow(self._bind_mb_period_label, self._bind_mb_period_spin)
 
             self._bind_expr_edit = LineEdit()
             self._bind_expr_edit.setPlaceholderText("表达式 (如 value * 0.1)")
@@ -731,6 +742,12 @@ class PropertyEditor(ScrollArea):
                 label.setVisible(show)
                 editor.setVisible(show)
 
+    def _apply_poll_mode_visibility(self, mode: str):
+        """A Modbus card's 轮询表 row shows only when it polls by its table."""
+        if "pollList" in self._prop_rows:
+            for widget in self._prop_rows["pollList"]:
+                widget.setVisible(mode == "轮询表")
+
     def _apply_send_toggle_visibility(self, enabled: bool):
         """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles.
         A Modbus-mode control sends whether or not the toggle is on, so its fields stay visible."""
@@ -844,6 +861,8 @@ class PropertyEditor(ScrollArea):
                 self._apply_send_toggle_visibility(any(self._current_item.properties.get(n, False) for n in toggles))
         elif prop_name in ("sendOnEnter", "sendOnSelect", "sendOnChange"):
             self._apply_send_toggle_visibility(bool(value))
+        elif prop_name == "pollMode":
+            self._apply_poll_mode_visibility(value)
         elif (prop_name == "defaultParser" and self._card_frame_section is not None
               and self._current_item.type_name in LINK_CARD_TYPES):
             # Another mode shows other rows, and possibly the project's values.
@@ -929,7 +948,8 @@ class PropertyEditor(ScrollArea):
                   self._bind_mb_dtype_label, self._bind_mb_dtype_combo,
                   self._bind_mb_regorder_label, self._bind_mb_regorder_combo,
                   self._bind_mb_fc_label, self._bind_mb_fc_spin,
-                  self._bind_mb_slave_label, self._bind_mb_slave_spin):
+                  self._bind_mb_slave_label, self._bind_mb_slave_spin,
+                  self._bind_mb_period_label, self._bind_mb_period_spin):
             w.setVisible(is_mb)
 
     def _show_mb_area(self, area: str):
@@ -977,6 +997,7 @@ class PropertyEditor(ScrollArea):
                 "mbFcFilter": self._bind_mb_fc_spin.value(),
                 "mbSlaveFilter": self._bind_mb_slave_spin.value(),
                 "mbArea": self._bind_mb_area_combo.currentText(),
+                "mbPeriod": self._bind_mb_period_spin.value(),
             }
         else:
             self._current_item.binding = None

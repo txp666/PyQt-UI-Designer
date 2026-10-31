@@ -347,7 +347,7 @@ class ProgressRingDisplay(QWidget):
 # Modbus Config Card
 # ---------------------------------------------------------------------------
 
-from app.core.modbus_card import ModbusConfigCard as RuntimeModbusCard
+from app.core.modbus_card import ModbusConfigCard as RuntimeModbusCard, POLL_MODES, modbus_card_properties
 
 
 class ModbusConfigCard(RuntimeModbusCard):
@@ -381,6 +381,8 @@ MODBUS_CONFIG_META = WidgetMeta(
         PropDef("mbRegOrder", "写入寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
                 options=list(MODBUS_ORDERS)),
         PropDef("timeout", "响应超时(ms)", PropType.INT, 1000, min_val=10, max_val=60000),
+        PropDef("pollMode", "轮询方式", PropType.ENUM, POLL_MODES[0], options=list(POLL_MODES)),
+        PropDef("autoStart", "连接后自动轮询", PropType.BOOL, True),
         PropDef("pollList", "轮询表", PropType.TEXT, ""),
     ],
 )
@@ -547,6 +549,8 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         return w
     if type_name in _RUNTIME_CARDS:
         w = _RUNTIME_CARDS[type_name](parent)
+        if type_name == "ModbusConfigCard":
+            props = modbus_card_properties(props)
         for prop, method, default in w.PROPERTY_SETTERS:
             getattr(w, method)(props.get(prop, default))
         return w
