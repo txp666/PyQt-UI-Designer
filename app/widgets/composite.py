@@ -1,6 +1,6 @@
 # coding: utf-8
 """Composite card widgets: connection cards (serial, TCP, MQTT), DataSendCard, DataRecvCard,
-LogBox, ProgressRing."""
+LogBox."""
 from html import escape as _escape
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter, QFont
@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import (
     CardWidget, StrongBodyLabel, BodyLabel, CaptionLabel,
     PushButton, PrimaryPushButton, ComboBox, LineEdit, SpinBox,
-    ProgressRing, FluentIcon as FIF, ToolButton,
+    FluentIcon as FIF, ToolButton,
     CheckBox, TextEdit, isDarkTheme, setCustomStyleSheet,
 )
 
@@ -311,38 +311,6 @@ class LogDisplayBox(RuntimeLogBox):
 
 
 # ---------------------------------------------------------------------------
-# Progress Ring Display
-# ---------------------------------------------------------------------------
-
-class ProgressRingDisplay(QWidget):
-    """Circular progress indicator with value label."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(4)
-
-        self._ring = ProgressRing()
-        self._ring.setRange(0, 100)
-        self._ring.setValue(0)
-        self._ring.setFixedSize(80, 80)
-        self._ring.setTextVisible(True)
-
-        self._label = CaptionLabel("进度")
-        self._label.setAlignment(Qt.AlignCenter)
-
-        layout.addWidget(self._ring, 0, Qt.AlignCenter)
-        layout.addWidget(self._label)
-
-    def set_value(self, v): self._ring.setValue(int(v))
-    def set_maximum(self, v): self._ring.setMaximum(int(v))
-    def set_label(self, t): self._label.setText(t)
-    def set_ring_size(self, s): self._ring.setFixedSize(s, s)
-
-
-# ---------------------------------------------------------------------------
 # Metadata
 # ---------------------------------------------------------------------------
 
@@ -364,8 +332,8 @@ PARSER_CONFIG_PROP = PropDef(
 SERIAL_CONFIG_META = WidgetMeta(
     type_name="SerialConfigCard",
     display_name="串口配置卡片",
-    category=WidgetCategory.COMPOSITE,
-    icon="CONNECT",
+    category=WidgetCategory.COMM,
+    icon="SERIAL_PORT",
     default_width=360, default_height=320,
     min_width=200, min_height=50,
     properties=[
@@ -392,7 +360,7 @@ SERIAL_CONFIG_META = WidgetMeta(
 TCP_CONFIG_META = WidgetMeta(
     type_name="TcpConfigCard",
     display_name="TCP 配置卡片",
-    category=WidgetCategory.COMPOSITE,
+    category=WidgetCategory.COMM,
     icon="GLOBE",
     default_width=360, default_height=250,
     min_width=240, min_height=50,
@@ -414,7 +382,7 @@ TCP_CONFIG_META = WidgetMeta(
 MQTT_CONFIG_META = WidgetMeta(
     type_name="MqttConfigCard",
     display_name="MQTT 配置卡片",
-    category=WidgetCategory.COMPOSITE,
+    category=WidgetCategory.COMM,
     icon="CLOUD",
     default_width=380, default_height=390,
     min_width=260, min_height=50,
@@ -441,7 +409,7 @@ MQTT_CONFIG_META = WidgetMeta(
 DATA_SEND_META = WidgetMeta(
     type_name="DataSendCard",
     display_name="数据发送卡片",
-    category=WidgetCategory.COMPOSITE,
+    category=WidgetCategory.COMM,
     icon="SEND",
     default_width=350, default_height=140,
     min_width=240, min_height=100,
@@ -454,7 +422,7 @@ DATA_SEND_META = WidgetMeta(
 DATA_RECV_META = WidgetMeta(
     type_name="DataRecvCard",
     display_name="数据接收卡片",
-    category=WidgetCategory.COMPOSITE,
+    category=WidgetCategory.COMM,
     icon="DOWNLOAD",
     default_width=350, default_height=250,
     min_width=240, min_height=120,
@@ -467,8 +435,8 @@ DATA_RECV_META = WidgetMeta(
 LOG_BOX_META = WidgetMeta(
     type_name="LogBox",
     display_name="日志显示框",
-    category=WidgetCategory.COMPOSITE,
-    icon="HISTORY",
+    category=WidgetCategory.COMM,
+    icon="DOCUMENT",
     default_width=400, default_height=200,
     min_width=200, min_height=80,
     properties=[
@@ -476,23 +444,9 @@ LOG_BOX_META = WidgetMeta(
     ],
 )
 
-PROGRESS_RING_META = WidgetMeta(
-    type_name="ProgressRingDisplay",
-    display_name="进度环",
-    category=WidgetCategory.COMPOSITE,
-    icon="SPEED_MEDIUM",
-    default_width=120, default_height=130,
-    min_width=80, min_height=80,
-    properties=[
-        PropDef("label", "标签", PropType.STRING, "进度"),
-        PropDef("value", "当前值", PropType.INT, 0, min_val=0, max_val=100),
-        PropDef("maximum", "最大值", PropType.INT, 100, min_val=1, max_val=99999),
-    ],
-)
-
 ALL_COMPOSITE = [
     SERIAL_CONFIG_META, TCP_CONFIG_META, MQTT_CONFIG_META,
-    DATA_SEND_META, DATA_RECV_META, LOG_BOX_META, PROGRESS_RING_META,
+    DATA_SEND_META, DATA_RECV_META, LOG_BOX_META,
 ]
 
 # Cards shared with exported applications, configured through their PROPERTY_SETTERS.
@@ -525,12 +479,6 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         w = LogDisplayBox(parent)
         w.set_max_lines(props.get("maxLines", 500))
         return w
-    if type_name == "ProgressRingDisplay":
-        w = ProgressRingDisplay(parent)
-        w.set_label(props.get("label", "进度"))
-        w.set_maximum(props.get("maximum", 100))
-        w.set_value(props.get("value", 0))
-        return w
     return None
 
 
@@ -547,7 +495,3 @@ def apply_composite_property(widget, type_name: str, prop_name: str, value):
         elif prop_name == "maxLines": widget.set_max_lines(value)
     elif type_name == "LogBox":
         if prop_name == "maxLines": widget.set_max_lines(value)
-    elif type_name == "ProgressRingDisplay":
-        if prop_name == "label": widget.set_label(value)
-        elif prop_name == "value": widget.set_value(value)
-        elif prop_name == "maximum": widget.set_maximum(value)

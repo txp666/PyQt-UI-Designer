@@ -270,7 +270,7 @@ HBOX_META = WidgetMeta(
     type_name="HBoxLayout",
     display_name="水平布局",
     category=WidgetCategory.LAYOUT,
-    icon="RIGHT_ARROW",
+    icon="COLUMNS",
     default_width=300, default_height=80,
     min_width=60, min_height=40,
     properties=[
@@ -283,7 +283,7 @@ VBOX_META = WidgetMeta(
     type_name="VBoxLayout",
     display_name="垂直布局",
     category=WidgetCategory.LAYOUT,
-    icon="ARROW_DOWN",
+    icon="ROWS",
     default_width=200, default_height=200,
     min_width=60, min_height=40,
     properties=[
@@ -310,7 +310,7 @@ GROUPBOX_META = WidgetMeta(
     type_name="GroupBox",
     display_name="分组框",
     category=WidgetCategory.LAYOUT,
-    icon="FOLDER",
+    icon="GROUP_BOX",
     default_width=280, default_height=180,
     min_width=80, min_height=60,
     properties=[
@@ -322,7 +322,7 @@ TAB_META = WidgetMeta(
     type_name="TabWidget",
     display_name="选项卡",
     category=WidgetCategory.LAYOUT,
-    icon="TILES",
+    icon="TABS",
     default_width=350, default_height=250,
     min_width=150, min_height=80,
     properties=[
@@ -350,7 +350,7 @@ CARD_META = WidgetMeta(
     type_name="CardContainer",
     display_name="卡片容器",
     category=WidgetCategory.LAYOUT,
-    icon="LABEL",
+    icon="CARD",
     default_width=300, default_height=200,
     min_width=80, min_height=60,
     properties=[

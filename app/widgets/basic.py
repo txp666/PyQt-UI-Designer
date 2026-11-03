@@ -27,7 +27,7 @@ PUSH_BUTTON_META = WidgetMeta(
     type_name="PushButton",
     display_name="按钮",
     category=WidgetCategory.BASIC,
-    icon="SEND",
+    icon="BUTTON",
     default_width=120, default_height=36,
     properties=[
         PropDef("text", "文本", PropType.STRING, "按钮"),
@@ -88,7 +88,7 @@ LINE_EDIT_META = WidgetMeta(
     type_name="LineEdit",
     display_name="输入框",
     category=WidgetCategory.BASIC,
-    icon="EDIT",
+    icon="TEXT_FIELD",
     default_width=200, default_height=36,
     properties=[
         PropDef("placeholderText", "占位文本", PropType.STRING, "请输入..."),
@@ -122,7 +122,7 @@ COMBO_BOX_META = WidgetMeta(
     type_name="ComboBox",
     display_name="下拉框",
     category=WidgetCategory.BASIC,
-    icon="MENU",
+    icon="DROPDOWN",
     default_width=160, default_height=36,
     properties=[
         PropDef("items", "选项", PropType.TEXT, "选项1\n选项2\n选项3"),
@@ -158,7 +158,7 @@ SWITCH_META = WidgetMeta(
     type_name="ToggleSwitch",
     display_name="开关",
     category=WidgetCategory.BASIC,
-    icon="POWER_BUTTON",
+    icon="TOGGLE",
     default_width=140, default_height=30,
     properties=[
         PropDef("label", "标签", PropType.STRING, "开关"),
@@ -193,7 +193,7 @@ SLIDER_META = WidgetMeta(
     type_name="Slider",
     display_name="滑块",
     category=WidgetCategory.BASIC,
-    icon="SCROLL",
+    icon="SLIDER",
     default_width=200, default_height=30,
     properties=[
         PropDef("minimum", "最小值", PropType.INT, 0, min_val=-99999, max_val=99999),
@@ -227,7 +227,7 @@ SPIN_BOX_META = WidgetMeta(
     type_name="SpinBox",
     display_name="数值框",
     category=WidgetCategory.BASIC,
-    icon="SETTING",
+    icon="SPIN_BOX",
     default_width=140, default_height=36,
     properties=[
         PropDef("minimum", "最小值", PropType.INT, 0, min_val=-99999, max_val=99999),
