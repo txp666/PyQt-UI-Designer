@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Optional, List, Dict
 
-from PyQt5.QtCore import Qt, QRectF, QPointF, pyqtSignal
+from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal
 from PyQt5.QtGui import QPen, QColor, QPainter, QBrush, QTransform
 from PyQt5.QtWidgets import (
     QGraphicsScene, QGraphicsView, QGraphicsItem, QWidget,
@@ -183,6 +183,11 @@ class DesignView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._zoom = 1.0
+        self._fit_pending = False  # fit_canvas_soon() waits for the view's real size
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.setInterval(0)
+        self._fit_timer.timeout.connect(self._fit_if_pending)
         self._apply_view_style()
 
         self._scene_connections = SignalConnections(self)
@@ -246,6 +251,21 @@ class DesignView(QGraphicsView):
         self.setTransform(QTransform.fromScale(zoom, zoom))
         self.centerOn(page.center())
         self._zoom = zoom
+
+    def fit_canvas_soon(self):
+        """fit_canvas() once the view has its real size: after the layout settles, or once it is shown."""
+        self._fit_pending = True
+        self._fit_timer.start()
+
+    def _fit_if_pending(self):
+        if self._fit_pending and self.isVisible() and not self.viewport().size().isEmpty():
+            self._fit_pending = False
+            self.fit_canvas()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._fit_pending:
+            self._fit_timer.start()
 
     def reset_zoom(self):
         self.resetTransform()

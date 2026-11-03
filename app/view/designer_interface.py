@@ -382,6 +382,7 @@ class DesignerInterface(QWidget):
         self._history.reset(self._document())
         self._history_base = project.base_dir() if project is not None else Path.cwd()
         self._history_changed()
+        self._view.fit_canvas_soon()  # a canvas larger than the view opens whole, not cut off
 
     def mark_saved(self, path):
         """The design as just saved to ``path`` is the one without the unsaved mark."""
