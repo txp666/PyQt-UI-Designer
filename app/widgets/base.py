@@ -53,7 +53,6 @@ class WidgetCategory(Enum):
     DISPLAY = "显示控件"
     CHART = "图表控件"
     COMM = "通信控件"
-    COMPOSITE = "复合卡片"
 
 
 @dataclass
@@ -62,7 +61,7 @@ class WidgetMeta:
     type_name: str
     display_name: str
     category: WidgetCategory
-    icon: str  # FluentIcon name or path
+    icon: str  # a WidgetIcon or FluentIcon name, see app/common/icon.py
     default_width: int
     default_height: int
     properties: List[PropDef] = field(default_factory=list)

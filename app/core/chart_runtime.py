@@ -2,15 +2,17 @@
 """Chart widgets: real-time line chart (pyqtgraph) and gauge meter."""
 import csv
 import json
+import math
 import struct
 from itertools import zip_longest
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel
+from PyQt5.QtCore import Qt, QTimer, QPointF, QRectF, QSize
+from PyQt5.QtGui import QColor, QFontMetricsF, QPainter, QPen
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel, QSizePolicy
 
 from qfluentwidgets import (
-    LineEdit as FluentLineEdit, PushButton as FluentPushButton,
+    LineEdit as FluentLineEdit, ToolButton as FluentToolButton, FluentIcon,
     BodyLabel, isDarkTheme, qconfig, setCustomStyleSheet,
 )
 
@@ -109,15 +111,138 @@ def build_cfgs_from_props(props: dict) -> list:
     return cfgs
 
 
+class ChartHeader(QWidget):
+    """The row above the plot: the chart's title, then an entry per curve reading "name value", the dashed
+    comparison curves' too, flowing left to right and onto further rows only where they do not fit. An entry
+    keeps the widest it has been, so a reading that gets shorter (100 -> 99.82) leaves the entries after it
+    where they are; a new one starts wide enough for a typical reading. Clicking an entry calls toggled(index)."""
+
+    SAMPLE_READING = "-0000.00"
+    _PAD, _GAP, _TITLE_GAP, _SAMPLE, _TEXT = 8, 14, 20, 20, 26
+
+    def __init__(self, toggled, parent=None):
+        super().__init__(parent)
+        self._toggled = toggled
+        self._title = ""
+        self._entries = []  # (name, value, (r, g, b), dashed, shown)
+        self._widths = []  # the widest each entry's text has been
+        self._foreground = QColor("#202020")
+        policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+
+    def set_title(self, title):
+        self._title = title
+        self.updateGeometry()
+        self.update()
+
+    def set_foreground(self, color):
+        self._foreground = QColor(color)
+        self.update()
+
+    def foreground(self):
+        return QColor(self._foreground)
+
+    def set_entries(self, entries):
+        metrics = QFontMetricsF(self._entry_font())
+        height = self.heightForWidth(self.width())
+        for index, (name, value, *_) in enumerate(entries):
+            if index == len(self._widths):
+                self._widths.append(metrics.horizontalAdvance(f"{name} {self.SAMPLE_READING}"))
+            self._widths[index] = max(self._widths[index], metrics.horizontalAdvance(f"{name} {value}"))
+        self._entries = list(entries)
+        if self.heightForWidth(self.width()) != height:
+            self.updateGeometry()
+        self.update()
+
+    def renew(self, first):
+        """The entries from `first` on belong to new curves (rebuilt, or a recording loaded or cleared)."""
+        del self._widths[first:]
+        self.updateGeometry()
+
+    def entry_texts(self):
+        return [f"{name} {value}" for name, value, *_ in self._entries]
+
+    def entry_rect(self, index):
+        return self._places(self.width())[1][index]
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._places(width)[2]
+
+    def sizeHint(self):
+        title, rects, _ = self._places(1 << 20)  # all in one row
+        return QSize(math.ceil(max([title.right()] + [rect.right() for rect in rects])) + self._PAD,
+                     self.heightForWidth(self.width()))
+
+    def minimumSizeHint(self):
+        return QSize(0, self.heightForWidth(self.width()))
+
+    def _entry_font(self):
+        font = self.font()
+        font.setPointSizeF(9)
+        return font
+
+    def _title_font(self):
+        font = self.font()
+        font.setPointSizeF(10)
+        return font
+
+    def _places(self, width):
+        """The title's rect, the entries' rects and the height, for a width."""
+        row = math.ceil(max(QFontMetricsF(self._entry_font()).height(),
+                            QFontMetricsF(self._title_font()).height())) + 6
+        widths = [self._TEXT + held for held in self._widths[:len(self._entries)]]
+        if self._title:
+            widths.insert(0, QFontMetricsF(self._title_font()).horizontalAdvance(self._title))
+        rects, x, y = [], self._PAD, 2
+        for index, item_width in enumerate(widths):
+            if x > self._PAD and x + item_width > width - self._PAD:
+                x, y = self._PAD, y + row
+            rects.append(QRectF(x, y, item_width, row))
+            x += item_width + (self._TITLE_GAP if self._title and index == 0 else self._GAP)
+        title = rects.pop(0) if self._title else QRectF()
+        return title, rects, (y + row + 2 if widths else 0)
+
+    def paintEvent(self, event):
+        title, rects, _ = self._places(self.width())
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        if self._title:
+            painter.setFont(self._title_font())
+            painter.setPen(self._foreground)
+            painter.drawText(title, Qt.AlignLeft | Qt.AlignVCenter | Qt.TextDontClip, self._title)
+        painter.setFont(self._entry_font())
+        for rect, (name, value, color, dashed, shown) in zip(rects, self._entries):
+            sample = QColor(*color) if shown else QColor(self._foreground)
+            text = QColor(self._foreground)
+            if not shown:  # a hidden curve's entry is greyed
+                sample.setAlpha(82)
+                text.setAlpha(86)
+            middle = rect.center().y()
+            painter.setPen(QPen(sample, 2, Qt.DashLine if dashed else Qt.SolidLine, Qt.FlatCap))
+            painter.drawLine(QPointF(rect.left(), middle), QPointF(rect.left() + self._SAMPLE, middle))
+            painter.setPen(text)
+            painter.drawText(rect.adjusted(self._TEXT, 0, 0, 0), Qt.AlignLeft | Qt.AlignVCenter | Qt.TextDontClip,
+                             f"{name} {value}")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            for index, rect in enumerate(self._places(self.width())[1]):
+                if rect.contains(QPointF(event.pos())):
+                    self._toggled(index)
+                    break
+        event.accept()
+
+
 class RealtimeLineChart(QWidget):
-    """Multi-curve scrolling real-time chart with right-side value table
-    and draggable cursor. Each curve has independent parse configuration."""
+    """Multi-curve scrolling real-time chart, with a header above the plot that reads each curve's value, the
+    latest or at a draggable cursor. Each curve has independent parse configuration."""
 
     HISTORY_LIMIT = 10000
     REFRESH_MS = 33
-    # the value table starts wide enough for these, so typical readings never resize the plot
-    _SAMPLE_READING = "-0000.00"
-    _SAMPLE_MODE = "游标: x=00000"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -137,27 +262,23 @@ class RealtimeLineChart(QWidget):
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.timeout.connect(self._refresh_all)
         self.destroyed.connect(lambda _=None, histories=self._data: [h.close() for h in histories])
-        # a loaded recording laid over the live curves: [(name, values)], their dashed curves and table rows
+        # a loaded recording laid over the live curves: [(name, values)] and their dashed curves
         self._refs: list = []
         self._ref_curves: list = []
-        self._ref_labels: list = []
         self._listening = False
         self._cursor_mode = False
-
-        # ---- main area: plot (left) + value table (right) ----
-        main_h = QHBoxLayout()
-        main_h.setSpacing(4)
         self._missing_label = None
+
+        # The title and a "name value" entry per curve, the dashed ones too; clicking one hides or shows its
+        # curve. Above the plot, so no curve runs under it.
+        self._header = ChartHeader(self._toggle_curve)
+        self._header.set_title(self._title)
+        self._root.addWidget(self._header)
 
         if HAS_PYQTGRAPH:
             self._plot = pg.PlotWidget()
             self._plot.showGrid(x=True, y=True, alpha=0.3)
-            # One row across the top of the plot; clicking a curve's sample hides or shows that curve.
-            self._legend = self._plot.addLegend(offset=None, labelTextSize="9pt")
-            self._legend.anchor(itemPos=(0.5, 0), parentPos=(0.5, 0), offset=(0, 2))
-            # The plot area gets its size after this widget does, so follow the view box itself.
-            self._plot.getViewBox().sigResized.connect(self._fit_legend)
-            main_h.addWidget(self._plot, 1)
+            self._root.addWidget(self._plot, 1)
 
             self._cursor_line = pg.InfiniteLine(
                 angle=90, movable=True,
@@ -171,29 +292,9 @@ class RealtimeLineChart(QWidget):
         else:
             self._missing_label = BodyLabel("需要安装 pyqtgraph")
             self._missing_label.setAlignment(Qt.AlignCenter)
-            main_h.addWidget(self._missing_label, 1)
+            self._root.addWidget(self._missing_label, 1)
             self._plot = None
-            self._legend = None
             self._cursor_line = None
-
-        # right panel: mode label + value labels
-        self._side = QWidget()
-        right_panel = QVBoxLayout(self._side)
-        right_panel.setContentsMargins(2, 0, 2, 0)
-        right_panel.setSpacing(0)
-        self._mode_label = QLabel("实时")
-        self._mode_label.setAlignment(Qt.AlignCenter)
-        right_panel.addWidget(self._mode_label)
-
-        self._val_panel = QVBoxLayout()
-        self._val_panel.setContentsMargins(0, 0, 0, 0)
-        self._val_panel.setSpacing(0)
-        right_panel.addLayout(self._val_panel)
-        right_panel.addStretch()
-        self._val_labels: list = []
-        main_h.addWidget(self._side)
-
-        self._root.addLayout(main_h, 1)
 
         # ---- toolbar ----
         tb = QHBoxLayout()
@@ -205,16 +306,22 @@ class RealtimeLineChart(QWidget):
         self._disp_edit.setFixedWidth(80)
         self._disp_edit.editingFinished.connect(self._on_disp_changed)
         tb.addWidget(self._disp_edit)
+        # 实时, the cursor's sample, or what went wrong saving, loading or recording
+        self._mode_label = QLabel("实时")
+        self._mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._mode_label.setMinimumWidth(1)  # a long message is cut short rather than widening the chart
+        tb.addWidget(self._mode_label)
         tb.addStretch()
-        self._save_btn = FluentPushButton("保存")
-        self._save_btn.setFixedWidth(64)
+        self._save_btn = FluentToolButton(FluentIcon.SAVE)
+        self._save_btn.setToolTip("保存完整曲线数据")
         self._save_btn.clicked.connect(self._save_data)
         tb.addWidget(self._save_btn)
-        self._load_btn = FluentPushButton("加载")
-        self._load_btn.setFixedWidth(64)
+        self._load_btn = FluentToolButton(FluentIcon.FOLDER)
+        self._load_btn.setToolTip("加载对比曲线")
         self._load_btn.clicked.connect(self._load_data)
         tb.addWidget(self._load_btn)
-        self._clear_ref_btn = FluentPushButton("清除对比")
+        self._clear_ref_btn = FluentToolButton(FluentIcon.BROOM)
+        self._clear_ref_btn.setToolTip("清除对比")
         self._clear_ref_btn.clicked.connect(self.clear_reference)
         self._clear_ref_btn.hide()
         tb.addWidget(self._clear_ref_btn)
@@ -236,18 +343,13 @@ class RealtimeLineChart(QWidget):
         foreground = "#e5e5e5" if dark else "#202020"
         muted = "#b0b0b0" if dark else "#606060"
         accent = "#4aa3df" if dark else "#0078d4"
+        self._header.set_foreground(foreground)
         if self._plot:
             self._plot.setBackground("#252525" if dark else "#ffffff")
-            self._plot.setTitle(self._title, color=foreground, size="10pt")
             for name in ("left", "bottom", "right", "top"):
                 axis = self._plot.getAxis(name)
                 axis.setPen(pg.mkPen(muted))
                 axis.setTextPen(pg.mkPen(foreground))
-            self._legend.setLabelTextColor(foreground)
-            # A backing in the plot's colour keeps the names readable where a curve runs under them.
-            self._legend.setBrush((37, 37, 37, 210) if dark else (255, 255, 255, 210))
-            for _, label in self._legend.items:
-                label.setText(label.text)  # the new color only reaches a label when it is drawn again
             for index, curve in enumerate(self._curves):
                 if curve:
                     curve.setPen(pg.mkPen(self._curve_color(index), width=2))
@@ -261,20 +363,13 @@ class RealtimeLineChart(QWidget):
                 "FluentLabelBase { color: #c0c0c0; border: 1px dashed #555; background: #252525; }",
             )
         self._mode_label.setStyleSheet(
-            f"font-size: 10px; color: {accent}; padding: 1px 0;")
-        for label in self._val_labels + self._ref_labels:
-            label.setStyleSheet(
-                f"font-size: 11px; padding: 1px 2px; color: {foreground};")
-        if self._cursor_mode and self._cursor_line:
-            self._update_table_at_cursor(self._cursor_line.value())
-        else:
-            self._update_table_realtime()
+            f"font-size: 12px; color: {accent}; padding: 1px 0;")
+        self._show_values()  # the entries in the new curve colours
         self.update()
 
     def set_title(self, title: str):
         self._title = title
-        if self._plot:
-            self._plot.setTitle(title, color="#e5e5e5" if isDarkTheme() else "#202020", size="10pt")
+        self._header.set_title(title)
 
     def set_display_points(self, n: int):
         self._display_points = max(10, min(self.HISTORY_LIMIT, n))
@@ -321,13 +416,10 @@ class RealtimeLineChart(QWidget):
         for curve, (_, values) in zip(self._ref_curves, self._refs):
             if curve:
                 curve.setData(values[start:start + self._display_points])
-        if self._cursor_mode and self._cursor_line:
-            self._update_table_at_cursor(self._cursor_line.value())
-        else:
-            self._update_table_realtime()
+        self._show_values()
 
     def _rebuild_curves(self):
-        self.clear_reference()  # its rows live in the value table rebuilt below
+        self.clear_reference()  # its entries follow the live curves' in the header rebuilt below
         self._raw_frames = [
             RawFrameBuffer(_hex_to_bytes(cfg.get("frameHeader", "")),
                            _hex_to_bytes(cfg.get("frameTail", ""))) for cfg in self._cfgs
@@ -343,62 +435,20 @@ class RealtimeLineChart(QWidget):
         while len(self._data) < count:
             self._data.append(ChartHistory(self.HISTORY_LIMIT))
 
-        while self._val_panel.count():
-            it = self._val_panel.takeAt(0)
-            if it.widget():
-                it.widget().hide()  # gone at once: a snapshot taken before the deletion runs must not show it
-                it.widget().deleteLater()
-        self._val_labels.clear()
-
-        for i, cfg in enumerate(self._cfgs):
-            color = self._curve_color(i)
-            name = cfg.get("name", f"曲线{i + 1}")
-
-            if self._plot:
-                pen = pg.mkPen(color=color, width=2)
-                curve = self._plot.plot(pen=pen, name=name)
-                self._curves.append(curve)
-            else:
-                self._curves.append(None)
-
-            # sized for a typical reading up front; apply_theme then shows the real values
-            vl = QLabel(f"<b style='color:rgb{color}'>{name}</b>  {self._SAMPLE_READING}")
-            vl.setStyleSheet("font-size: 11px; padding: 1px 2px;")
-            self._val_panel.addWidget(vl)
-            self._val_labels.append(vl)
-
-        self._fit_legend()
+        for i in range(len(self._cfgs)):
+            self._curves.append(self._plot.plot(pen=pg.mkPen(color=self._curve_color(i), width=2))
+                                if self._plot else None)
+        self._header.renew(0)
         self._cursor_mode = False
         self._mode_label.setText("实时")
-        self._side.setMinimumWidth(0)
-        self._hold_side_width()
         self.apply_theme()
 
-    def _fit_legend(self, *_):
-        """One row of curve names across the top of the plot, or as many columns as fit when
-        the names are wider than the plot, so none is cut off."""
-        if self._legend is None or not self._curves:
-            return
-        count = len(self._curves)
-        self._legend.setColumnCount(count)
-        self._legend.updateSize()
-        available = self._plot.getViewBox().width()
-        width = self._legend.boundingRect().width()
-        if available > 0 and width > available:
-            self._legend.setColumnCount(max(1, int(count * available / width)))
-            self._legend.updateSize()
-
-    def _hold_side_width(self):
-        """Let the value table widen but never narrow back. A reading that gets shorter (99.82 -> 100) would
-        otherwise hand its space to the plot, and the whole curve would shift sideways with every sample."""
-        for label in (self._mode_label, *self._val_labels, *self._ref_labels):
-            label.ensurePolished()
-        margins = self._side.layout().contentsMargins()
-        need = max([self._mode_label.fontMetrics().horizontalAdvance(self._SAMPLE_MODE)]
-                   + [label.sizeHint().width() for label in self._val_labels + self._ref_labels])
-        need += margins.left() + margins.right()
-        if need > self._side.minimumWidth():
-            self._side.setMinimumWidth(need)
+    def _toggle_curve(self, index):
+        """A click on a header entry hides or shows its curve."""
+        curve = (self._curves + self._ref_curves)[index]
+        if curve:
+            curve.setVisible(not curve.isVisible())
+            self._show_values()
 
     # -- comparison overlay ---------------------------------------------------
 
@@ -414,11 +464,8 @@ class RealtimeLineChart(QWidget):
                 history.close()
         self.clear_reference()
         self._refs = refs
-        for index in range(len(refs)):
-            self._ref_curves.append(self._plot.plot(pen=self._ref_pen(index)) if self._plot else None)
-            label = QLabel()
-            self._val_panel.addWidget(label)
-            self._ref_labels.append(label)
+        self._ref_curves = [self._plot.plot(pen=self._ref_pen(index)) if self._plot else None
+                            for index in range(len(refs))]
         self._clear_ref_btn.show()
         self.apply_theme()
         self._refresh_all()
@@ -427,16 +474,14 @@ class RealtimeLineChart(QWidget):
         for curve in self._ref_curves:
             if self._plot and curve:
                 self._plot.removeItem(curve)
-        for label in self._ref_labels:
-            self._val_panel.removeWidget(label)
-            label.hide()
-            label.deleteLater()
-        self._refs, self._ref_curves, self._ref_labels = [], [], []
+        self._refs, self._ref_curves = [], []
+        self._header.renew(len(self._cfgs))
         self._clear_ref_btn.hide()
+        self._show_values()
 
     def _ref_color(self, index):
         """A recording takes the palette colours after the live curves', so it stands apart even where it
-        crosses the curve it is compared with; the value table names which is which."""
+        crosses the curve it is compared with; the header names which is which."""
         return self._curve_color(len(self._cfgs) + index)
 
     def _ref_pen(self, index):
@@ -446,10 +491,17 @@ class RealtimeLineChart(QWidget):
         """Sample number of the first point the live window shows."""
         return max(0, max((h.count for h in self._data), default=0) - self._display_points)
 
-    def _update_reference_rows(self, sample):
-        for index, (label, (name, values)) in enumerate(zip(self._ref_labels, self._refs)):
+    def _show_entries(self, live, sample):
+        """The header: each live curve's reading, then the recording's at a sample number."""
+        entries = []
+        for i, value in enumerate(live):
+            curve = self._curves[i] if i < len(self._curves) else None
+            entries.append((self._cfgs[i].get("name", f"曲线{i+1}"), value, self._curve_color(i), False,
+                            curve is None or curve.isVisible()))
+        for index, (curve, (name, values)) in enumerate(zip(self._ref_curves, self._refs)):
             val = f"{values[sample]:.4g}" if 0 <= sample < len(values) else "--"
-            label.setText(f"<b style='color:rgb{self._ref_color(index)}'>{name}</b>  {val}")
+            entries.append((name, val, self._ref_color(index), True, curve is None or curve.isVisible()))
+        self._header.set_entries(entries)
 
     # -- cursor ---------------------------------------------------------------
 
@@ -459,7 +511,7 @@ class RealtimeLineChart(QWidget):
             self._mode_label.setText("实时")
             if self._cursor_line:
                 self._cursor_line.setVisible(False)
-            self._update_table_realtime()
+            self._show_live_values()
             return
         if not self._plot:
             return
@@ -473,39 +525,39 @@ class RealtimeLineChart(QWidget):
             self._cursor_line.blockSignals(True)
             self._cursor_line.setValue(x)
             self._cursor_line.blockSignals(False)
-        self._update_table_at_cursor(x)
+        self._show_cursor_values(x)
 
     def _on_cursor_moved(self, *_):
         if not self._cursor_line:
             return
         self._cursor_mode = True
         x = self._cursor_line.value()
-        self._update_table_at_cursor(x)
+        self._show_cursor_values(x)
 
-    def _update_table_at_cursor(self, x: float):
+    def _show_values(self):
+        if self._cursor_mode and self._cursor_line:
+            self._show_cursor_values(self._cursor_line.value())
+        else:
+            self._show_live_values()
+
+    def _show_cursor_values(self, x: float):
         idx = int(round(x))
         self._mode_label.setText(f"游标: x={idx}")
-        for i, lbl in enumerate(self._val_labels):
-            color = self._curve_color(i)
-            name = self._cfgs[i].get("name", f"曲线{i+1}") if i < len(self._cfgs) else ""
+        values = []
+        for i in range(len(self._cfgs)):
             visible = self._data[i].tail(self._display_points) if i < len(self._data) else []
-            val = f"{visible[idx]:.4g}" if 0 <= idx < len(visible) else "--"
-            lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
-        self._update_reference_rows(self._window_start() + idx)
-        self._hold_side_width()
+            values.append(f"{visible[idx]:.4g}" if 0 <= idx < len(visible) else "--")
+        self._show_entries(values, self._window_start() + idx)
 
-    def _update_table_realtime(self):
-        for i, lbl in enumerate(self._val_labels):
-            color = self._curve_color(i)
-            name = self._cfgs[i].get("name", f"曲线{i+1}") if i < len(self._cfgs) else ""
+    def _show_live_values(self):
+        values = []
+        for i in range(len(self._cfgs)):
             if i < len(self._data) and self._data[i]:
-                val = f"{self._data[i][-1]:.4g}"
+                values.append(f"{self._data[i][-1]:.4g}")
             else:
-                val = "--"
-            lbl.setText(f"<b style='color:rgb{color}'>{name}</b>  {val}")
+                values.append("--")
         # the recording at the point the live run has reached
-        self._update_reference_rows(max((h.count for h in self._data), default=0) - 1)
-        self._hold_side_width()
+        self._show_entries(values, max((h.count for h in self._data), default=0) - 1)
 
     # -- data input -----------------------------------------------------------
 
@@ -525,7 +577,7 @@ class RealtimeLineChart(QWidget):
             self._data[i].clear()
             if i < len(self._curves) and self._curves[i]:
                 self._curves[i].setData([])
-        self._update_table_realtime()
+        self._show_live_values()
 
     # -- save / load ----------------------------------------------------------
 

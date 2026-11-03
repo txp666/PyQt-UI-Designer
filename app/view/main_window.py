@@ -54,6 +54,7 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
         self.designer_interface.set_project_source(lambda: self._project_mgr.current)
 
         self.preview_interface = PreviewInterface(self)
+        self.preview_interface.set_mica_enabled(self.isMicaEffectEnabled())
         self.setting_interface = SettingInterface(self)
 
     def _connect_signals(self):
@@ -61,13 +62,21 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
         self._external_connections.connect(
             signalBus.micaEnableChanged, self.setMicaEffectEnabled)
         self._external_connections.connect(
+            signalBus.micaEnableChanged, self._on_mica_changed)
+        self._external_connections.connect(
             signalBus.canvasChanged, self._on_canvas_changed)
         self._external_connections.connect(
             qconfig.themeChangedFinished, self._on_theme_changed)
         self.stackedWidget.currentChanged.connect(self._on_page_changed)
         self.preview_interface.projectDataRequested.connect(self._sync_preview)
+        self.designer_interface.newRequested.connect(self._new_project)
+        self.designer_interface.openRequested.connect(self._open_project)
+        self.designer_interface.saveRequested.connect(self._save_project)
+        self.designer_interface.saveAsRequested.connect(self._save_project_as)
+        self.designer_interface.historyChanged.connect(self._on_history_changed)
 
         QShortcut(QKeySequence.Save, self, self._save_project)
+        QShortcut(QKeySequence.SaveAs, self, self._save_project_as)
         QShortcut(QKeySequence.New, self, self._new_project)
         QShortcut(QKeySequence.Open, self, self._open_project)
         QShortcut(QKeySequence("Ctrl+Shift+E"), self, self._export_code)
@@ -78,9 +87,17 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
             self.preview_interface.invalidate_project("设计已更改，请重新运行预览")
         self._update_title()
 
+    def _on_history_changed(self):
+        # Undoing back to the saved design clears the unsaved mark; redoing away from it sets it again.
+        self._project_mgr.set_dirty(not self.designer_interface.is_saved_state())
+        self._update_title()
+
     def _on_theme_changed(self):
         self.designer_interface.on_theme_changed()
         self.preview_interface.on_theme_changed()
+
+    def _on_mica_changed(self, _enabled):
+        self.preview_interface.set_mica_enabled(self.isMicaEffectEnabled())
 
     def _init_navigation(self):
         self.addSubInterface(
@@ -94,22 +111,7 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
 
         self.navigationInterface.addSeparator()
 
-        # project actions in navigation
-        self.navigationInterface.addItem(
-            "nav_new", FIF.ADD, "新建项目",
-            onClick=lambda: self._new_project(),
-            position=NavigationItemPosition.BOTTOM,
-        )
-        self.navigationInterface.addItem(
-            "nav_open", FIF.FOLDER, "打开项目",
-            onClick=lambda: self._open_project(),
-            position=NavigationItemPosition.BOTTOM,
-        )
-        self.navigationInterface.addItem(
-            "nav_save", FIF.SAVE, "保存项目",
-            onClick=lambda: self._save_project(),
-            position=NavigationItemPosition.BOTTOM,
-        )
+        # 新建、打开、保存 are on the designer toolbar
         self.navigationInterface.addItem(
             "nav_export", FIF.CODE, "导出代码",
             onClick=lambda: self._export_code(),
@@ -207,17 +209,21 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
         except Exception as e:
             InfoBar.error("错误", f"加载失败: {e}", parent=self, position=InfoBarPosition.TOP, duration=5000)
 
-    def _save_project(self):
+    def _save_project_as(self):
+        return self._save_project(choose_path=True)
+
+    def _save_project(self, choose_path=False):
         path = self._project_mgr.current.file_path
-        if not path:
+        if choose_path or not path:
             path, _ = QFileDialog.getSaveFileName(
-                self, "保存项目", "project.uidp",
+                self, "另存为" if choose_path else "保存项目", path or "project.uidp",
                 "UI Designer Project (*.uidp);;All Files (*)"
             )
         if not path:
             return False
         try:
             self._project_mgr.save_from_scene(self.designer_interface.scene, path, self.designer_interface.app_name)
+            self.designer_interface.mark_saved(path)
             self._update_title()
             InfoBar.success("成功", f"已保存: {path}", parent=self, position=InfoBarPosition.TOP, duration=2000)
             return True

@@ -136,9 +136,8 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 | **Basic** | Button, label, line edit, combo box, switch, slider, spin box |
 | **Layout** | Horizontal layout, vertical layout, flex layout, group box, tab widget, separator, card container |
 | **Display** | LED indicator, numeric display, progress bar, progress ring, image |
-| **Charts** | Live chart (multiple channels, cursor, data save / load), gauge |
-| **Communication** | Data table |
-| **Composite** | Serial config card, TCP config card, MQTT config card, send card, receive card, log box |
+| **Charts** | Live chart (multiple channels, cursor, data save / load), gauge, data table |
+| **Communication** | Serial config card, TCP config card, MQTT config card, send card, receive card, log box |
 
 ### Receiving and binding data
 
@@ -319,6 +318,7 @@ PyQt-UI-Designer/
 │   ├── common/          # Config, version info, packaging support, update check
 │   ├── core/            # Project I/O, data binding, protocol parsing, serial / TCP / MQTT runtime, code generation
 │   ├── designer/        # Design canvas, widget panel, property editor, selection and alignment
+│   ├── resource/        # Widget panel icons
 │   ├── view/            # Main window, and the designer, preview and settings pages
 │   └── widgets/         # Widget definitions: basic, layout, display, chart, communication, composite
 ├── demo/                # Standalone exported example, its source project and a simulated device

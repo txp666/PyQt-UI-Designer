@@ -43,7 +43,7 @@ REALTIME_CHART_META = WidgetMeta(
     type_name="RealtimeChart",
     display_name="实时曲线",
     category=WidgetCategory.CHART,
-    icon="HISTORY",
+    icon="MARKET",
     default_width=400, default_height=280,
     min_width=200, min_height=150,
     properties=[

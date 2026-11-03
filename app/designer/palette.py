@@ -8,36 +8,14 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtWidgets import QScrollArea
 from qfluentwidgets import (
-    StrongBodyLabel, FluentIcon as FIF, isDarkTheme, Theme, getIconColor, qconfig,
+    StrongBodyLabel, isDarkTheme, Theme, getIconColor, qconfig,
 )
 
+from app.common.icon import widget_icon
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
 from app.widgets.base import WidgetCategory, WidgetMeta
 from app.designer.canvas import MIME_WIDGET_TYPE
-
-_ICON_MAP = {
-    # basic
-    "SEND": FIF.SEND, "FONT": FIF.FONT, "EDIT": FIF.EDIT,
-    "MENU": FIF.MENU, "POWER_BUTTON": FIF.POWER_BUTTON,
-    "SCROLL": FIF.SCROLL, "SETTING": FIF.SETTING,
-    # layout
-    "RIGHT_ARROW": FIF.RIGHT_ARROW, "ARROW_DOWN": FIF.ARROW_DOWN,
-    "LAYOUT": FIF.LAYOUT, "FOLDER": FIF.FOLDER, "TILES": FIF.TILES,
-    "REMOVE": FIF.REMOVE,
-    # display
-    "CHECKBOX": FIF.CHECKBOX, "CALORIES": FIF.CALORIES,
-    "SPEED_HIGH": FIF.SPEED_HIGH, "SPEED_MEDIUM": FIF.SPEED_MEDIUM,
-    "SPEED_OFF": FIF.SPEED_OFF, "PHOTO": FIF.PHOTO,
-    # chart
-    "HISTORY": FIF.HISTORY, "ALBUM": FIF.ALBUM,
-    # comm
-    "COMMAND_PROMPT": FIF.COMMAND_PROMPT, "VIEW": FIF.VIEW,
-    # composite
-    "CONNECT": FIF.CONNECT, "LABEL": FIF.LABEL,
-    "IOT": FIF.IOT, "DEVELOPER_TOOLS": FIF.DEVELOPER_TOOLS,
-    "DOWNLOAD": FIF.DOWNLOAD, "GLOBE": FIF.GLOBE, "CLOUD": FIF.CLOUD,
-}
 
 
 class _DraggableListWidget(QListWidget):
@@ -49,6 +27,8 @@ class _DraggableListWidget(QListWidget):
         self.setDefaultDropAction(Qt.CopyAction)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setSpacing(2)
+        # The icons are drawn for 16 px; Fusion (Linux) would scale them to 24 and blur them.
+        self.setIconSize(QSize(16, 16))
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.apply_theme()
@@ -136,7 +116,7 @@ class _CategoryCard(QFrame):
         for meta in widgets:
             item = QListWidgetItem(meta.display_name)
             item.setData(Qt.UserRole, meta.type_name)
-            icon = _ICON_MAP.get(meta.icon)
+            icon = widget_icon(meta.icon)
             if icon:
                 item.setIcon(icon.icon(theme))
             self._list.addItem(item)
@@ -199,6 +179,6 @@ class WidgetPalette(QWidget):
                 type_name = item.data(Qt.UserRole)
                 meta = registry.get(type_name)
                 if meta:
-                    icon = _ICON_MAP.get(meta.icon)
+                    icon = widget_icon(meta.icon)
                     if icon:
                         item.setIcon(icon.icon(theme))

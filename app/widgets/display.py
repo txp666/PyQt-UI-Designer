@@ -1,12 +1,12 @@
 # coding: utf-8
-"""Display widgets: LED indicator, numeric display, progress bar, image display."""
+"""Display widgets: LED indicator, numeric display, progress bar, progress ring, image display."""
 from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPainter, QColor, QFont, QPixmap
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
-from qfluentwidgets import ProgressBar, BodyLabel, isDarkTheme, qconfig
+from qfluentwidgets import ProgressBar, ProgressRing, BodyLabel, CaptionLabel, isDarkTheme, qconfig
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
@@ -146,6 +146,34 @@ class NumericDisplay(QWidget):
         )
 
 
+class ProgressRingDisplay(QWidget):
+    """Circular progress indicator with value label."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(4)
+
+        self._ring = ProgressRing()
+        self._ring.setRange(0, 100)
+        self._ring.setValue(0)
+        self._ring.setFixedSize(80, 80)
+        self._ring.setTextVisible(True)
+
+        self._label = CaptionLabel("进度")
+        self._label.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(self._ring, 0, Qt.AlignCenter)
+        layout.addWidget(self._label)
+
+    def set_value(self, v): self._ring.setValue(int(v))
+    def set_maximum(self, v): self._ring.setMaximum(int(v))
+    def set_label(self, t): self._label.setText(t)
+    def set_ring_size(self, s): self._ring.setFixedSize(s, s)
+
+
 class ImageDisplay(QWidget):
     """Static image display widget."""
 
@@ -197,7 +225,7 @@ LED_META = WidgetMeta(
     type_name="LEDIndicator",
     display_name="LED指示灯",
     category=WidgetCategory.DISPLAY,
-    icon="CALORIES",
+    icon="LED",
     default_width=140, default_height=30,
     properties=[
         PropDef("label", "标签", PropType.STRING, "状态"),
@@ -213,7 +241,7 @@ NUMERIC_DISPLAY_META = WidgetMeta(
     type_name="NumericDisplay",
     display_name="数值显示",
     category=WidgetCategory.DISPLAY,
-    icon="SPEED_HIGH",
+    icon="SEVEN_SEGMENT",
     default_width=160, default_height=90,
     properties=[
         PropDef("title", "标题", PropType.STRING, "温度"),
@@ -231,11 +259,25 @@ PROGRESS_BAR_META = WidgetMeta(
     type_name="ProgressBar",
     display_name="进度条",
     category=WidgetCategory.DISPLAY,
-    icon="SPEED_MEDIUM",
+    icon="PROGRESS_BAR",
     default_width=250, default_height=20,
     min_height=10,
     properties=[
         PropDef("value", "当前值", PropType.INT, 50, min_val=0, max_val=100),
+        PropDef("maximum", "最大值", PropType.INT, 100, min_val=1, max_val=99999),
+    ],
+)
+
+PROGRESS_RING_META = WidgetMeta(
+    type_name="ProgressRingDisplay",
+    display_name="进度环",
+    category=WidgetCategory.DISPLAY,
+    icon="PROGRESS_RING",
+    default_width=120, default_height=130,
+    min_width=80, min_height=80,
+    properties=[
+        PropDef("label", "标签", PropType.STRING, "进度"),
+        PropDef("value", "当前值", PropType.INT, 0, min_val=0, max_val=100),
         PropDef("maximum", "最大值", PropType.INT, 100, min_val=1, max_val=99999),
     ],
 )
@@ -251,7 +293,8 @@ IMAGE_DISPLAY_META = WidgetMeta(
     ],
 )
 
-ALL_DISPLAY = [LED_META, NUMERIC_DISPLAY_META, PROGRESS_BAR_META, IMAGE_DISPLAY_META]
+ALL_DISPLAY = [LED_META, NUMERIC_DISPLAY_META, PROGRESS_BAR_META, PROGRESS_RING_META,
+               IMAGE_DISPLAY_META]
 
 
 def register_display_widgets():
@@ -283,6 +326,13 @@ def create_display_widget(type_name: str, props: dict, parent=None) -> QWidget:
         w = ProgressBar(parent)
         w.setMaximum(props.get("maximum", 100))
         w.setValue(props.get("value", 50))
+        return w
+
+    if type_name == "ProgressRingDisplay":
+        w = ProgressRingDisplay(parent)
+        w.set_label(props.get("label", "进度"))
+        w.set_maximum(props.get("maximum", 100))
+        w.set_value(props.get("value", 0))
         return w
 
     if type_name == "ImageDisplay":
@@ -317,6 +367,14 @@ def apply_display_property(widget, type_name: str, prop_name: str, value):
             widget.setValue(value)
         elif prop_name == "maximum":
             widget.setMaximum(value)
+
+    elif type_name == "ProgressRingDisplay":
+        if prop_name == "label":
+            widget.set_label(value)
+        elif prop_name == "value":
+            widget.set_value(value)
+        elif prop_name == "maximum":
+            widget.set_maximum(value)
 
     elif type_name == "ImageDisplay":
         if prop_name == "imagePath":

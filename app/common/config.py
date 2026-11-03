@@ -64,5 +64,7 @@ class Config(QConfig):
 cfg = Config()
 cfg.themeMode.value = Theme.AUTO
 qconfig.load(str(CONFIG_FILE), cfg)
+# qconfig.load forwards cfg's themeChanged to qconfig but not themeColorChanged, which the palette listens to.
+cfg.themeColorChanged.connect(qconfig.themeColorChanged)
 if sys.platform == "darwin" and hasattr(cfg, "fontFamilies"):
     qconfig.set(cfg.fontFamilies, ["PingFang SC", "Helvetica Neue"], save=False)

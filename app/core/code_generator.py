@@ -18,6 +18,7 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None):
         theme_mode = qconfig.get(qconfig.themeMode)
     theme_mode = Theme(theme_mode).value
     widgets, assets = _prepare_export_widgets(project)
+    icons = _project_icons(project)
     bindings = _extract_bindings(widgets)
 
     def collect_types(items):
@@ -60,12 +61,64 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None):
         (out / name).write_text(source, encoding="utf-8")
 
     # Keep icons beside main.py in both source exports and compiled apps.
-    import shutil
-    _root = Path(__file__).resolve().parent.parent.parent
-    for name in ("logo.ico", "logo.png", "logo.icns"):
-        source = _root / name
-        if source.exists() and source.resolve() != (out / name).resolve():
-            shutil.copy2(str(source), str(out / name))
+    if icons:
+        for name, content in icons.items():
+            (out / name).write_bytes(content)
+        # The macOS build prefers logo.icns, which an earlier export may have left with the designer's logo.
+        (out / "logo.icns").unlink(missing_ok=True)
+    else:
+        import shutil
+        _root = Path(__file__).resolve().parent.parent.parent
+        for name in ("logo.ico", "logo.png", "logo.icns"):
+            source = _root / name
+            if source.exists() and source.resolve() != (out / name).resolve():
+                shutil.copy2(str(source), str(out / name))
+
+
+def _project_icons(project):
+    """The project's icon as logo.png (window, Dock and macOS app icon) and logo.ico (Windows .exe), by
+    file name; None for the designer's own icon."""
+    if not project.icon:
+        return None
+    from PyQt5.QtCore import QBuffer, QByteArray, QIODevice, Qt
+    from PyQt5.QtGui import QImage, QImageReader, QPainter
+
+    path = project.icon_file()
+    reader = QImageReader(path)
+    image = QImage()
+    for index in range(max(reader.imageCount(), 1)):
+        reader.jumpToImage(index)
+        frame = reader.read()
+        # An .ico holds several sizes; the window icon takes the largest.
+        if frame.width() * frame.height() > image.width() * image.height():
+            image = frame
+    try:
+        content = Path(path).read_bytes()
+    except OSError:
+        content = None
+    if content is None or image.isNull():
+        raise ValueError(f"图标不存在或不可读: {path}")
+
+    def encoded(kind):
+        picture = image
+        if kind == "ICO" and image.width() != image.height():
+            # Windows stretches an icon to a square, so a wide image is centred on a transparent one.
+            side = max(image.width(), image.height())
+            picture = QImage(side, side, QImage.Format_ARGB32)
+            picture.fill(Qt.transparent)
+            painter = QPainter(picture)
+            painter.drawImage((side - image.width()) // 2, (side - image.height()) // 2, image)
+            painter.end()
+        data = QByteArray()
+        buffer = QBuffer(data)
+        buffer.open(QIODevice.WriteOnly)
+        if not picture.save(buffer, kind):
+            raise ValueError(f"无法把图标转换为 {kind}: {path}")
+        return bytes(data)
+
+    suffix = Path(path).suffix.lower()
+    return {"logo.png": content if suffix == ".png" else encoded("PNG"),
+            "logo.ico": content if suffix == ".ico" else encoded("ICO")}
 
 
 def _prepare_export_widgets(project):

@@ -33,6 +33,10 @@ def build_nuitka_command(project_dir, python_cmd, app_name, version="1.0.0",
     if assets.is_dir():
         args.append(f"--include-data-dir={assets}=assets")
 
+    icons = project / "app" / "resource" / "widget_icons"
+    if icons.is_dir():  # the designer's palette icons
+        args.append(f"--include-data-dir={icons}=app/resource/widget_icons")
+
     if (project / "app" / "core" / "serial_runtime.py").is_file():
         from app.common.runtime_sources import bundle_runtime_sources
         bundle = bundle_runtime_sources(project)

@@ -18,6 +18,27 @@ PROJECT_VERSION = "1.0"
 # LINK_CARD_TYPES: the link cards, which can carry their own frame format (properties.parserConfig).
 
 
+def resolved_asset_path(path: str, base_dir=None) -> str:
+    """An image path as the project uses it: a relative one is taken from ``base_dir`` (the .uidp's folder),
+    else from the working directory."""
+    source = Path(path).expanduser()
+    if not source.is_absolute():
+        source = Path(base_dir or Path.cwd()) / source
+    return str(source.resolve())
+
+
+def rebased_asset_path(path: str, old_base, new_base) -> str:
+    """A relative image path that names the same file once the .uidp moves from ``old_base`` to ``new_base``."""
+    if not path or Path(path).expanduser().is_absolute():
+        return path
+    source = (old_base / Path(path).expanduser()).resolve()
+    try:
+        return Path(os.path.relpath(source, new_base)).as_posix()
+    except ValueError:
+        # Windows paths on another drive cannot be made relative.
+        return str(source)
+
+
 class ProjectData:
     """In-memory representation of a .uidp project."""
 
@@ -27,6 +48,7 @@ class ProjectData:
         self.canvas_width: int = 1200
         self.canvas_height: int = 800
         self.grid_size: int = 10
+        self.icon: str = ""  # the exported application's icon; empty for the default one
         self.widgets: List[Dict[str, Any]] = []
         self.serial: Dict[str, Any] = {
             "baudRate": 115200,
@@ -39,7 +61,7 @@ class ProjectData:
         self.file_path: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {
+        document = {
             "version": self.version,
             "appName": self.app_name,
             "canvas": {
@@ -50,6 +72,18 @@ class ProjectData:
             "widgets": self.widgets,
             "serial": self.serial,
         }
+        if self.icon:
+            document["icon"] = self.icon
+        return document
+
+    def base_dir(self) -> Path:
+        """The folder relative image paths start from: the .uidp's, or the working directory before a save."""
+        return (Path(self.file_path).expanduser().resolve().parent
+                if self.file_path else Path.cwd())
+
+    def icon_file(self) -> str:
+        """The icon's absolute path, or "" when the project uses the default icon."""
+        return resolved_asset_path(self.icon, self.base_dir()) if self.icon else ""
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProjectData":
@@ -61,6 +95,7 @@ class ProjectData:
         proj.canvas_width = canvas.get("width", 1200)
         proj.canvas_height = canvas.get("height", 800)
         proj.grid_size = canvas.get("gridSize", 10)
+        proj.icon = data.get("icon", "")
         proj.widgets = data.get("widgets", [])
         proj.serial.update(data.get("serial", {}))
         return proj
@@ -74,6 +109,8 @@ class ProjectData:
             raise ValueError("不支持的项目版本")
         if not isinstance(data.get("appName", ""), str):
             raise ValueError("应用名称必须是文本")
+        if not isinstance(data.get("icon", ""), str):
+            raise ValueError("应用图标必须是文本")
         canvas = data.get("canvas", {})
         if not isinstance(canvas, dict):
             raise ValueError("画布配置必须是对象")
@@ -156,6 +193,9 @@ class ProjectManager:
     def mark_dirty(self):
         self._dirty = True
 
+    def set_dirty(self, dirty: bool):
+        self._dirty = dirty
+
     def new_project(self):
         self._current = ProjectData()
         self._dirty = False
@@ -173,11 +213,11 @@ class ProjectManager:
         candidate.widgets = [
             item.to_dict() for item in scene.top_level_canvas_items()
         ]
-        old_base = (Path(self._current.file_path).expanduser().resolve().parent
-                    if self._current.file_path else Path.cwd())
+        old_base = self._current.base_dir()
         new_base = Path(path).expanduser().resolve().parent
         if old_base != new_base:
             self._rebase_image_paths(candidate.widgets, old_base, new_base)
+            candidate.icon = rebased_asset_path(candidate.icon, old_base, new_base)
         candidate.file_path = path
         document = candidate.to_dict()
         ProjectData.validate(document)
@@ -221,14 +261,7 @@ class ProjectManager:
             props = item.get("properties", {})
             path = props.get("imagePath", "")
             if item["type"] == "ImageDisplay" and path:
-                source = Path(path).expanduser()
-                if not source.is_absolute():
-                    source = (old_base / source).resolve()
-                    try:
-                        props["imagePath"] = Path(os.path.relpath(source, new_base)).as_posix()
-                    except ValueError:
-                        # Windows paths on another drive cannot be made relative.
-                        props["imagePath"] = str(source)
+                props["imagePath"] = rebased_asset_path(path, old_base, new_base)
             ProjectManager._rebase_image_paths(item.get("children", []), old_base, new_base)
 
     def load_to_scene(self, scene: DesignScene, path: str):

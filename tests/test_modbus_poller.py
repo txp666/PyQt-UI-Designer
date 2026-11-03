@@ -112,6 +112,30 @@ class ModbusPollerTests(unittest.TestCase):
             assert (poller.status(), poller.blocks()) == ("等待连接", []), poller.status()
         """)
 
+    def test_a_block_due_between_ticks_is_read_when_due_not_a_period_late(self):
+        # Seen with the PLC tutorial: a reply quicker than the round before left the next block due
+        # a moment later, and that block waited for the next tick, a whole period late.
+        widgets = tutorial_widgets("10-PLC恒压供水.uidp")
+        self.run_both(widgets, SETUP + r"""
+            serial.configure({"parser": "modbus"})
+            coils, live, setpoint = rtu("010100000004"), rtu("010300640006"), rtu("010300c80002")
+            serial.connected.emit("PLC")  # the coils at 0
+            clock[0] = 30
+            reply("01010101")  # the live block at 30
+            clock[0] = 60
+            reply("01030c" + registers(0, 0, 0, 0, 0, 0))
+            reply("010304" + registers(0, 0))
+            clock[0] = 500
+            tick()
+            clock[0] = 515  # the live block is due at 530
+            reply("01010101")
+            check_payloads([coils, live, setpoint, coils])
+            assert poller._wake.isActive() and poller._wake.interval() == 15, poller._wake.interval()
+            clock[0] = 530
+            poller._wake.timeout.emit()
+            check_payloads([coils, live, setpoint, coils, live])
+        """)
+
     def test_the_first_link_card_whose_link_parses_modbus_sets_period_timeout_and_slave(self):
         self.run_both([
             # First in the document, but its link is not connected: its settings do not count.

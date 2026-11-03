@@ -697,6 +697,7 @@ class PreviewInterface(QWidget):
         self.setObjectName("previewInterface")
         self._project_data = None
         self._running = False
+        self._mica = False
         self._init_ui()
         self._external_connections = SignalConnections(self)
         self._external_connections.connect(
@@ -844,8 +845,13 @@ class PreviewInterface(QWidget):
         dlg = NuitkaPackDialog(directory, app_name, self)
         dlg.exec_()
 
+    def set_mica_enabled(self, enabled: bool):
+        self._mica = enabled
+        self.on_theme_changed()
+
     def on_theme_changed(self):
         self._preview_canvas._update_style()
-        background = "#202020" if isDarkTheme() else "#f5f5f5"
+        # With Mica the window paints no background, so the area around the canvas lets the backdrop through.
+        background = "transparent" if self._mica else "#202020" if isDarkTheme() else "#f5f5f5"
         self._scroll.setStyleSheet(
             f"QScrollArea#previewScroll {{ background: {background}; border: none; }}")

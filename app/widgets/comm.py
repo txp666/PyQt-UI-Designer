@@ -20,7 +20,7 @@ DATA_TABLE_META = WidgetMeta(
     type_name="DataTable",
     display_name="数据表格",
     category=WidgetCategory.CHART,
-    icon="VIEW",
+    icon="TABLE",
     default_width=350, default_height=250,
     min_width=200, min_height=100,
     properties=[
