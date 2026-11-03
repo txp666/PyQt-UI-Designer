@@ -1,15 +1,17 @@
 # coding: utf-8
 """Settings interface with Fluent setting cards."""
+import sys
+
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
 
 from qfluentwidgets import (
     ScrollArea, ExpandLayout, SettingCardGroup,
-    SwitchSettingCard, ComboBoxSettingCard,
+    SwitchSettingCard, ComboBoxSettingCard, CustomColorSettingCard,
     PrimaryPushSettingCard, OptionsSettingCard,
     FluentIcon as FIF, InfoBar, InfoBarPosition,
-    setTheme, Theme,
+    setTheme, setThemeColor, Theme,
 )
 
 from app.common.config import cfg, APP_VERSION, isWin11
@@ -50,14 +52,27 @@ class SettingInterface(ScrollArea):
         )
         self.themeCard.optionChanged.connect(self._on_theme_changed)
 
-        self.micaCard = SwitchSettingCard(
-            FIF.TRANSPARENT, "云母效果",
-            "窗口背景半透明 (仅 Win11)",
-            configItem=cfg.micaEnabled,
+        # The card saves the colour; setThemeColor restyles the Fluent widgets with it.
+        self.themeColorCard = CustomColorSettingCard(
+            cfg.themeColor, FIF.PALETTE, "主题色",
+            "选择 Fluent 控件的强调色",
             parent=self.personalGroup,
         )
-        self.micaCard.checkedChanged.connect(signalBus.micaEnableChanged)
-        self.micaCard.setEnabled(isWin11())
+        self.themeColorCard.colorChanged.connect(lambda color: setThemeColor(color))
+
+        # Mica is a Windows 11 backdrop: off and disabled on Windows 10, no card elsewhere.
+        self.micaCard = None
+        if sys.platform == "win32":
+            if isWin11():
+                self.micaCard = SwitchSettingCard(
+                    FIF.TRANSPARENT, "云母效果", "窗口和表面显示半透明",
+                    configItem=cfg.micaEnabled, parent=self.personalGroup,
+                )
+                self.micaCard.checkedChanged.connect(signalBus.micaEnableChanged)
+            else:
+                self.micaCard = SwitchSettingCard(
+                    FIF.TRANSPARENT, "云母效果", "需要 Windows 11", parent=self.personalGroup)
+                self.micaCard.setEnabled(False)
 
         self.zoomCard = ComboBoxSettingCard(
             cfg.dpiScale, FIF.ZOOM, "界面缩放",
@@ -67,7 +82,9 @@ class SettingInterface(ScrollArea):
         )
 
         self.personalGroup.addSettingCard(self.themeCard)
-        self.personalGroup.addSettingCard(self.micaCard)
+        self.personalGroup.addSettingCard(self.themeColorCard)
+        if self.micaCard is not None:
+            self.personalGroup.addSettingCard(self.micaCard)
         self.personalGroup.addSettingCard(self.zoomCard)
 
         # designer settings

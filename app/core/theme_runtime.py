@@ -18,6 +18,8 @@ class ThemeController(QObject):
         self._timer.timeout.connect(self._check_system_theme)
         self._external_connections = SignalConnections(self)
         self._external_connections.connect(qconfig.themeChangedFinished, self._apply_palette)
+        # The selection highlight is the accent.
+        self._external_connections.connect(qconfig.themeColorChanged, lambda _color: self._apply_palette())
         self._external_connections.connect(app.aboutToQuit, self._timer.stop)
         mode = mode if isinstance(mode, Theme) else Theme(mode)
         # setTheme alone skips resolving Auto when the saved mode is unchanged.

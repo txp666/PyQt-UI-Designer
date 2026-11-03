@@ -28,7 +28,7 @@ window = MainWindow()
 app.processEvents()
 assert not window.windowIcon().isNull()
 if sys.platform == "darwin":
-    assert not window.setting_interface.micaCard.isEnabled()
+    assert window.setting_interface.micaCard is None  # Mica is a Windows 11 backdrop
 python_cmd, ready = NuitkaPackDialog._find_python()
 assert python_cmd and ready, (python_cmd, ready)
 
