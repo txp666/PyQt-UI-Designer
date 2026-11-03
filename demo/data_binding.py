@@ -179,8 +179,9 @@ server needs a client), it reads what the project's Modbus bindings and chart cu
 before each request it gathers what the widgets on screen read, merges neighbouring addresses
 into read blocks (modbus_master.plan_blocks) and sends the block that is due first; a block is
 due again one period after it went out: the shortest 采集周期 (``mbPeriod``) of its bindings, or
-the default period. Reads go only to the links that parse Modbus, through their ModbusMaster,
-one request on the wire at a time, so a control's write goes out between two reads.
+the default period; one that falls due between two ticks goes out then, not a tick later. Reads
+go only to the links that parse Modbus, through their ModbusMaster, one request on the wire at a
+time, so a control's write goes out between two reads.
 
 Its settings are the link cards' (serial, TCP, MQTT; link_card.ModbusLinkSettings): the first
 card in document order whose link is connected and parses Modbus hands it its 默认轮询(ms)
@@ -200,7 +201,7 @@ from serial_handler import MODBUS_PARSERS, modbus_problem, plan_blocks
 DEFAULT_PERIOD = 500    # ms: how often what sets no 采集周期 of its own is read
 DEFAULT_TIMEOUT = 1000  # ms a read waits for its reply
 DEFAULT_SLAVE = 1       # the slave of bindings that filter none (mbSlaveFilter 0 or less)
-DUE_EARLY = 10          # ms: a block this close to due goes now, rather than a whole tick late
+DUE_EARLY = 10          # ms: a block this close to due goes now; how soon to look again past a write
 WAITING = "等待连接"    # the status while no link that parses Modbus can send; link cards do not show it
 
 
@@ -275,6 +276,11 @@ class ModbusPoller(QObject):
         # Each block keeps its own period; a coarse timer would let them drift by 5 %.
         self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.timeout.connect(self._tick)
+        # When the block due next falls between two ticks, or a control's write is on the wire.
+        self._wake = QTimer(self)
+        self._wake.setSingleShot(True)
+        self._wake.setTimerType(Qt.PreciseTimer)
+        self._wake.timeout.connect(self._tick)
 
     # -- what the runtime and the link cards call ---------------------------------
 
@@ -353,6 +359,7 @@ class ModbusPoller(QObject):
         self._active = False
         self._link_connections.clear()
         self._timer.stop()
+        self._wake.stop()
         self._withdraw()
 
     # -- polling ------------------------------------------------------------------
@@ -407,6 +414,7 @@ class ModbusPoller(QObject):
         """Take the link cards' settings, plan again, then send the block due first if every master
         is free."""
         self._period, self._timeout, self._slave = self._link_settings()
+        self._wake.stop()
         if not self._active:
             return
         masters = self._masters()
@@ -424,11 +432,15 @@ class ModbusPoller(QObject):
             self._set_status("没有 Modbus 绑定")
             return
         self._set_status(self._round_status or f"{len(blocks)} 块 · 轮询中", modbus_block_tip(blocks))
-        if self._read is not None or any(master.busy() for master in masters):
-            return  # a read or a control's write is on the wire
+        if self._read is not None:
+            return  # its replies tick again
         now = self._now()
         due, index = min((self._due[tuple(block)], index) for index, block in enumerate(blocks))
+        if any(master.busy() for master in masters):  # a control's write is on the wire
+            self._wake.start(max(DUE_EARLY, due - now))
+            return
         if due > now + DUE_EARLY:
+            self._wake.start(due - now)  # rather than at the next tick, up to a period late
             return
         block = blocks[index]
         self._due[tuple(block)] = now + block[4]
