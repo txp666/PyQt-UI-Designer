@@ -61,7 +61,7 @@ The same project runs live once it is connected to a device (the data in the scr
 
 - **Exporting needs no Python or compiler**: export copies a prebuilt runner and adds the project and its images, which takes about 0.3 s. This project first generates Python source and then compiles it with Nuitka, and the downloaded designer needs Python and build tools installed separately before it can package.
 - **The preview is the finished app**: the preview and the exported app are the same runner, so what you see in the preview is what you get after export.
-- **Smaller downloads**: 16.7 MB on Windows (this project: 54.2 MB); on macOS a single 32.7 MB universal package covers both Apple Silicon and Intel, and the apps it exports are universal too (this project has one package per architecture, 53.8 / 62.8 MB).
+- **Smaller downloads**: 17.7 MB on Windows (this project: 52.0 MB); on macOS a single 32.7 MB universal package covers both Apple Silicon and Intel, and the apps it exports are universal too (this project has one package per architecture, 51.7 / 60.3 MB).
 - **Faster startup, less memory**: on the same Mac it takes 0.7–1.1 s to show its window (this project: 1.5–2.2 s) and uses 71–85 MB of memory after startup (this project: 126–137 MB).
 - **In-app updates**: it checks for new versions from the settings page or at startup, downloads them and verifies the SHA-256, and swaps in the new version when you restart or quit.
 
