@@ -5,7 +5,7 @@ import sys
 from typing import Optional, List, Dict
 
 from PyQt5.QtCore import Qt, QRectF, QPointF, pyqtSignal
-from PyQt5.QtGui import QPen, QColor, QPainter, QBrush
+from PyQt5.QtGui import QPen, QColor, QPainter, QBrush, QTransform
 from PyQt5.QtWidgets import (
     QGraphicsScene, QGraphicsView, QGraphicsItem, QWidget,
 )
@@ -228,10 +228,28 @@ class DesignView(QGraphicsView):
             event.ignore()
             return
         factor = 1.15 ** (delta / 120)
+        self.zoom_by(factor)
+        event.accept()
+
+    def zoom_by(self, factor: float):
         new_zoom = max(0.2, min(5.0, self._zoom * factor))
         self.scale(new_zoom / self._zoom, new_zoom / self._zoom)
         self._zoom = new_zoom
-        event.accept()
+
+    def fit_canvas(self):
+        """The whole canvas in view with a small margin, never above 100%."""
+        page = self.sceneRect().adjusted(-16, -16, 16, 16)
+        viewport = self.viewport().size()
+        if viewport.isEmpty():
+            return
+        zoom = min(1.0, viewport.width() / page.width(), viewport.height() / page.height())
+        self.setTransform(QTransform.fromScale(zoom, zoom))
+        self.centerOn(page.center())
+        self._zoom = zoom
+
+    def reset_zoom(self):
+        self.resetTransform()
+        self._zoom = 1.0
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat(MIME_WIDGET_TYPE):

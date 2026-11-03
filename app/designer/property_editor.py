@@ -176,6 +176,10 @@ class _TabNamesEdit(TextEdit):
 class PropertyEditor(ScrollArea):
     """Right panel showing editable properties for the selected widget."""
 
+    # The field behind an edit, just before the edit's canvasChanged: consecutive edits of one field (keystrokes,
+    # spin box arrows) are one undo step.
+    edited = pyqtSignal(object)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("propertyEditor")
@@ -405,21 +409,21 @@ class PropertyEditor(ScrollArea):
             self._bind_key_edit = LineEdit()
             self._bind_key_edit.setPlaceholderText("字段名 (如 temperature)")
             self._bind_key_edit.setText(bd.get("key", ""))
-            self._bind_key_edit.textChanged.connect(self._on_binding_changed)
+            self._bind_key_edit.textChanged.connect(self._binding_slot("key"))
             self._bind_key_label = BodyLabel("绑定字段")
             binding_rows.add(self._bind_key_label, self._bind_key_edit)
 
             self._bind_json_edit = LineEdit()
             self._bind_json_edit.setPlaceholderText("路径 (如 data.sensors.0.temp)")
             self._bind_json_edit.setText(bd.get("jsonPath", ""))
-            self._bind_json_edit.textChanged.connect(self._on_binding_changed)
+            self._bind_json_edit.textChanged.connect(self._binding_slot("jsonPath"))
             self._bind_json_label = BodyLabel("JSON路径")
             binding_rows.add(self._bind_json_label, self._bind_json_edit)
 
             self._bind_offset_spin = SpinBox()
             self._bind_offset_spin.setRange(0, 9999)
             self._bind_offset_spin.setValue(int(bd.get("byteOffset", 0)))
-            self._bind_offset_spin.valueChanged.connect(self._on_binding_changed)
+            self._bind_offset_spin.valueChanged.connect(self._binding_slot("byteOffset"))
             self._bind_offset_label = BodyLabel("字节偏移")
             binding_rows.add(self._bind_offset_label, self._bind_offset_spin)
 
@@ -429,7 +433,7 @@ class PropertyEditor(ScrollArea):
                 "uint32", "int32", "float32", "ASCII"])
             dt = bd.get("dataType", "uint16")
             self._bind_dtype_combo.setCurrentText(dt)
-            self._bind_dtype_combo.currentTextChanged.connect(self._on_binding_changed)
+            self._bind_dtype_combo.currentTextChanged.connect(self._binding_slot("dataType"))
             self._bind_dtype_label = BodyLabel("数据类型")
             binding_rows.add(self._bind_dtype_label, self._bind_dtype_combo)
 
@@ -437,35 +441,35 @@ class PropertyEditor(ScrollArea):
             self._bind_order_combo.addItems(["大端(BE)", "小端(LE)"])
             bo = bd.get("byteOrder", "大端(BE)")
             self._bind_order_combo.setCurrentText(bo)
-            self._bind_order_combo.currentTextChanged.connect(self._on_binding_changed)
+            self._bind_order_combo.currentTextChanged.connect(self._binding_slot("byteOrder"))
             self._bind_order_label = BodyLabel("字节序")
             binding_rows.add(self._bind_order_label, self._bind_order_combo)
 
             self._bind_header_edit = LineEdit()
             self._bind_header_edit.setPlaceholderText("如 AA 55")
             self._bind_header_edit.setText(bd.get("frameHeader", ""))
-            self._bind_header_edit.textChanged.connect(self._on_binding_changed)
+            self._bind_header_edit.textChanged.connect(self._binding_slot("frameHeader"))
             self._bind_header_label = BodyLabel("帧头(HEX)")
             binding_rows.add(self._bind_header_label, self._bind_header_edit)
 
             self._bind_tail_edit = LineEdit()
             self._bind_tail_edit.setPlaceholderText("如 0D 0A")
             self._bind_tail_edit.setText(bd.get("frameTail", ""))
-            self._bind_tail_edit.textChanged.connect(self._on_binding_changed)
+            self._bind_tail_edit.textChanged.connect(self._binding_slot("frameTail"))
             self._bind_tail_label = BodyLabel("帧尾(HEX)")
             binding_rows.add(self._bind_tail_label, self._bind_tail_edit)
 
             self._bind_mb_area_combo = ComboBox()
             self._bind_mb_area_combo.addItems(list(MODBUS_AREAS))
             self._bind_mb_area_combo.setCurrentText(bd.get("mbArea", DEFAULT_MODBUS_AREA))
-            self._bind_mb_area_combo.currentTextChanged.connect(self._on_binding_changed)
+            self._bind_mb_area_combo.currentTextChanged.connect(self._binding_slot("mbArea"))
             self._bind_mb_area_label = BodyLabel("寄存器区")
             binding_rows.add(self._bind_mb_area_label, self._bind_mb_area_combo)
 
             self._bind_mb_reg_spin = SpinBox()
             self._bind_mb_reg_spin.setRange(0, 65535)
             self._bind_mb_reg_spin.setValue(int(bd.get("mbRegIndex", 0)))
-            self._bind_mb_reg_spin.valueChanged.connect(self._on_binding_changed)
+            self._bind_mb_reg_spin.valueChanged.connect(self._binding_slot("mbRegIndex"))
             self._bind_mb_reg_label = BodyLabel("寄存器地址")
             binding_rows.add(self._bind_mb_reg_label, self._bind_mb_reg_spin)
 
@@ -473,28 +477,28 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_dtype_combo.addItems([
                 "uint16", "int16", "uint32", "int32", "float32"])
             self._bind_mb_dtype_combo.setCurrentText(bd.get("mbDataType", "uint16"))
-            self._bind_mb_dtype_combo.currentTextChanged.connect(self._on_binding_changed)
+            self._bind_mb_dtype_combo.currentTextChanged.connect(self._binding_slot("mbDataType"))
             self._bind_mb_dtype_label = BodyLabel("数据类型")
             binding_rows.add(self._bind_mb_dtype_label, self._bind_mb_dtype_combo)
 
             self._bind_mb_regorder_combo = ComboBox()
             self._bind_mb_regorder_combo.addItems(["大端(AB CD)", "小端(CD AB)"])
             self._bind_mb_regorder_combo.setCurrentText(bd.get("mbRegOrder", "大端(AB CD)"))
-            self._bind_mb_regorder_combo.currentTextChanged.connect(self._on_binding_changed)
+            self._bind_mb_regorder_combo.currentTextChanged.connect(self._binding_slot("mbRegOrder"))
             self._bind_mb_regorder_label = BodyLabel("寄存器序")
             binding_rows.add(self._bind_mb_regorder_label, self._bind_mb_regorder_combo)
 
             self._bind_mb_fc_spin = SpinBox()
             self._bind_mb_fc_spin.setRange(-1, 255)
             self._bind_mb_fc_spin.setValue(int(bd.get("mbFcFilter", -1)))
-            self._bind_mb_fc_spin.valueChanged.connect(self._on_binding_changed)
+            self._bind_mb_fc_spin.valueChanged.connect(self._binding_slot("mbFcFilter"))
             self._bind_mb_fc_label = BodyLabel("功能码过滤(-1=全部)")
             binding_rows.add(self._bind_mb_fc_label, self._bind_mb_fc_spin)
 
             self._bind_mb_slave_spin = SpinBox()
             self._bind_mb_slave_spin.setRange(-1, 247)
             self._bind_mb_slave_spin.setValue(int(bd.get("mbSlaveFilter", -1)))
-            self._bind_mb_slave_spin.valueChanged.connect(self._on_binding_changed)
+            self._bind_mb_slave_spin.valueChanged.connect(self._binding_slot("mbSlaveFilter"))
             self._bind_mb_slave_label = BodyLabel("从站过滤(-1=全部)")
             binding_rows.add(self._bind_mb_slave_label, self._bind_mb_slave_spin)
 
@@ -502,7 +506,7 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_period_spin = SpinBox()
             self._bind_mb_period_spin.setRange(0, 60000)
             self._bind_mb_period_spin.setValue(_int_setting(bd.get("mbPeriod", 0), 0))
-            self._bind_mb_period_spin.valueChanged.connect(self._on_binding_changed)
+            self._bind_mb_period_spin.valueChanged.connect(self._binding_slot("mbPeriod"))
             self._bind_mb_period_label = BodyLabel("采集周期(ms)")
             for widget in (self._bind_mb_period_label, self._bind_mb_period_spin):
                 widget.setToolTip("0 = 用默认周期（链路卡片的「默认轮询(ms)」，默认 500）")
@@ -511,7 +515,7 @@ class PropertyEditor(ScrollArea):
             self._bind_expr_edit = LineEdit()
             self._bind_expr_edit.setPlaceholderText("表达式 (如 value * 0.1)")
             self._bind_expr_edit.setText(bd.get("expression", ""))
-            self._bind_expr_edit.textChanged.connect(self._on_binding_changed)
+            self._bind_expr_edit.textChanged.connect(self._binding_slot("expression"))
             binding_rows.add(BodyLabel("转换表达式"), self._bind_expr_edit)
 
             self._layout.addWidget(binding_card)
@@ -668,6 +672,7 @@ class PropertyEditor(ScrollArea):
         else:
             config = serial.get("parserConfig")
             serial["parserConfig"] = {**(config if isinstance(config, dict) else {}), key: value}
+        self.edited.emit(("serial", key))
         signalBus.canvasChanged.emit()
 
     def _card_effective_frame(self):
@@ -697,7 +702,7 @@ class PropertyEditor(ScrollArea):
             return
         # The first edit copies what the card showed, so its other rows keep their values.
         _mode, config = self._card_effective_frame()
-        self._on_prop_changed("parserConfig", {**config, key: value})
+        self._on_prop_changed("parserConfig", {**config, key: value}, field=("parserConfig", key))
 
     def _create_file_picker(self, prop_def: PropDef, current_value) -> QWidget:
         container = QWidget()
@@ -877,7 +882,7 @@ class PropertyEditor(ScrollArea):
                 item.properties.get(f"_tabLayout_{current}", "自由"))
         self._updating = updating
 
-    def _on_prop_changed(self, prop_name: str, value):
+    def _on_prop_changed(self, prop_name: str, value, field=None):
         if self._updating or not self._current_item:
             return
         self._updating = True
@@ -885,6 +890,7 @@ class PropertyEditor(ScrollArea):
         signalBus.widgetPropertyChanged.emit(
             self._current_item.widget_id, prop_name, value
         )
+        self.edited.emit((self._current_item.widget_id, field or prop_name))
         signalBus.canvasChanged.emit()
         self._updating = False
 
@@ -975,6 +981,7 @@ class PropertyEditor(ScrollArea):
             value = max(item.min_height(), value)
             item.set_rect(QRectF(0, 0, rect.width(), value))
 
+        self.edited.emit((item.widget_id, attr))
         signalBus.canvasChanged.emit()
         self._updating = False
 
@@ -996,9 +1003,12 @@ class PropertyEditor(ScrollArea):
 
     def _on_bind_mode_changed(self, mode: str):
         self._apply_bind_mode_visibility(mode)
-        self._on_binding_changed()
+        self._on_binding_changed("parseMode")
 
-    def _on_binding_changed(self, _=None):
+    def _binding_slot(self, field):
+        return lambda *_: self._on_binding_changed(field)
+
+    def _on_binding_changed(self, field):
         if self._updating or not self._current_item:
             return
         if not hasattr(self, "_bind_mode_combo"):
@@ -1035,4 +1045,5 @@ class PropertyEditor(ScrollArea):
             }
         else:
             self._current_item.binding = None
+        self.edited.emit((self._current_item.widget_id, "binding", field))
         signalBus.canvasChanged.emit()

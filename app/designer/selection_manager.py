@@ -59,19 +59,46 @@ def align_bottom(scene: DesignScene):
     _align(scene, "bottom")
 
 
+def _align_center(scene: DesignScene, horizontal: bool):
+    """Centre the selection on the middle of its bounding box, across or down."""
+    items = selected_items(scene)
+    if len(items) < 2:
+        return
+    rects = [(item, item.mapRectToScene(item.rect())) for item in items]
+    if horizontal:
+        middle = (min(r.left() for _, r in rects) + max(r.right() for _, r in rects)) / 2
+        for item, rect in rects:
+            _move_by_scene_delta(item, QPointF(middle - rect.center().x(), 0))
+    else:
+        middle = (min(r.top() for _, r in rects) + max(r.bottom() for _, r in rects)) / 2
+        for item, rect in rects:
+            _move_by_scene_delta(item, QPointF(0, middle - rect.center().y()))
+
+
+def align_horizontal_center(scene: DesignScene):
+    _align_center(scene, True)
+
+
+def align_vertical_center(scene: DesignScene):
+    _align_center(scene, False)
+
+
 def _distribute(scene: DesignScene, horizontal: bool):
+    """Equal gaps between the selected widgets, the outermost two staying where they are."""
     items = selected_items(scene)
     if len(items) < 3:
         return
-    edge = "left" if horizontal else "top"
-    coordinates = sorted(
-        ((item, getattr(item.mapRectToScene(item.rect()), edge)()) for item in items),
-        key=lambda entry: (entry[1], entry[0].widget_id))
-    start, stop = coordinates[0][1], coordinates[-1][1]
-    spacing = (stop - start) / (len(coordinates) - 1)
-    for index, (item, coordinate) in enumerate(coordinates):
-        delta = start + index * spacing - coordinate
+    rects = sorted(((item, item.mapRectToScene(item.rect())) for item in items),
+                   key=lambda entry: ((entry[1].left() if horizontal else entry[1].top()), entry[0].widget_id))
+    start = min(r.left() if horizontal else r.top() for _, r in rects)
+    stop = max(r.right() if horizontal else r.bottom() for _, r in rects)
+    sizes = sum(r.width() if horizontal else r.height() for _, r in rects)
+    gap = (stop - start - sizes) / (len(rects) - 1)
+    cursor = start
+    for item, rect in rects:
+        delta = cursor - (rect.left() if horizontal else rect.top())
         _move_by_scene_delta(item, QPointF(delta, 0) if horizontal else QPointF(0, delta))
+        cursor += (rect.width() if horizontal else rect.height()) + gap
 
 
 def distribute_horizontal(scene: DesignScene):

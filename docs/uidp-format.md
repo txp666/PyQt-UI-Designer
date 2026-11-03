@@ -83,6 +83,7 @@ python tools/check_uidp.py motor.uidp
 | `canvas` | 画布宽、高（1–9999 的整数）和网格大小 |
 | `serial` | 工程默认的帧格式：`parser` 和 `parserConfig`，见下面「解析收到的数据」。名字叫 serial，但对所有链路都有效 |
 | `widgets` | 控件数组 |
+| `icon` | 可选，应用图标：PNG、JPG 或 ICO 图片的路径，相对 .uidp 所在的文件夹。导出的应用用它做窗口、任务栏和程序图标；不写时用默认图标 |
 
 每个控件：
 
