@@ -141,25 +141,26 @@ class ChartResilienceTests(unittest.TestCase):
             assert not errors, errors
         """)
 
-    def test_plot_keeps_its_width_while_readings_change_length(self):
+    def test_legend_entries_keep_their_places_while_readings_change_length(self):
         self.run_both("""
             chart.configure([{"name": "目标", "key": "tgt"}, {"name": "实际", "key": "pos"}])
             chart.resize(700, 300)
             chart.show()
-            widths = []
+            places = []
+            def measure():
+                header = chart._header
+                places.append(tuple(header.entry_rect(i).x() for i in range(len(header.entry_texts()))))
             def settle():
                 chart._refresh_all()
-                chart.layout().activate()
-                widths.append(chart._plot.width())
+                measure()
             for pos in (100, 99.82, 100, 137.5, 90, -5.25, 0.001234, 100):
                 serial.dataReceived.emit({"tgt": 100, "pos": pos})
                 settle()
-            chart._update_table_at_cursor(123.0)  # the cursor reading replaces 实时
-            chart.layout().activate()
-            widths.append(chart._plot.width())
+            chart._show_cursor_values(123.0)  # past the samples, so both read --
+            measure()
             chart._mode_label.setText("实时")
             settle()
-            assert len(set(widths)) == 1, widths
+            assert len(set(places)) == 1, places
         """)
 
     def test_loaded_recording_overlays_the_live_curves(self):
@@ -177,15 +178,16 @@ class ChartResilienceTests(unittest.TestCase):
             assert chart._ref_curves[0].opts["pen"].style() == Qt.DashLine
             assert not chart._clear_ref_btn.isHidden()
             def readings():
-                return [lbl.text().split()[-1] for lbl in chart._val_labels + chart._ref_labels]
-            assert readings() == ["3.9", "3.5"], readings()  # live now, and the recording at the same sample
-            chart._update_table_at_cursor(1.0)
-            assert readings() == ["4", "3.8"], readings()  # the cursor reads both
+                return chart._header.entry_texts()
+            # live now, and the recording at the same sample
+            assert readings() == ["电压 3.9", "电压（上周） 3.5"], readings()
+            chart._show_cursor_values(1.0)
+            assert readings() == ["电压 4", "电压（上周） 3.8"], readings()  # the cursor reads both
             serial.dataReceived.emit({"v": 3.8})
             chart.save_data(Path("本次.csv"))
             assert Path("本次.csv").read_text(encoding="utf-8").split() == ["电压", "4.1", "4.0", "3.9", "3.8"]
             chart.clear_reference()
-            assert chart._ref_curves == [] and chart._ref_labels == [] and chart._clear_ref_btn.isHidden()
+            assert chart._ref_curves == [] and readings() == ["电压 3.8"] and chart._clear_ref_btn.isHidden()
             assert [list(h.values()) for h in chart._data] == [[4.1, 4.0, 3.9, 3.8]]
             path.write_text("电压\\n1\\nnan\\n", encoding="utf-8")
             try:

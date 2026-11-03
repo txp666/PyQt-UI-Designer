@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtCore import QEvent, Qt, QTimer
-from PyQt5.QtTest import QSignalSpy
+from PyQt5.QtTest import QSignalSpy, QTest
 from PyQt5.QtWidgets import QApplication
 from PyQt5 import sip
 
@@ -24,10 +24,9 @@ from app.core.protocol_parser import RawFrameBuffer
 from types import SimpleNamespace
 
 
-def click_legend_sample(chart, index):
-    """Click a curve's sample in the chart legend, as a user does to hide or show that curve."""
-    sample = chart._legend.items[index][0]
-    sample.mouseClickEvent(SimpleNamespace(button=lambda: Qt.LeftButton, accept=lambda: None))
+def click_legend_entry(chart, index):
+    """Click a curve's entry in the chart's header, as a user does to hide or show that curve."""
+    QTest.mouseClick(chart._header, Qt.LeftButton, Qt.NoModifier, chart._header.entry_rect(index).center().toPoint())
 
 
 class ChartTests(unittest.TestCase):
@@ -155,7 +154,7 @@ class ChartTests(unittest.TestCase):
                 with self.subTest(runtime=cls.__module__, format=extension):
                     chart = self.make_chart(cls)
                     chart.configure(cfgs)
-                    click_legend_sample(chart, 1)
+                    click_legend_entry(chart, 1)
                     self.assertFalse(chart._curves[1].isVisible())
                     chart.append_value(0, 999)
                     chart.on_raw(bytes.fromhex("aa5501"))
