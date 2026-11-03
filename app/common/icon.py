@@ -1,5 +1,5 @@
 # coding: utf-8
-"""The icons widget types show in the palette."""
+"""The icons widget types show in the palette, and the designer's panel switches."""
 from enum import Enum
 from pathlib import Path
 
@@ -9,8 +9,8 @@ _FOLDER = Path(__file__).resolve().parents[1] / "resource" / "widget_icons"
 
 
 class WidgetIcon(FluentIconBase, Enum):
-    """Pictures of controls that qfluentwidgets has no icon for, drawn in its style, one file per theme.
-    FluentHMI Studio has the same files under the same names."""
+    """Pictures of controls that qfluentwidgets has no icon for, and of the designer's side panels shown or
+    hidden, drawn in its style, one file per theme. FluentHMI Studio has the same files under the same names."""
 
     BUTTON = "Button"
     TEXT_FIELD = "TextField"
@@ -29,6 +29,10 @@ class WidgetIcon(FluentIconBase, Enum):
     PROGRESS_RING = "ProgressRing"
     TABLE = "Table"
     SERIAL_PORT = "SerialPort"
+    PANEL_LEFT = "PanelLeft"
+    PANEL_LEFT_ON = "PanelLeftOn"
+    PANEL_RIGHT = "PanelRight"
+    PANEL_RIGHT_ON = "PanelRightOn"
 
     def path(self, theme=Theme.AUTO):
         return (_FOLDER / f"{self.value}_{getIconColor(theme)}.svg").as_posix()

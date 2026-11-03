@@ -28,6 +28,7 @@ from app.designer.palette import WidgetPalette
 from app.designer.property_editor import PropertyEditor
 from app.designer import selection_manager as sel
 from app.common.config import cfg
+from app.common.icon import WidgetIcon
 from app.common.signal_bus import signalBus
 from app.core.project import ProjectManager, rebased_asset_path
 from app.core.signal_lifetime import SignalConnections
@@ -172,6 +173,10 @@ class DesignerInterface(QWidget):
             bar.addAction(action)
             return action
 
+        # The side panels' switches sit at the two ends of the bar; the canvas takes a hidden panel's room.
+        self._palette_action = add(WidgetIcon.PANEL_LEFT_ON, "隐藏控件库", lambda: self._toggle_panel(
+            self._palette, self._palette_action, "控件库", WidgetIcon.PANEL_LEFT, WidgetIcon.PANEL_LEFT_ON))
+        bar.addSeparator()
         add(FIF.ADD, "新建", self.newRequested.emit, QKeySequence.New)
         add(FIF.FOLDER, "打开", self.openRequested.emit, QKeySequence.Open)
         add(FIF.SAVE, "保存", self.saveRequested.emit, QKeySequence.Save)
@@ -201,8 +206,19 @@ class DesignerInterface(QWidget):
         add(FIF.ZOOM_OUT, "缩小", lambda: self._view.zoom_by(1 / 1.15), QKeySequence.ZoomOut)
         add(FIF.FIT_PAGE, "适应窗口", lambda: self._view.fit_canvas(), "Ctrl+0")
         add(FIF.ZOOM, "实际大小", lambda: self._view.reset_zoom())
+        bar.addSeparator()
+        self._properties_action = add(WidgetIcon.PANEL_RIGHT_ON, "隐藏属性", lambda: self._toggle_panel(
+            self._prop_editor, self._properties_action, "属性", WidgetIcon.PANEL_RIGHT, WidgetIcon.PANEL_RIGHT_ON))
 
         return bar
+
+    @staticmethod
+    def _toggle_panel(panel, action, title, hidden_icon, shown_icon):
+        shown = panel.isHidden()
+        panel.setVisible(shown)
+        action.setIcon(shown_icon if shown else hidden_icon)
+        action.setText(("隐藏" if shown else "显示") + title)
+        action.setToolTip(action.text())
 
     def _on_grid_setting(self, shown):
         self._grid_action.setChecked(shown)
