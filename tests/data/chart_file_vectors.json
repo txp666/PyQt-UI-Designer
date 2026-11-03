@@ -1,0 +1,217 @@
+{
+ "_note": "Generated from PyQt UI Designer's RealtimeLineChart.save_data/_read_history. save: names + values -> exact file text (CSV rows end with CRLF). load: file text -> names + values, or error true when loading must fail.",
+ "save": [
+  {
+   "title": "unique names, uneven lengths, quoting and number forms",
+   "names": [
+    "温度",
+    "压力,kPa",
+    "say \"hi\""
+   ],
+   "values": [
+    [
+     0.0,
+     1.5,
+     -2.25,
+     0.1,
+     1e-05,
+     0.0001,
+     123456789.0,
+     1e+16,
+     3.0000000000000004,
+     -0.0
+    ],
+    [
+     100.0,
+     0.30000000000000004,
+     0.3333333333333333,
+     9007199254740992.0,
+     1e+22,
+     5e-324
+    ],
+    [
+     7.0
+    ]
+   ],
+   "csv": "温度,\"压力,kPa\",\"say \"\"hi\"\"\"\r\n0.0,100.0,7.0\r\n1.5,0.30000000000000004,\r\n-2.25,0.3333333333333333,\r\n0.1,9007199254740992.0,\r\n1e-05,1e+22,\r\n0.0001,5e-324,\r\n123456789.0,,\r\n1e+16,,\r\n3.0000000000000004,,\r\n-0.0,,\r\n",
+   "json": "{\"温度\":[0.0,1.5,-2.25,0.1,1e-05,0.0001,123456789.0,1e+16,3.0000000000000004,-0.0],\"压力,kPa\":[100.0,0.30000000000000004,0.3333333333333333,9007199254740992.0,1e+22,5e-324],\"say \\\"hi\\\"\":[7.0]}"
+  },
+  {
+   "title": "duplicate names use the channel array form",
+   "names": [
+    "曲线1",
+    "曲线1"
+   ],
+   "values": [
+    [
+     1.0,
+     2.0
+    ],
+    [
+     3.5
+    ]
+   ],
+   "csv": "曲线1,曲线1\r\n1.0,3.5\r\n2.0,\r\n",
+   "json": "[{\"name\":\"曲线1\",\"values\":[1.0,2.0]},{\"name\":\"曲线1\",\"values\":[3.5]}]"
+  },
+  {
+   "title": "a channel with no samples",
+   "names": [
+    "a",
+    "b"
+   ],
+   "values": [
+    [],
+    [
+     42.0
+    ]
+   ],
+   "csv": "a,b\r\n,42.0\r\n",
+   "json": "{\"a\":[],\"b\":[42.0]}"
+  }
+ ],
+ "load": [
+  {
+   "title": "csv: CRLF, quoted names, blank and spaced cells",
+   "format": "csv",
+   "text": "温度,\"压力,kPa\"\r\n1,2.5\r\n, 3 \r\n1e3,\r\n-0.5,+.5\r\n",
+   "names": [
+    "温度",
+    "压力,kPa"
+   ],
+   "values": [
+    [
+     1.0,
+     1000.0,
+     -0.5
+    ],
+    [
+     2.5,
+     3.0,
+     0.5
+    ]
+   ]
+  },
+  {
+   "title": "csv: LF line ends and a short row",
+   "format": "csv",
+   "text": "x,y\n1\n2,3\n",
+   "names": [
+    "x",
+    "y"
+   ],
+   "values": [
+    [
+     1.0,
+     2.0
+    ],
+    [
+     3.0
+    ]
+   ]
+  },
+  {
+   "title": "csv: header only",
+   "format": "csv",
+   "text": "x,y\r\n",
+   "names": [
+    "x",
+    "y"
+   ],
+   "values": [
+    [],
+    []
+   ]
+  },
+  {
+   "title": "json: object form, integers become floats, null skipped",
+   "format": "json",
+   "text": "{\"温度\": [1, 2.5, null, -3e2], \"压力\": []}",
+   "names": [
+    "温度",
+    "压力"
+   ],
+   "values": [
+    [
+     1.0,
+     2.5,
+     -300.0
+    ],
+    []
+   ]
+  },
+  {
+   "title": "json: channel array form with duplicate names",
+   "format": "json",
+   "text": "[{\"name\": \"a\", \"values\": [1]}, {\"name\": \"a\", \"values\": [2, 3]}]",
+   "names": [
+    "a",
+    "a"
+   ],
+   "values": [
+    [
+     1.0
+    ],
+    [
+     2.0,
+     3.0
+    ]
+   ]
+  },
+  {
+   "title": "csv: text that is not a number",
+   "format": "csv",
+   "text": "x\nabc\n",
+   "error": true,
+   "_python_error": "ValueError: could not convert string to float: 'abc'"
+  },
+  {
+   "title": "csv: not finite",
+   "format": "csv",
+   "text": "x\nnan\n",
+   "error": true,
+   "_python_error": "ValueError: 曲线样本必须是有限数"
+  },
+  {
+   "title": "json: neither object nor array",
+   "format": "json",
+   "text": "5",
+   "error": true,
+   "_python_error": "ValueError: 曲线 JSON 必须是对象或通道数组"
+  },
+  {
+   "title": "json: array entry without values",
+   "format": "json",
+   "text": "[{\"name\": \"a\"}]",
+   "error": true,
+   "_python_error": "ValueError: 曲线 JSON 通道必须包含 name 和 values"
+  },
+  {
+   "title": "json: name that is not text",
+   "format": "json",
+   "text": "[{\"name\": 1, \"values\": []}]",
+   "error": true,
+   "_python_error": "ValueError: 曲线 JSON 通道名称必须是文本，样本必须是数组"
+  },
+  {
+   "title": "json: values that are not an array",
+   "format": "json",
+   "text": "{\"a\": 1}",
+   "error": true,
+   "_python_error": "ValueError: 曲线 JSON 通道名称必须是文本，样本必须是数组"
+  },
+  {
+   "title": "json: a sample that is text",
+   "format": "json",
+   "text": "{\"a\": [\"1\"]}",
+   "names": [
+    "a"
+   ],
+   "values": [
+    [
+     1.0
+    ]
+   ]
+  }
+ ]
+}
