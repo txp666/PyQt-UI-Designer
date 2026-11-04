@@ -16,10 +16,11 @@ QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 
 app = QApplication(sys.argv)
-from qfluentwidgets import qconfig
+from qfluentwidgets import qconfig, setThemeColor
 if sys.platform == "darwin" and hasattr(qconfig, "fontFamilies"):
     qconfig.set(qconfig.fontFamilies, ["PingFang SC", "Helvetica Neue"], save=False)
 
+setThemeColor('#009faa')
 from theme_support import ThemeController
 theme_controller = ThemeController(app, 'Auto')
 

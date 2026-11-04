@@ -6,7 +6,7 @@ from PyQt5.QtGui import QPainter, QColor, QFont, QPixmap
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
-from qfluentwidgets import ProgressBar, ProgressRing, BodyLabel, CaptionLabel, isDarkTheme, qconfig
+from qfluentwidgets import ProgressBar, ProgressRing, BodyLabel, CaptionLabel, isDarkTheme, qconfig, themeColor
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
@@ -114,6 +114,7 @@ class NumericDisplay(QWidget):
         self.apply_theme()
         self._theme_connections = SignalConnections(self)
         self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
+        self._theme_connections.connect(qconfig.themeColorChanged, self.apply_theme)
 
     def apply_theme(self):
         secondary = "#b3b3b3" if isDarkTheme() else "#606060"
@@ -139,7 +140,8 @@ class NumericDisplay(QWidget):
         self._update_value_style()
 
     def _update_value_style(self):
-        color = getattr(self, "_val_color", "#0078d4")
+        # The value takes the theme colour, as FluentHMI Studio's does, unless one was set.
+        color = getattr(self, "_val_color", None) or themeColor().name()
         size = getattr(self, "_val_font_size", 28)
         self._value_label.setStyleSheet(
             f"font-size: {size}px; font-weight: bold; color: {color};"

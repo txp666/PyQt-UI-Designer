@@ -8,7 +8,9 @@ import sys
 from app.common.build_support import (
     archive_build, build_environment, build_nuitka_command,
 )
-from app.common.metadata import APP_NAME, APP_VERSION
+from app.common.metadata import (
+    APP_BUNDLE_ID, APP_COMPANY, APP_DESCRIPTION, APP_NAME, APP_VERSION,
+)
 
 
 def main():
@@ -18,7 +20,9 @@ def main():
     options = parser.parse_args()
     root = Path(__file__).resolve().parent
     result = subprocess.run(
-        build_nuitka_command(root, [sys.executable], APP_NAME, options.version),
+        build_nuitka_command(root, [sys.executable], APP_NAME, options.version,
+                             bundle_id=APP_BUNDLE_ID, description=APP_DESCRIPTION,
+                             company=APP_COMPANY),
         cwd=str(root), env=build_environment(),
     )
     if result.returncode:
