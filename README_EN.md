@@ -145,6 +145,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **TCP client / server**: connect to a device as a client, or listen on a port and let devices connect in; the server accepts several devices at once and frames each connection separately
 - **MQTT subscribe / publish**: connect to a broker and subscribe to one or more topics (with `+` and `#` wildcards) to receive data, and publish commands to a chosen topic; supports username and password, QoS 0/1/2 and TLS
 - All three links share the same parser modes, data bindings, charts, tables and logs, and commands go to every connected link
+- Every link card has a link of its own, so a project can hold several cards of one kind, each connected on its own: two serial ports, say, a TCP server next to a TCP client, or two MQTT brokers
 - **Key-value matching**: parses `key1=value1,key2=value2`, top-level JSON fields, or CSV (channels are named `ch0`, `ch1`… automatically)
 - **JSON path**: parses JSON data, including nested paths
 - **HEX byte extraction**: extracts data from binary frames by offset, with several data types

@@ -61,7 +61,7 @@ python main.py
 | `project.uidp` | 可用设计器「打开」继续编辑的源工程 |
 | `main.py` | 生成的程序入口 |
 | `ui.py` | 生成的界面、图表和控件 |
-| `comm_hub.py` | 生成的通信汇总：串口、TCP、MQTT 三条链路共用一组信号 |
+| `comm_hub.py` | 生成的通信汇总：每张链路卡片把自己的链路登记在这里，所有链路共用一组信号 |
 | `serial_handler.py` | 生成的串口线程及协议解析器 |
 | `tcp_handler.py` | 生成的 TCP 客户端 / 服务端链路（本示例未放置 TCP 卡片，随导出一并生成） |
 | `mqtt_handler.py` | 生成的 MQTT 链路（同上） |
