@@ -16,7 +16,8 @@
 - [三、下行发送协议（发送）](#三下行发送协议发送)
   - [1. 文本模式](#1-文本模式)
   - [2. HEX模式](#2-hex模式)
-  - [3. Modbus模式](#3-modbus模式)（含[接 PLC：自动轮询](#接-plc自动轮询)）
+  - [3. JSON模式](#3-json模式)
+  - [4. Modbus模式](#4-modbus模式)（含[接 PLC：自动轮询](#接-plc自动轮询)）
 - [四、行协议自动识别规则](#四行协议自动识别规则)
 - [五、Modbus 帧格式参考](#五modbus-帧格式参考)
 - [六、传输链路：串口、TCP、UDP、MQTT](#六传输链路串口tcpudpmqtt)
@@ -34,7 +35,7 @@
 │          │  解析器输出 ──┤                                                │
 │          │              └─ serialDataReceived ─→ 键值/JSON/MB            │
 │          │                                                               │
-│          │  ←── 所有已连接的链路 ←──  文本/HEX/Modbus帧  ←── 控件操作      │
+│          │  ←── 所有已连接的链路 ←──  文本/HEX/JSON/Modbus帧  ←── 控件操作 │
 └──────────┘                                                    └──────────┘
 ```
 
@@ -729,7 +730,54 @@ byteOrder: 大端(BE)
 
 ---
 
-### 3. Modbus模式
+### 3. JSON模式
+
+把值填进 JSON 模板，作为一条 JSON 发送。
+
+#### 参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `command` | string | 发送内容 |
+| `commandTemplate` | string | JSON 模板，默认 `{value}`，`{value}` 被替换为值的 JSON |
+| `commandJsonNewline` | enum | `无`（默认） / `\\r\\n` / `\\n` / `\\r` |
+
+- 值是合法 JSON（`1`、`true`、`{"a":1}`）就照用，否则转义成字符串；输入框也一样，输入 `"123"` 才发字符串。
+- 模板须是一个合法 JSON，`{value}` 不能在引号里；没有 `{value}` 就发模板本身。无效时不发，提示 `JSON 模板无效: <模板>`。
+- 字符串以外的空白去掉后发送。
+
+#### 示例
+
+**开关**
+
+```
+控件: ToggleSwitch (onCommand: 1, offCommand: 0)
+commandTemplate: {"led":{value}}
+```
+
+打开 → 发送：`{"led":1}`；关闭 → 发送：`{"led":0}`
+
+**滑块**
+
+```
+控件: Slider (当前值 75, sendOnChange: true)
+commandTemplate: {"cmd":"setSpeed","value":{value}}
+```
+
+拖动到75 → 发送：`{"cmd":"setSpeed","value":75}`
+
+**输入框**
+
+```
+控件: LineEdit (用户输入 say "hi", sendOnEnter: true)
+commandTemplate: {"name":{value}}
+```
+
+回车 → 发送：`{"name":"say \"hi\""}`
+
+---
+
+### 4. Modbus模式
 
 自动构建标准 Modbus 请求帧，并按链路选择帧格式：解析模式为 `modbus_tcp` 的链路收到 Modbus TCP 请求（MBAP 头，事务标识符逐帧递增，无 CRC），解析模式为 `modbus_ascii` 的链路收到 Modbus ASCII 请求（`:`、大写十六进制、LRC、`\r\n`，见[五、Modbus ASCII](#modbus-ascii)），其余链路收到 Modbus RTU 请求（含 CRC16 校验）。控件只配置从站、功能码、地址和值，不需要区分 RTU、TCP 和 ASCII。
 
@@ -885,7 +933,7 @@ mbDataType: float32
 | `第 2 块无响应（从站 1 功能码 3 地址 200）` | 上一轮出问题的块里排在最前的一块超时 |
 | `第 2 块异常 02 非法数据地址` | 上一轮出问题的块里排在最前的一块收到异常响应 |
 
-**手动读写。** 要手动发一条 Modbus 请求（读一次某个地址、写一个寄存器或线圈），放一个按钮、输入框、开关等控件，把命令模式设成 `Modbus`（见[3. Modbus模式](#3-modbus模式)）。这些请求同样经过链路的请求队列，排在读请求前面。
+**手动读写。** 要手动发一条 Modbus 请求（读一次某个地址、写一个寄存器或线圈），放一个按钮、输入框、开关等控件，把命令模式设成 `Modbus`（见[4. Modbus模式](#4-modbus模式)）。这些请求同样经过链路的请求队列，排在读请求前面。
 
 例如示例 `10-PLC恒压供水.uidp` 里那些绑定（保持寄存器 100、102 的 float32，104、105，200 的 float32，线圈 0–3），自动规划成三块：`从站 1 功能码 1 地址 0 数量 4`、`从站 1 功能码 3 地址 100 数量 6`、`从站 1 功能码 3 地址 200 数量 2`，每块 500 ms 读一次，一次一条。
 

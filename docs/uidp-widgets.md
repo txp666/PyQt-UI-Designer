@@ -12,9 +12,10 @@
 
 - `text`（文本，文本）默认 `"按钮"`
 - `enabled`（启用，true/false）默认 `true`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"Modbus"`
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `command`（发送内容，命令）默认 `""`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`
+- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `frameHeader`（帧头(HEX)，文本）默认 `""`
 - `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -51,8 +52,9 @@
 - `text`（默认值，文本）默认 `""`
 - `readOnly`（只读，true/false）默认 `false`
 - `sendOnEnter`（回车发送，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"Modbus"`
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`
+- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `frameHeader`（帧头(HEX)，文本）默认 `""`
 - `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -72,8 +74,9 @@
 - `currentIndex`（默认选项，整数）默认 `0`，范围 0–99
 - `sendOnSelect`（选中发送，true/false）默认 `false`
 - `commands`（发送命令表，多行文本）默认 `""`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"Modbus"`
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`
+- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `frameHeader`（帧头(HEX)，文本）默认 `""`
 - `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -92,10 +95,11 @@
 
 - `label`（标签，文本）默认 `"开关"`
 - `checked`（默认开启，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"Modbus"`
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `onCommand`（开启命令，命令）默认 `""`
 - `offCommand`（关闭命令，命令）默认 `""`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`
+- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `frameHeader`（帧头(HEX)，文本）默认 `""`
 - `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -117,8 +121,9 @@
 - `maximum`（最大值，整数）默认 `100`，范围 -99999–99999
 - `value`（默认值，整数）默认 `50`，范围 -99999–99999
 - `sendOnChange`（变化发送，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"Modbus"`
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`
+- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `frameHeader`（帧头(HEX)，文本）默认 `""`
 - `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
@@ -139,8 +144,9 @@
 - `value`（默认值，整数）默认 `0`，范围 -99999–99999
 - `suffix`（后缀，文本）默认 `""`
 - `sendOnChange`（变化发送，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"Modbus"`
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`
+- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `frameHeader`（帧头(HEX)，文本）默认 `""`
 - `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`

@@ -197,7 +197,7 @@ https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.
 
 1. **设计界面**：从左侧控件面板把控件拖到画布上，在右侧属性编辑器里配置属性。
 2. **绑定数据**：选中显示类控件（数值显示、LED、进度条等），设置"绑定键"（设备数据中的字段名）和"解析模式"（键值匹配、JSON 路径、HEX 字节提取或 Modbus）。
-3. **配置命令**：选中交互类控件（按钮、开关、滑块等），设置发送模式（文本、HEX 或 Modbus）、命令内容，以及可选的 `{value}` 命令模板。
+3. **配置命令**：选中交互类控件（按钮、开关、滑块等），设置发送模式（文本、HEX、JSON 或 Modbus）、命令内容，以及可选的 `{value}` 命令模板。
 4. **预览运行**：切换到"预览运行"页面，点击"运行预览"，用串口、TCP、UDP 或 MQTT 配置卡片连接设备后即可实时测试。
 5. **导出与打包**：导出代码的快捷键在 Windows 上是 `Ctrl+Shift+E`，在 Mac 上是 `⌘⇧E`，也可以点击导航栏的"导出代码"；在预览页面点击"一键打包"，选择目录后会自动导出、用 Nuitka 编译并压缩。打包需要本机有 C/C++ 编译器：macOS 使用 Xcode Command Line Tools，Windows 使用 Nuitka 支持的编译器（Python 3.13+ 使用 MSVC）。
 

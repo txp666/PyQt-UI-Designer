@@ -175,6 +175,7 @@ python tools/check_uidp.py motor.uidp
 
 - **`"文本"`（默认）**：`commandTemplate` 里的 `{value}` 换成要发的值，末尾加 `commandNewline`。`commandNewline` 可选 `"无"`、`"\\r\\n"`（默认）、`"\\n"`、`"\\r"`。在 JSON 里要写成两个反斜杠，因为这个值是反斜杠加字母的文字。
 - **`"HEX"`**：`dataType` 为 `"HEX字符串"` 时，值本身就是 HEX 文本（如 `"01 03 00 00"`）；为数值类型时，按 `dataType` 和 `byteOrder` 打包后放进模板。可加 `frameHeader` / `frameTail`。
+- **`"JSON"`**：`commandTemplate` 里的 `{value}` 换成值的 JSON：值本身是合法 JSON（`1`、`true`、`{"a":1}`）就照用，否则当字符串、自动转义，输入框也一样。如 `{"cmd":"setSpeed","value":{value}}` 发 `{"cmd":"setSpeed","value":75}`。整条须是合法 JSON（`{value}` 不能在引号里），去掉空白后发，末尾加 `commandJsonNewline`（默认 `"无"`）。
 - **`"Modbus"`**：用 `mbSlave`、`mbFunc`（如 `"06 写单寄存器"`）、`mbAddress` 组请求；连接的链路解析模式是 `modbus_tcp` 时自动用 MBAP 帧，`modbus_ascii` 时用 ASCII 帧，否则用 RTU 帧加 CRC。`mbDataType`（默认 `"uint16"`）和 `mbRegOrder` 决定写入的值怎么放进寄存器：`"06 写单寄存器"` 可用 `"uint16"`、`"int16"`；`"16 写多个寄存器"` 还可用 `"uint32"`、`"int32"`、`"float32"`，32 位类型写两个寄存器。按钮写的值是 `mbValue`，只能是整数（int16、int32 可以是负数）；写小数用输入框。
 
 每种控件发什么值：
@@ -183,7 +184,7 @@ python tools/check_uidp.py motor.uidp
 | --- | --- | --- |
 | `PushButton` | `command` | 点击 |
 | `ToggleSwitch` | 打开时 `onCommand`，关闭时 `offCommand` | 用户拨动 |
-| `Slider`、`SpinBox` | 当前数值 | `sendOnChange` 为 `true` 时数值一变就发；拖动滑块时不发，松手发一次（键盘、滚轮每一步都发）；文本和 HEX 模式不打开它就不发 |
+| `Slider`、`SpinBox` | 当前数值 | `sendOnChange` 为 `true` 时数值一变就发；拖动滑块时不发，松手发一次（键盘、滚轮每一步都发）；Modbus 以外的模式不打开它就不发 |
 | `LineEdit` | 输入的文字 | `sendOnEnter` 为 `true` 时按回车 |
 | `ComboBox` | `commands` 里和选项同一行的命令（多行文本，一行对应 `items` 的一项）；那一行是空的就发选项文字本身 | `sendOnSelect` 为 `true` 时选中 |
 
