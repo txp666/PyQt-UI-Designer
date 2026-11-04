@@ -6,6 +6,7 @@ from .modbus_master import (  # noqa: F401  (_transaction: the MBAP counter, for
     _transaction, modbus_dispatch, modbus_frame as _modbus_frame, next_modbus_transaction,
 )
 from .modbus_slave import AREA_TABLES
+from .i18n import tr
 
 
 def _command_hex(text):
@@ -16,7 +17,7 @@ def _command_hex(text):
     try:
         return bytes.fromhex(compact)
     except ValueError as exc:
-        raise ValueError("HEX 格式错误，请检查内容、帧头和帧尾") from exc
+        raise ValueError(tr("HEX 格式错误，请检查内容、帧头和帧尾")) from exc
 
 
 def command_hex_frame(command, header="", tail=""):
@@ -30,40 +31,40 @@ def command_packed_frame(value, fmt, cast=int, template="{value}", header="", ta
             raise ValueError("non-finite value")
         payload = struct.pack(fmt, number)
     except (TypeError, ValueError, OverflowError, struct.error) as exc:
-        raise ValueError("数值无效或超出数据类型范围") from exc
+        raise ValueError(tr("数值无效或超出数据类型范围")) from exc
     return command_hex_frame(template.replace("{value}", payload.hex()), header, tail)
 
 
 # Function codes by the names the designer shows, for widgets and exports.
 MODBUS_FUNCTIONS = {
-    "01 读线圈": 0x01, "02 读离散输入": 0x02,
-    "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
-    "05 写单线圈": 0x05, "06 写单寄存器": 0x06, "16 写多个寄存器": 0x10,
+    "01 读线圈": 0x01, "02 读离散输入": 0x02,  # i18n: value
+    "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,  # i18n: value
+    "05 写单线圈": 0x05, "06 写单寄存器": 0x06, "16 写多个寄存器": 0x10,  # i18n: value
 }
 MODBUS_DATA_TYPES = ("uint16", "int16", "uint32", "int32", "float32")
-MODBUS_ORDERS = ("大端(AB CD)", "小端(CD AB)")
+MODBUS_ORDERS = ("大端(AB CD)", "小端(CD AB)")  # i18n: value
 _REGISTER_FORMATS = {"uint16": "H", "int16": "h", "uint32": "I", "int32": "i", "float32": "f"}
 
 
-def modbus_registers(value, data_type="uint16", reg_order="大端(AB CD)"):
+def modbus_registers(value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A value as the 16-bit registers that hold it: one for 16-bit types, two for 32-bit ones."""
     fmt = _REGISTER_FORMATS.get(data_type)
     if fmt is None:
-        raise ValueError(f"未知的 Modbus 数据类型: {data_type}")
+        raise ValueError(tr("未知的 Modbus 数据类型: %1", data_type))
     try:
         number = float(value) if fmt == "f" else int(value)
         if fmt == "f" and not math.isfinite(number):
             raise ValueError("non-finite value")
         raw = struct.pack(">" + fmt, number)
     except (TypeError, ValueError, OverflowError, struct.error) as exc:
-        raise ValueError(f"Modbus 值无效或超出 {data_type} 的范围") from exc
+        raise ValueError(tr("Modbus 值无效或超出 %1 的范围", data_type)) from exc
     registers = [int.from_bytes(raw[i:i + 2], "big") for i in range(0, len(raw), 2)]
     if reg_order != MODBUS_ORDERS[0]:
         registers.reverse()
     return tuple(registers)
 
 
-def modbus_request(slave, func, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def modbus_request(slave, func, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """Validate a Modbus request and return its integer fields.
 
     The value is the count for reads and the coil or register value for FC 05/06 (FC 06
@@ -74,15 +75,15 @@ def modbus_request(slave, func, address, value, data_type="uint16", reg_order="�
         if func not in (0x06, 0x10):
             value = int(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("Modbus 地址和值必须是整数") from exc
+        raise ValueError(tr("Modbus 地址和值必须是整数")) from exc
     if not 1 <= slave <= 247 or not 0 <= address <= 65535:
-        raise ValueError("Modbus 从站地址或寄存器地址超出范围")
+        raise ValueError(tr("Modbus 从站地址或寄存器地址超出范围"))
     if func in (0x06, 0x10):
         if func == 0x06 and data_type not in ("uint16", "int16"):
-            raise ValueError("32 位数据占两个寄存器，请用 16 写多个寄存器")
+            raise ValueError(tr("32 位数据占两个寄存器，请用 16 写多个寄存器"))
         registers = modbus_registers(value, data_type, reg_order)
         if address + len(registers) > 65536:
-            raise ValueError("Modbus 从站地址或寄存器地址超出范围")
+            raise ValueError(tr("Modbus 从站地址或寄存器地址超出范围"))
         return slave, func, address, registers[0] if func == 0x06 else registers
     if func in (1, 2):
         valid = 1 <= value <= 2000
@@ -93,17 +94,17 @@ def modbus_request(slave, func, address, value, data_type="uint16", reg_order="�
     else:
         valid = False
     if not valid:
-        raise ValueError("Modbus 值或读取数量超出功能码允许范围")
+        raise ValueError(tr("Modbus 值或读取数量超出功能码允许范围"))
     return slave, func, address, value
 
 
-def command_modbus_frame(slave, func, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def command_modbus_frame(slave, func, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A validated Modbus RTU request frame (CRC16 appended)."""
     return _modbus_frame(modbus_request(slave, func, address, value, data_type, reg_order))
 
 
 def command_modbus_tcp_frame(slave, func, address, value, transaction=None,
-                             data_type="uint16", reg_order="大端(AB CD)"):
+                             data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A validated Modbus TCP request ADU (MBAP header, no CRC)."""
     request = modbus_request(slave, func, address, value, data_type, reg_order)
     if transaction is None:
@@ -111,7 +112,7 @@ def command_modbus_tcp_frame(slave, func, address, value, transaction=None,
     return _modbus_frame(request, transaction)
 
 
-def send_modbus_command(hub, slave, func, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def send_modbus_command(hub, slave, func, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """Validate once, then send the request over every connected link, framed for that link.
 
     A link parsing Modbus TCP gets an MBAP frame, one parsing Modbus ASCII an ASCII frame,
@@ -132,12 +133,12 @@ _TYPE_RANGES = {"uint16": (0, 0xFFFF), "int16": (-0x8000, 0x7FFF), "uint32": (0,
 
 
 def slave_devices(widgets):
-    """The slaves of the link cards in the 从站 role among ``widgets``, in their order (the document's)."""
+    """The slaves of the link cards in the slave role among ``widgets``, in their order (the document's)."""
     return [device for device in (getattr(widget, "slave_device", None) for widget in widgets)
             if device is not None]
 
 
-def slave_control_write(devices, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def slave_control_write(devices, area, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A user's change of a control with a Modbus binding, written into every slave's data table at the
     binding's area and address: 1 or 0 for a coil or discrete input, the registers of the value packed as its
     type (and clamped to the type's range) for registers, as a Modbus write command packs them. A table that

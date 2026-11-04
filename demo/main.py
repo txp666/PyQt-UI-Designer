@@ -24,6 +24,15 @@ setThemeColor('#009faa')
 from theme_support import ThemeController
 theme_controller = ThemeController(app, 'Auto')
 
+# The interface language, set before the interface exists: "Auto" follows the system.
+from i18n import TABLE, language, set_language
+set_language('zh_CN', TABLE)
+if language() == "zh_CN":  # the Fluent widgets' own texts are English in their source
+    from PyQt5.QtCore import QLocale
+    from qfluentwidgets import FluentTranslator
+    translator = FluentTranslator(QLocale(QLocale.Chinese, QLocale.China))
+    app.installTranslator(translator)
+
 from ui import MainUI
 from comm_hub import CommHub
 from data_binding import DataBinding

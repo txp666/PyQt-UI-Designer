@@ -5,6 +5,8 @@ import math
 import struct
 import tempfile
 
+from .i18n import tr
+
 
 class ChartHistory:
     def __init__(self, capacity=10000):
@@ -15,7 +17,7 @@ class ChartHistory:
     def append(self, value):
         value = float(value)
         if not math.isfinite(value):
-            raise ValueError("曲线样本必须是有限数")
+            raise ValueError(tr("曲线样本必须是有限数"))
         if self._file is None:
             self._file = tempfile.TemporaryFile()
         self._file.write(struct.pack("<d", value))

@@ -1,6 +1,6 @@
 """The register table (ModbusSlaveTable) shared by the designer preview and exported applications.
 
-It shows one area of a slave data table (slave_runtime.ModbusSlaveDevice): the first link card in the 从站
+It shows one area of a slave data table (slave_runtime.ModbusSlaveDevice): the first link card in the slave
 role in the document, a row per address. A value cell edited with a double-click is written into the table,
 which publishes the change like any other write; writes from elsewhere (an external master, a control) show
 in the rows they touch. Without such a card the table holds one hint row.
@@ -12,9 +12,10 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHeaderView, QTableWidgetItem,
 from qfluentwidgets import TableWidget
 
 from .modbus_slave import AREA_TABLES
+from .i18n import tr, N_
 
-NO_SLAVE = "没有从站链路卡片"
-_UNSIGNED, _SIGNED, _HEX = "无符号", "有符号", "十六进制"
+NO_SLAVE = N_("没有从站链路卡片")
+_UNSIGNED, _SIGNED, _HEX = "无符号", "有符号", "十六进制"  # i18n: value  (the display formats)
 
 
 def slave_value_text(table, value, display_format=_UNSIGNED):
@@ -48,7 +49,7 @@ def slave_value_from_text(table, text, display_format=_UNSIGNED):
 
 
 class ModbusSlaveTable(QWidget):
-    """地址 / 值 rows of one area of a slave data table."""
+    """Address / value rows of one area of a slave data table."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -57,7 +58,7 @@ class ModbusSlaveTable(QWidget):
         layout.setSpacing(2)
         self._table = TableWidget()
         self._table.setColumnCount(2)
-        self._table.setHorizontalHeaderLabels(["地址", "值"])
+        self._table.setHorizontalHeaderLabels([tr("地址"), tr("值")])
         self._table.setEditTriggers(QAbstractItemView.DoubleClicked)
         self._table.verticalHeader().setVisible(False)
         header = self._table.horizontalHeader()
@@ -73,12 +74,12 @@ class ModbusSlaveTable(QWidget):
         self._show()
 
     def set_area(self, area):
-        """保持寄存器 (the default), 输入寄存器, 线圈 or 离散输入."""
+        """An area name of binding_values.MODBUS_AREAS; holding registers by default."""
         self._area = AREA_TABLES.get(area, "hr")
         self._show()
 
     def set_display_format(self, display_format):
-        """无符号 (the default), 有符号 or 十六进制; coils and discrete inputs always show 0 / 1."""
+        """Unsigned (the default), signed or hex; coils and discrete inputs always show 0 / 1."""
         self._format = display_format if display_format in (_UNSIGNED, _SIGNED, _HEX) else _UNSIGNED
         self._show()
 
@@ -102,7 +103,7 @@ class ModbusSlaveTable(QWidget):
         table.clearSpans()
         if self._store is None:
             table.setRowCount(1)
-            hint = QTableWidgetItem(NO_SLAVE)
+            hint = QTableWidgetItem(tr(NO_SLAVE))
             hint.setFlags(Qt.ItemIsEnabled)
             table.setItem(0, 0, hint)
             table.setSpan(0, 0, 1, 2)

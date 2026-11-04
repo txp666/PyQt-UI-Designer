@@ -224,24 +224,27 @@ class DistributionSmokeTest:
 
     def _tcp_loopback_listen(self):
         from app.core.comm_manager import commHub
-        from app.core.tcp_runtime import TcpHandler
+        from app.core.i18n import tr
+        from app.core.tcp_runtime import SERVER, TcpHandler
         self.hub = commHub
         card = self.widgets["all_TcpConfigCard"]
         self.tcp = card.link  # the card's own link
         assert isinstance(self.tcp, TcpHandler) and self.tcp in commHub.links
-        assert self.tcp.connect("127.0.0.1", 0, mode="服务端")
-        assert "监听中" in card._status.text(), card._status.text()
+        assert self.tcp.connect("127.0.0.1", 0, mode=SERVER)
+        # The texts in the language the built application runs in.
+        assert tr("监听中 · %1 客户端", 0) in card._status.text(), card._status.text()
         self.tcp_received = []
         self.tcp_client = TcpHandler()
         self.tcp_client.rawReceived.connect(self.tcp_received.append)
         assert self.tcp_client.connect("127.0.0.1", self.tcp.port)
 
     def _tcp_loopback_exchange(self):
+        from app.core.i18n import tr
         card = self.widgets["all_TcpConfigCard"]
         self._wait_for(lambda: self.tcp_client.is_connected and self.tcp.peer_count == 1,
                        "the loopback TCP client")
-        assert "1 客户端" in card._status.text(), card._status.text()
-        assert card._connect_btn.isEnabled() and card._connect_btn.text() == "断开"
+        assert tr("监听中 · %1 客户端", 1) in card._status.text(), card._status.text()
+        assert card._connect_btn.isEnabled() and card._connect_btn.text() == tr("断开")
         assert self.tcp_client.send(b"tcp_temperature=31.5\n")
         receive, log = self.widgets["all_DataRecvCard"], self.widgets["all_LogBox"]
         self._wait_for(lambda: "tcp_temperature=31.5" in receive._output.toPlainText(),
@@ -256,13 +259,14 @@ class DistributionSmokeTest:
         self.result["tcp_loopback"] = True
 
     def _tcp_loopback_close(self):
+        from app.core.i18n import tr
         card = self.widgets["all_TcpConfigCard"]
         self.tcp_client.disconnect()
         self.tcp_client.deleteLater()
         self.tcp.disconnect()
         assert not self.tcp.is_active and self.hub.is_connected
-        assert card._connect_btn.isEnabled() and card._connect_btn.text() == "连接"
-        assert card._status.text() == "未连接", card._status.text()
+        assert card._connect_btn.isEnabled() and card._connect_btn.text() == tr("连接")
+        assert card._status.text() == tr("未连接"), card._status.text()
 
     def _change_theme_and_title(self):
         from PyQt5.QtGui import QIcon

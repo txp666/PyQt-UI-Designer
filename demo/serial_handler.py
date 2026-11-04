@@ -5,6 +5,8 @@ import re
 import struct
 from typing import Optional, Dict, Any, List
 
+from i18n import tr
+
 
 class BaseParser:
     """Reading a byte stream takes two steps: ``frames`` cuts the bytes a link read into raw
@@ -103,14 +105,14 @@ class LineParser(BaseParser):
                  kv_separator: str = "=", encoding: str = "utf-8"):
         # The checks run in a fixed order, so FluentHMI Studio names the same problem first.
         if not isinstance(separator, str) or not separator:
-            raise ValueError("行分隔符不能为空")
+            raise ValueError(tr("行分隔符不能为空"))
         if not isinstance(terminator, str) or not terminator:
-            raise ValueError("行结束符不能为空")
+            raise ValueError(tr("行结束符不能为空"))
         if not isinstance(kv_separator, str) or kv_separator not in LINE_KV_SEPARATORS:
-            raise ValueError("键值分隔符只能是 = 或 :")
+            raise ValueError(tr("键值分隔符只能是 = 或 :"))
         encoding = encoding.lower() if isinstance(encoding, str) else None
         if encoding not in LINE_ENCODINGS:
-            raise ValueError("编码只能是 utf-8、gbk 或 ascii")
+            raise ValueError(tr("编码只能是 utf-8、gbk 或 ascii"))
         self._buf = b""
         self._sep = separator
         self._kv = kv_separator
@@ -263,11 +265,11 @@ def _reject_constant(name):
     raise ValueError(name)
 
 
-HEX_ENDIANS = ("大端(BE)", "小端(LE)")
+HEX_ENDIANS = ("大端(BE)", "小端(LE)")  # i18n: value
 # What a hex frame's length field counts: the data only, everything after the field, or the whole frame.
-HEX_LENGTH_COVERS = ("数据", "长度字段之后", "整帧")
+HEX_LENGTH_COVERS = ("数据", "长度字段之后", "整帧")  # i18n: value
 # Checksum algorithms and the bytes each puts on the wire, just before the footer.
-HEX_CHECKSUMS = {"无": 0, "和校验": 1, "异或": 1, "CRC8": 1, "CRC16-Modbus": 2, "CRC16-CCITT": 2}
+HEX_CHECKSUMS = {"无": 0, "和校验": 1, "异或": 1, "CRC8": 1, "CRC16-Modbus": 2, "CRC16-CCITT": 2}  # i18n: value
 # Field types and their sizes; 0 takes any length (ASCII text up to a NUL, HEX text of the bytes).
 HEX_FIELD_TYPES = {"uint8": 1, "int8": 1, "uint16": 2, "int16": 2, "uint32": 4, "int32": 4,
                    "float32": 4, "float64": 8, "ASCII": 0, "HEX": 0}
@@ -297,7 +299,7 @@ def _whole(value):
 
 
 def hex_field(item):
-    """A field-table entry [名字, 偏移, 长度, 类型(, 字节序)] as a 5-tuple; ValueError names a bad one."""
+    """A field-table entry [name, offset, length, type(, byte order)] as a 5-tuple; ValueError names a bad one."""
     entry = isinstance(item, (list, tuple))
     name = item[0] if entry and item and isinstance(item[0], str) else ""
     if entry and len(item) in (4, 5):
@@ -307,14 +309,14 @@ def hex_field(item):
         if (offset is not None and offset >= 0 and length is not None and length > 0
                 and size is not None and size in (0, length) and endian in HEX_ENDIANS):
             return name, offset, length, dtype, endian
-    raise ValueError(f"无效 HEX 字段: {name}")
+    raise ValueError(tr("无效 HEX 字段: %1", name))
 
 
 def hex_checksum(algorithm: str, data: bytes) -> int:
     """The check value of ``data``; for b"123456789" these give DD 31 F4 4B37 29B1."""
-    if algorithm == "和校验":
+    if algorithm == "和校验":  # i18n: value
         return sum(data) & 0xFF
-    if algorithm == "异或":
+    if algorithm == "异或":  # i18n: value
         value = 0
         for byte in data:
             value ^= byte
@@ -341,7 +343,7 @@ def hex_checksum(algorithm: str, data: bytes) -> int:
 class HexFrameParser(BaseParser):
     """Cut binary frames out of a byte stream and read their fields.
 
-    A frame is ``[帧头] [长度字段 …] [数据] [校验] [帧尾]``, every part but the data optional.
+    A frame is ``[header] [length field …] [data] [checksum] [footer]``, every part but the data optional.
     Its end is found by the first rule configured: a fixed length, a length field, the
     footer. With none of them the frame is whatever came after the header before the line
     went quiet, returned by ``flush``. A candidate whose footer or checksum is wrong is not a
@@ -354,32 +356,32 @@ class HexFrameParser(BaseParser):
     def __init__(self, header: Optional[bytes] = b"\xAA\x55", footer: Optional[bytes] = b"\x55\xAA",
                  fields: list = None, max_buffer: int = HEX_MAX_FRAME,
                  length_offset=-1, length_size=1, length_endian=HEX_ENDIANS[0],
-                 length_covers=HEX_LENGTH_COVERS[0], fixed_length=0, checksum="无",
+                 length_covers=HEX_LENGTH_COVERS[0], fixed_length=0, checksum="无",  # i18n: value
                  checksum_start=0, checksum_endian=HEX_ENDIANS[0], idle_timeout=0):
         # None stands for a setting that is not a number or not hex text (from_config). The checks
         # run in a fixed order, so FluentHMI Studio names the same problem in a config with several.
         if (footer == b"" and length_offset is not None and length_offset < 0
                 and fixed_length == 0 and idle_timeout == 0):
-            raise ValueError("HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧")
+            raise ValueError(tr("HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧"))
         if header is None or footer is None:
-            raise ValueError("HEX 帧头或帧尾不是十六进制")
+            raise ValueError(tr("HEX 帧头或帧尾不是十六进制"))
         if (fixed_length is not None and fixed_length > 0
                 and length_offset is not None and length_offset >= 0):
-            raise ValueError("固定帧长和长度字段只能选一个")
+            raise ValueError(tr("固定帧长和长度字段只能选一个"))
         if (length_offset is None or length_offset < -1 or length_size not in (1, 2)
                 or length_endian not in HEX_ENDIANS or length_covers not in HEX_LENGTH_COVERS):
-            raise ValueError("HEX 长度字段设置无效")
+            raise ValueError(tr("HEX 长度字段设置无效"))
         if fixed_length is None or not 0 <= fixed_length <= HEX_MAX_FRAME:
-            raise ValueError("HEX 固定帧长无效")
+            raise ValueError(tr("HEX 固定帧长无效"))
         if (not isinstance(checksum, str) or checksum not in HEX_CHECKSUMS
                 or checksum_start is None or checksum_start < 0 or checksum_endian not in HEX_ENDIANS):
-            raise ValueError("HEX 校验设置无效")
+            raise ValueError(tr("HEX 校验设置无效"))
         if idle_timeout is None or not 0 <= idle_timeout <= HEX_MAX_IDLE:
-            raise ValueError("HEX 空闲超时无效")
+            raise ValueError(tr("HEX 空闲超时无效"))
         if fields is None:
             fields = []
         if not isinstance(fields, (list, tuple)):
-            raise ValueError("无效 HEX 字段: ")
+            raise ValueError(tr("无效 HEX 字段: %1", ""))
         self._fields = [hex_field(item) for item in fields]
         self._buf = b""
         self._header, self._footer = header, footer
@@ -403,7 +405,7 @@ class HexFrameParser(BaseParser):
             length_offset=_whole(get("lengthOffset", -1)), length_size=_whole(get("lengthSize", 1)),
             length_endian=get("lengthEndian", HEX_ENDIANS[0]),
             length_covers=get("lengthCovers", HEX_LENGTH_COVERS[0]),
-            fixed_length=_whole(get("fixedLength", 0)), checksum=get("checksum", "无"),
+            fixed_length=_whole(get("fixedLength", 0)), checksum=get("checksum", "无"),  # i18n: value
             checksum_start=_whole(get("checksumStart", 0)),
             checksum_endian=get("checksumEndian", HEX_ENDIANS[0]),
             idle_timeout=_whole(get("idleTimeout", 0)))
@@ -465,9 +467,9 @@ class HexFrameParser(BaseParser):
                 return None
             value = int.from_bytes(buf[self._length_offset:end], self._length_order)
             tail = self._checksum_size + len(self._footer)
-            if self._length_covers == "整帧":
+            if self._length_covers == "整帧":  # i18n: value
                 size = value
-            elif self._length_covers == "长度字段之后":
+            elif self._length_covers == "长度字段之后":  # i18n: value
                 size = end + value
             else:  # 数据: the checksum and footer follow the counted bytes
                 size = end + value + tail
@@ -928,7 +930,7 @@ def create_parser(parser_type: str, config: dict = None, requests: ModbusRequest
         return ModbusTCPParser(fields=config.get("fields", []), requests=requests)
     elif parser_type == "modbus_ascii":
         return ModbusASCIIParser(fields=config.get("fields", []), requests=requests)
-    raise ValueError(f"未知解析模式: {parser_type}")
+    raise ValueError(tr("未知解析模式: %1", parser_type))
 
 """Modbus master queue, one per link, shared by the designer and standalone exports.
 
@@ -947,12 +949,13 @@ curves read, merged into as few reads as the gap and length limits allow.
 from PyQt5.QtCore import QObject, QTimer
 
 
+from i18n import tr, N_
 
 # The link parsers that read Modbus replies; requests on other links are sent and not answered.
 MODBUS_PARSERS = ("modbus", "modbus_tcp", "modbus_ascii")
-MODBUS_EXCEPTIONS = {
-    1: "非法功能码", 2: "非法数据地址", 3: "非法数据值", 4: "从站设备故障",
-    5: "已确认，处理中", 6: "从站忙", 10: "网关路径不可用", 11: "网关目标设备无响应",
+MODBUS_EXCEPTIONS = {  # translated where they are shown
+    1: N_("非法功能码"), 2: N_("非法数据地址"), 3: N_("非法数据值"), 4: N_("从站设备故障"),
+    5: N_("已确认，处理中"), 6: N_("从站忙"), 10: N_("网关路径不可用"), 11: N_("网关目标设备无响应"),
 }
 
 
@@ -961,7 +964,8 @@ def modbus_problem(data):
     code = data.get("error")
     if code is None:
         return None
-    return f"异常 {code:02X} {MODBUS_EXCEPTIONS.get(code, '')}".rstrip()
+    name = MODBUS_EXCEPTIONS.get(code)
+    return tr("异常 %1 %2", f"{code:02X}", tr(name) if name else "").rstrip()
 
 
 _transaction = [0]
@@ -1094,7 +1098,7 @@ class ModbusMaster(QObject):
         self._current, self._queue = None, []
         self._timer.stop()
         for entry in entries:
-            self._call(entry, ModbusResult(False, {}, f"无响应（{entry.timeout} ms 超时）"))
+            self._call(entry, ModbusResult(False, {}, tr("无响应（%1 ms 超时）", entry.timeout)))
 
     # -- the wire ---------------------------------------------------------------
 
@@ -1109,7 +1113,7 @@ class ModbusMaster(QObject):
         while self._current is None and self._queue:
             entry = self._queue.pop(0)
             if not self._start(entry):
-                self._call(entry, ModbusResult(False, {}, "发送失败"))
+                self._call(entry, ModbusResult(False, {}, tr("发送失败")))
 
     @staticmethod
     def _call(entry, result):
@@ -1125,7 +1129,7 @@ class ModbusMaster(QObject):
 
     def _on_timeout(self):
         if self._current is not None:
-            self._finish(ModbusResult(False, {}, f"无响应（{self._current.timeout} ms 超时）"))
+            self._finish(ModbusResult(False, {}, tr("无响应（%1 ms 超时）", self._current.timeout)))
 
     def _answers(self, data):
         slave, fc, address = self._current.request[:3]
@@ -1143,7 +1147,7 @@ class ModbusMaster(QObject):
         if self._current is None or not self._answers(data):
             return  # not the answer; the bindings still get it
         problem = modbus_problem(data)
-        self._finish(ModbusResult(problem is None, data, "" if problem is None else f"设备返回{problem}"))
+        self._finish(ModbusResult(problem is None, data, "" if problem is None else tr("设备返回%1", problem)))
 
 
 # -- the polling plan -------------------------------------------------------------
@@ -1185,7 +1189,7 @@ def plan_blocks(needs, default_period):
     blocks.sort(key=lambda block: (block[0], block[1], block[2]))
     return blocks
 
-"""The Modbus slave (RTU and TCP) of a link card in the 从站 role, shared by the designer preview and exports.
+"""The Modbus slave (RTU and TCP) of a link card in the slave role, shared by the designer preview and exports.
 
 Pure Python, no Qt: the data table (SlaveStore), how a request is answered (ModbusSlave.request), how requests
 are cut out of a byte stream (RtuRequestFramer, TcpRequestFramer) and the log lines. slave_runtime.py puts it on
@@ -1200,20 +1204,24 @@ written addresses and their neighbours in the area, keyed like a Modbus reply's 
 import re
 
 
+from i18n import tr, N_
 
 # The link parsers a slave answers with: RTU frames (modbus) or MBAP frames (modbus_tcp).
 SLAVE_PARSERS = ("modbus", "modbus_tcp")
-SLAVE_ROLE = "从站"
+# A link card's modbusRole: it polls slaves as a master, or answers a master as a slave.
+MASTER_ROLE = "主站"  # i18n: value
+SLAVE_ROLE = "从站"  # i18n: value
 TABLES = ("co", "di", "hr", "ir")
 READ_FUNCTIONS = {"co": 1, "di": 2, "hr": 3, "ir": 4}
 # The tables by the area names bindings use, as binding_values.MODBUS_AREAS.
-AREA_TABLES = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}
+AREA_TABLES = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}  # i18n: value
 DEFAULT_AREA = (0, 100)  # start, count
 MAX_COUNT = 10000
 
-EXCEPTION_NAMES = {1: "非法功能码", 2: "非法数据地址", 3: "非法数据值"}
-FUNCTION_NAMES = {1: "读线圈", 2: "读离散输入", 3: "读保持寄存器", 4: "读输入寄存器",
-                  5: "写单线圈", 6: "写单寄存器", 15: "写多个线圈", 16: "写多个寄存器"}
+# Translated where a log line shows them.
+EXCEPTION_NAMES = {1: N_("非法功能码"), 2: N_("非法数据地址"), 3: N_("非法数据值")}
+FUNCTION_NAMES = {1: N_("读线圈"), 2: N_("读离散输入"), 3: N_("读保持寄存器"), 4: N_("读输入寄存器"),
+                  5: N_("写单线圈"), 6: N_("写单寄存器"), 15: N_("写多个线圈"), 16: N_("写多个寄存器")}
 
 _INIT_LINE = re.compile(r"\s*(co|di|hr|ir)([0-9]+)\s*=\s*(-?[0-9]+)\s*", re.I | re.A)
 
@@ -1324,16 +1332,16 @@ def describe(pdu):
     """What a request asks for, as its log line says."""
     fc = pdu[0]
     if fc not in FUNCTION_NAMES:
-        return f"功能码 {fc:02X}"
-    text = FUNCTION_NAMES[fc]
+        return tr("功能码 %1", f"{fc:02X}")
+    text = tr(FUNCTION_NAMES[fc])
     if len(pdu) >= 5:
         address, value = _u16(pdu, 1), _u16(pdu, 3)
         if fc == 5:
-            text += f" 地址 {address} 值 {value:04X}"
+            text += " " + tr("地址 %1 值 %2", address, f"{value:04X}")
         elif fc == 6:
-            text += f" 地址 {address} 值 {value}"
+            text += " " + tr("地址 %1 值 %2", address, value)
         else:
-            text += f" 地址 {address} 数量 {value}"
+            text += " " + tr("地址 %1 数量 %2", address, value)
     return text
 
 
@@ -1427,29 +1435,30 @@ class ModbusSlave:
                 return None, [], []
             broadcast = False
         fc = pdu[0]
-        line = f"收 {hex_text(frame)} · {describe(pdu)}"
+        line = f"{tr('收')} {hex_text(frame)} · {describe(pdu)}"
+        unanswered = f" · {tr('广播')} · {tr('不应答')}"
         if broadcast and fc in (1, 2, 3, 4):
-            return None, [[f"{line} · 广播 · 不应答", "info"]], []
+            return None, [[line + unanswered, "info"]], []
         result, written = handle(self.store, pdu)
         emits = [self.store.message(self.slave, *written)] if written else []
         if isinstance(result, int):
-            problem = f"异常 {result:02X} {EXCEPTION_NAMES[result]}"
+            problem = tr("异常 %1 %2", f"{result:02X}", tr(EXCEPTION_NAMES[result]))
             if broadcast:
-                return None, [[f"{line} · {problem} · 广播 · 不应答", "warn"]], emits
+                return None, [[f"{line} · {problem}{unanswered}", "warn"]], emits
             if not self.exceptions:
-                return None, [[f"{line} · {problem} · 不应答", "warn"]], emits
+                return None, [[f"{line} · {problem} · {tr('不应答')}", "warn"]], emits
             reply_pdu, ok = bytes([fc | 0x80, result]), False
         else:
             if broadcast:
-                return None, [[f"{line} · 广播 · 不应答", "info"]], emits
+                return None, [[line + unanswered, "info"]], emits
             reply_pdu, ok = result, True
         if self.framing == "rtu":
             body = bytes([unit]) + reply_pdu
             reply = body + modbus_crc(body)
         else:
             reply = frame[:4] + (len(reply_pdu) + 1).to_bytes(2, "big") + bytes([unit]) + reply_pdu
-        tail = "正常" if ok else problem
-        return reply, [[line, "info"], [f"发 {hex_text(reply)} · {tail}", "ok" if ok else "warn"]], emits
+        tail = tr("正常") if ok else problem
+        return reply, [[line, "info"], [f"{tr('发')} {hex_text(reply)} · {tail}", "ok" if ok else "warn"]], emits
 
 
 class RtuRequestFramer(BaseParser):
@@ -1543,15 +1552,15 @@ def request_framer(parser_type):
     """The framer of one stream for a link that parses ``parser_type`` (one of SLAVE_PARSERS)."""
     return TcpRequestFramer() if parser_type == "modbus_tcp" else RtuRequestFramer()
 
-"""The Modbus slave of a link card in the 从站 role, on its link: shared by the designer preview and exports.
+"""The Modbus slave of a link card in the slave role, on its link: shared by the designer preview and exports.
 
-A serial or TCP card whose 设计角色 is 从站 owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
-built from the card's areas and 初始值 when it is first needed and kept while the program runs, whether the
+A serial or TCP card whose Modbus role is slave owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
+built from the card's areas and initial values when it is first needed and kept while the program runs, whether the
 link is connected or not. Every write to it (an external master's, a control's, a command's, the register
 table's) gives a slave message on ``written``, which the card publishes on its link like a parsed frame.
 
 When the card connects its link and the link parses modbus or modbus_tcp, the link frames requests with the
-device's framer and hands each one to ``receive``. A write takes effect at once; the reply goes out 响应延时
+device's framer and hands each one to ``receive``. A write takes effect at once; the reply goes out the response delay
 (``delay``) ms after its request came in, the replies one after another in the order the requests came. The
 link's ``slaveLog`` carries the log lines (the reply's when it goes out), and the counts of replies and of
 failed requests start from 0 at each connection.
@@ -1561,6 +1570,7 @@ import time
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
 
+from i18n import tr
 
 
 class ModbusSlaveDevice(QObject):
@@ -1672,9 +1682,10 @@ class ModbusSlaveDevice(QObject):
             self._link.slaveLog.emit(text, level)
 
     def status_text(self):
-        """What the card shows after its connection: 从站 S · 应答 N, and · 异常 M once a request failed."""
-        text = f"从站 {self.address} · 应答 {self.replies}"
-        return f"{text} · 异常 {self.errors}" if self.errors else text
+        """What the card shows after its connection: the slave address and the replies so far, then the
+        failed requests once there are any."""
+        text = tr("从站 %1 · 应答 %2", self.address, self.replies)
+        return text + tr(" · 异常 %1", self.errors) if self.errors else text
 
 # coding: utf-8
 """Serial runtime shared by the designer and standalone exports."""
@@ -1685,6 +1696,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QObject
 
 
 
+from i18n import tr
 
 try:
     import serial
@@ -1784,7 +1796,7 @@ class SerialReaderThread(QThread):
     def stop(self):
         self._running = False
         if not self.wait(2000):
-            raise RuntimeError("串口读取线程未能停止")
+            raise RuntimeError(tr("串口读取线程未能停止"))
 
 
 class SerialHandler(QObject):
@@ -1843,13 +1855,13 @@ class SerialHandler(QObject):
     def connect(self, port, baudrate=None, databits=None, parity=None, stopbits=None,
                 flowcontrol=None, parser_type=None, parser_config=None, slave=None):
         if not HAS_SERIAL:
-            self.error.emit("pyserial 未安装，请运行 pip install pyserial")
+            self.error.emit(tr("pyserial 未安装，请运行 pip install pyserial"))
             return False
         cfg = self._config
         parity_map = {"None": "N", "Even": "E", "Odd": "O", "Mark": "M", "Space": "S"}
         parity = parity if parity is not None else cfg["parity"]
         flow = flowcontrol if flowcontrol is not None else cfg["flowControl"]
-        flow = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}.get(flow, flow)
+        flow = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}.get(flow, flow)  # i18n: value
         try:
             selected_parser = parser_type if parser_type is not None else cfg["parser"]
             selected_config = parser_config
@@ -1869,7 +1881,7 @@ class SerialHandler(QObject):
                 timeout=0.1, write_timeout=1,
                 rtscts=flow == "rtscts", xonxoff=flow == "xonxoff", dsrdtr=flow == "dsrdtr")
         except Exception as exc:
-            self.error.emit(f"串口打开失败: {exc}")
+            self.error.emit(tr("串口打开失败: %1", exc))
             return False
         self._port = port_obj
         self._parser = parser
@@ -1917,9 +1929,9 @@ class SerialHandler(QObject):
         try:
             written = self._port.write(data)
             if written != len(data):
-                raise OSError(f"串口仅写入 {written}/{len(data)} 字节")
+                raise OSError(tr("串口仅写入 %1/%2 字节", written, len(data)))
         except Exception as exc:
-            self.error.emit(f"发送失败: {exc}")
+            self.error.emit(tr("发送失败: %1", exc))
             return False
         self.dataSent.emit(data)
         return True
@@ -1934,9 +1946,9 @@ class SerialHandler(QObject):
         try:
             written = self._port.write(data)
             if written != len(data):
-                raise OSError(f"串口仅写入 {written}/{len(data)} 字节")
+                raise OSError(tr("串口仅写入 %1/%2 字节", written, len(data)))
         except Exception as exc:
-            self.error.emit(f"发送失败: {exc}")
+            self.error.emit(tr("发送失败: %1", exc))
             return False
         self.dataSent.emit(bytes(data))
         return True

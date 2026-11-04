@@ -18,8 +18,9 @@ from PyQt5.QtNetwork import QAbstractSocket, QHostAddress, QTcpServer, QTcpSocke
 from .protocol_parser import ModbusRequests, create_parser, text_encoding
 from .modbus_master import ModbusMaster
 from .modbus_slave import SLAVE_PARSERS
+from .i18n import tr
 
-CLIENT, SERVER = "客户端", "服务端"
+CLIENT, SERVER = "客户端", "服务端"  # i18n: value
 _MODES = {CLIENT: CLIENT, SERVER: SERVER, "client": CLIENT, "server": SERVER}
 
 
@@ -27,7 +28,7 @@ def tcp_mode(value):
     text = str(value).strip()
     mode = _MODES.get(text) or _MODES.get(text.lower())
     if mode is None:
-        raise ValueError(f"未知 TCP 模式: {value}")
+        raise ValueError(tr("未知 TCP 模式: %1", value))
     return mode
 
 
@@ -134,7 +135,7 @@ class TcpHandler(QObject):
             mode = tcp_mode(mode if mode is not None else cfg["mode"])
             port = int(port if port is not None else cfg["port"])
             if not 0 <= port <= 65535 or (mode == CLIENT and port == 0):
-                raise ValueError("端口必须在 1–65535 之间")
+                raise ValueError(tr("端口必须在 1–65535 之间"))
             selected_parser = parser_type if parser_type is not None else cfg["parser"]
             selected_config = parser_config
             if selected_config is None:
@@ -144,11 +145,11 @@ class TcpHandler(QObject):
             parser = (slave.framer(selected_parser) if slave is not None
                       else create_parser(selected_parser, selected_config, self.modbus_requests))
         except (TypeError, ValueError) as exc:
-            self.error.emit(f"TCP 参数无效: {exc}")
+            self.error.emit(tr("TCP 参数无效: %1", exc))
             return False
         host = str(host if host is not None else cfg["host"]).strip()
         if mode == CLIENT and not host:
-            self.error.emit("TCP 参数无效: 请填写服务器地址")
+            self.error.emit(tr("TCP 参数无效: 请填写服务器地址"))
             return False
         if self.is_active:
             self.disconnect()
@@ -185,17 +186,17 @@ class TcpHandler(QObject):
         else:
             address, shown = QHostAddress(host), host
             if address.isNull():
-                self.error.emit(f"TCP 参数无效: 监听地址必须是本机 IP，不能是 {host!r}")
+                self.error.emit(tr("TCP 参数无效: 监听地址必须是本机 IP，不能是 %1", repr(host)))
                 return False
         server = QTcpServer(self)
         if not server.listen(address, port):
             message = server.errorString()
             server.deleteLater()
-            self.error.emit(f"TCP 监听失败: {message}")
+            self.error.emit(tr("TCP 监听失败: %1", message))
             return False
         server.newConnection.connect(partial(self._on_new_connection, server))
         self._server = server
-        self._description = f"TCP 服务端 {shown}:{server.serverPort()}"
+        self._description = tr("TCP 服务端 %1:%2", shown, server.serverPort())
         self.connected.emit(self._description)
         self.connectionChanged.emit(True)
         return True
@@ -243,13 +244,13 @@ class TcpHandler(QObject):
                 peers = [peer for peer in self._peers
                          if peer.state() == QAbstractSocket.ConnectedState]
                 if not peers:
-                    raise OSError("没有已连接的 TCP 客户端")
+                    raise OSError(tr("没有已连接的 TCP 客户端"))
                 for peer in peers:
                     self._write(peer, data)
             else:
                 self._write(self._socket, data)
         except Exception as exc:
-            self.error.emit(f"发送失败: {exc}")
+            self.error.emit(tr("发送失败: %1", exc))
             return False
         self.dataSent.emit(bytes(data))
         return True
@@ -258,7 +259,7 @@ class TcpHandler(QObject):
     def _write(socket, data):
         written = socket.write(bytes(data))
         if written != len(data):
-            raise OSError(f"TCP 仅写入 {written}/{len(data)} 字节")
+            raise OSError(tr("TCP 仅写入 %1/%2 字节", written, len(data)))
         socket.flush()
 
     def send_text(self, text, encoding="utf-8"):
@@ -282,15 +283,15 @@ class TcpHandler(QObject):
             return
         if code == QAbstractSocket.RemoteHostClosedError:
             # Qt reports the peer closing as an error; its disconnected signal follows.
-            self._pending_error = "TCP 连接已被对方关闭"
+            self._pending_error = tr("TCP 连接已被对方关闭")
             return
         # A refused loopback connect can pass through the connected state on macOS before
         # the error arrives, so word the failure by what this link has announced.
         message = socket.errorString()
         if self._announced:
-            self.error.emit(f"TCP 连接错误: {message}")
+            self.error.emit(tr("TCP 连接错误: %1", message))
         else:
-            self.error.emit(f"TCP 连接失败: {message}")
+            self.error.emit(tr("TCP 连接失败: %1", message))
         self.disconnect()
 
     def _on_client_disconnected(self, socket):
@@ -378,7 +379,7 @@ class TcpHandler(QObject):
         try:
             self._write(stream, data)
         except Exception as exc:
-            self.error.emit(f"发送失败: {exc}")
+            self.error.emit(tr("发送失败: %1", exc))
             return False
         self.dataSent.emit(bytes(data))
         return True

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from qfluentwidgets import TextEdit, setCustomStyleSheet
 
 from .signal_lifetime import SignalConnections
+from .i18n import tr
 
 LOG_STYLE = ("QTextEdit { font-family: Menlo, Consolas, 'Courier New', monospace; font-size: 11px; "
              "background: #1a1a2e; color: #a8d8ea; border: 1px solid #333; border-radius: 6px; padding: 6px; }")
@@ -57,13 +58,13 @@ class LogDisplayBox(QWidget):
                 self._serial_connections.connect(handler.slaveLog, self.append_log)
 
     def _on_connected(self, port):
-        self.append_log(f"已连接: {port}", "ok")
+        self.append_log(tr("已连接: %1", port), "ok")
 
     def _on_disconnected(self):
-        self.append_log("已断开", "warn")
+        self.append_log(tr("已断开"), "warn")
 
     def _on_serial_error(self, message):
-        self.append_log(f"错误: {message}", "error")
+        self.append_log(tr("错误: %1", message), "error")
 
     def _on_parsed_data(self, data):
         if getattr(self._handler, "slave_data", False):

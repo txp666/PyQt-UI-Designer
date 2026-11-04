@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QWidget
 from qfluentwidgets import isDarkTheme, qconfig
 
 from .signal_lifetime import SignalConnections
+from .i18n import tr
 
 
 class GaugeMeter(QWidget):
@@ -20,7 +21,7 @@ class GaugeMeter(QWidget):
         self._value = 0.0
         self._min_val = 0.0
         self._max_val = 100.0
-        self._title = "仪表"
+        self._title = tr("仪表")
         self._unit = ""
         self.setMinimumSize(80, 80)
         self._theme_connections = SignalConnections(self)

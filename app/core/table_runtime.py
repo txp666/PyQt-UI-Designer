@@ -10,11 +10,11 @@ from .signal_lifetime import SignalConnections
 class DataTableWidget(QWidget):
     """Either the latest frame as field / value rows, or a log with one row per frame.
 
-    In the log, each column takes the value of the key it is named after and a column named 时间 takes the
+    In the log, each column takes the value of the key it is named after and a column named TIME_COLUMN takes the
     time the frame arrived; frames carrying none of the named keys belong to some other message and are
     skipped. Beyond the row limit the oldest rows go."""
 
-    TIME_COLUMN = "时间"
+    TIME_COLUMN = "时间"  # i18n: value
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,11 +24,11 @@ class DataTableWidget(QWidget):
         layout.setSpacing(2)
         self._table = TableWidget()
         self._table.setColumnCount(2)
-        self._table.setHorizontalHeaderLabels(["字段", "值"])
+        self._table.setHorizontalHeaderLabels(["字段", "值"])  # i18n: value  (the default columns, user content)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         layout.addWidget(self._table)
-        self._columns = ["字段", "值"]
+        self._columns = ["字段", "值"]  # i18n: value
         self._max_rows = 500
         self._logging = False
         self._fit_columns()
@@ -38,7 +38,7 @@ class DataTableWidget(QWidget):
         self._serial_connections.connect(handler.dataReceived, self.on_data)
 
     def set_columns(self, columns):
-        self._columns = list(columns) or ["字段", "值"]
+        self._columns = list(columns) or ["字段", "值"]  # i18n: value
         self._table.setColumnCount(len(self._columns))
         self._table.setHorizontalHeaderLabels(self._columns)
         self._fit_columns()
@@ -62,8 +62,8 @@ class DataTableWidget(QWidget):
             self._table.removeRow(0 if self._logging else self._table.rowCount() - 1)
 
     def set_record_mode(self, mode):
-        """最新值 (the latest frame) or 逐行记录 (one row per frame)."""
-        logging = mode == "逐行记录"
+        """The recordMode: the latest frame only, or a log with one row per frame."""
+        logging = mode == "逐行记录"  # i18n: value
         if logging != self._logging:
             self._logging = logging
             self.clear_data()

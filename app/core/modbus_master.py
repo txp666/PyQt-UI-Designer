@@ -15,12 +15,13 @@ curves read, merged into as few reads as the gap and length limits allow.
 from PyQt5.QtCore import QObject, QTimer
 
 from .protocol_parser import build_modbus_ascii_frame, build_modbus_frame, build_modbus_tcp_frame
+from .i18n import tr, N_
 
 # The link parsers that read Modbus replies; requests on other links are sent and not answered.
 MODBUS_PARSERS = ("modbus", "modbus_tcp", "modbus_ascii")
-MODBUS_EXCEPTIONS = {
-    1: "非法功能码", 2: "非法数据地址", 3: "非法数据值", 4: "从站设备故障",
-    5: "已确认，处理中", 6: "从站忙", 10: "网关路径不可用", 11: "网关目标设备无响应",
+MODBUS_EXCEPTIONS = {  # translated where they are shown
+    1: N_("非法功能码"), 2: N_("非法数据地址"), 3: N_("非法数据值"), 4: N_("从站设备故障"),
+    5: N_("已确认，处理中"), 6: N_("从站忙"), 10: N_("网关路径不可用"), 11: N_("网关目标设备无响应"),
 }
 
 
@@ -29,7 +30,8 @@ def modbus_problem(data):
     code = data.get("error")
     if code is None:
         return None
-    return f"异常 {code:02X} {MODBUS_EXCEPTIONS.get(code, '')}".rstrip()
+    name = MODBUS_EXCEPTIONS.get(code)
+    return tr("异常 %1 %2", f"{code:02X}", tr(name) if name else "").rstrip()
 
 
 _transaction = [0]
@@ -162,7 +164,7 @@ class ModbusMaster(QObject):
         self._current, self._queue = None, []
         self._timer.stop()
         for entry in entries:
-            self._call(entry, ModbusResult(False, {}, f"无响应（{entry.timeout} ms 超时）"))
+            self._call(entry, ModbusResult(False, {}, tr("无响应（%1 ms 超时）", entry.timeout)))
 
     # -- the wire ---------------------------------------------------------------
 
@@ -177,7 +179,7 @@ class ModbusMaster(QObject):
         while self._current is None and self._queue:
             entry = self._queue.pop(0)
             if not self._start(entry):
-                self._call(entry, ModbusResult(False, {}, "发送失败"))
+                self._call(entry, ModbusResult(False, {}, tr("发送失败")))
 
     @staticmethod
     def _call(entry, result):
@@ -193,7 +195,7 @@ class ModbusMaster(QObject):
 
     def _on_timeout(self):
         if self._current is not None:
-            self._finish(ModbusResult(False, {}, f"无响应（{self._current.timeout} ms 超时）"))
+            self._finish(ModbusResult(False, {}, tr("无响应（%1 ms 超时）", self._current.timeout)))
 
     def _answers(self, data):
         slave, fc, address = self._current.request[:3]
@@ -211,7 +213,7 @@ class ModbusMaster(QObject):
         if self._current is None or not self._answers(data):
             return  # not the answer; the bindings still get it
         problem = modbus_problem(data)
-        self._finish(ModbusResult(problem is None, data, "" if problem is None else f"设备返回{problem}"))
+        self._finish(ModbusResult(problem is None, data, "" if problem is None else tr("设备返回%1", problem)))
 
 
 # -- the polling plan -------------------------------------------------------------

@@ -12,10 +12,11 @@ from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy
 from qfluentwidgets import (
-    CardWidget, StrongBodyLabel, BodyLabel, PrimaryPushButton, qconfig,
+    CardWidget, ComboBox, StrongBodyLabel, BodyLabel, PrimaryPushButton, qconfig,
 )
 
-from .link_polling import ModbusLinkSettings, status_label
+from .link_polling import CARD_PARSERS, FULL_MODE, ModbusLinkSettings, add_value_items, select_value, status_label
+from .i18n import tr, N_
 from .signal_lifetime import SignalConnections
 
 STATUS_COLORS = {
@@ -27,21 +28,20 @@ STATUS_COLORS = {
 
 
 class LinkConfigCard(ModbusLinkSettings, CardWidget):
-    TITLE = "连接配置"
+    TITLE = N_("连接配置")  # shown translated until set_title
     LABEL_WIDTH = 56
-    PARSERS = ["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._display_mode = "完整"
+        self._display_mode = FULL_MODE
         self._parser_config = {}
         self._connected = False
         self._pending = False  # connecting, or waiting to reconnect: the button cancels
         self._failed = False
         self._handler = None
         self._editors = []
-        self._rows = []        # (row, shown in 完整 only)
+        self._rows = []        # (row, shown in the full display mode only)
         self._full_only = []
         self._serial_connections = SignalConnections(self)
         self._theme_connections = SignalConnections(self)
@@ -52,8 +52,8 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
         self._root.setSpacing(10)
 
         self._title_w = self._make_row()
-        self._title = StrongBodyLabel(self.TITLE)
-        self._status = status_label("未连接")
+        self._title = StrongBodyLabel(tr(self.TITLE))
+        self._status = status_label(tr("未连接"))
         self._title_w.layout().addWidget(self._title)
         self._title_w.layout().addWidget(self._status, 1)
         self._root.addWidget(self._title_w)
@@ -64,20 +64,20 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
         self._root.addStretch(1)
         self._place_button()
 
-        self._set_status("未连接", "idle")
+        self._set_status(tr("未连接"), "idle")
         self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     # ---- layout helpers ----
 
     @staticmethod
     def _toggle_button():
-        """连接 / 断开 / 取消 in one button, as wide as the widest, so the row beside it stays put."""
-        button = PrimaryPushButton("连接")
+        """Connect / disconnect / cancel in one button, as wide as the widest, so the row beside it stays put."""
+        button = PrimaryPushButton(tr("连接"))
         width = 0
-        for text in ("连接", "断开", "取消"):
+        for text in (tr("连接"), tr("断开"), tr("取消")):
             button.setText(text)
             width = max(width, button.sizeHint().width())
-        button.setText("连接")
+        button.setText(tr("连接"))
         button.setFixedWidth(width)
         return button
 
@@ -105,7 +105,7 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
         return row
 
     def _shown_rows(self):
-        return [row for row, full_only in self._rows if self._display_mode == "完整" or not full_only]
+        return [row for row, full_only in self._rows if self._display_mode == FULL_MODE or not full_only]
 
     def _place_button(self):
         """The button goes at the right end of the last row this display mode shows."""
@@ -131,6 +131,12 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
     def _build_rows(self):
         raise NotImplementedError
 
+    def _parser_box(self):
+        """The parsing-mode combo box: the project's settings or a mode of the card's own."""
+        combo = ComboBox()
+        add_value_items(combo, CARD_PARSERS)
+        return combo
+
     def _connect_link(self, handler):
         """Start the link from the card's current fields; return the handler's result."""
         raise NotImplementedError
@@ -139,7 +145,7 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
         """Subscribe to link signals beyond connected/disconnected/error."""
 
     def _connected_text(self):
-        return "● 已连接"
+        return "● " + tr("已连接")
 
     # ---- link wiring ----
 
@@ -153,27 +159,27 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
 
     def _on_toggle(self):
         if self._connected or self._pending:
-            self._on_disconnect()  # 断开, or 取消 an attempt
+            self._on_disconnect()  # disconnect, or cancel an attempt
         else:
             self._on_connect()
 
     def _show_button(self):
-        self._connect_btn.setText("断开" if self._connected else "取消" if self._pending else "连接")
+        self._connect_btn.setText(tr("断开") if self._connected else tr("取消") if self._pending else tr("连接"))
 
     def _on_connect(self):
         if self._handler is None:
             return
         self._failed = False
         self._connect_btn.setEnabled(False)
-        self._set_status("连接中...", "busy")
+        self._set_status(tr("连接中..."), "busy")
         ok = self._connect_link(self._handler)
         if not ok:
             self._connect_btn.setEnabled(True)
             self._show_button()
             if not self._failed:
-                self._set_status("连接失败", "error")
+                self._set_status(tr("连接失败"), "error")
         elif not self._handler.is_connected and getattr(self._handler, "is_active", False):
-            self._set_pending("连接中...")
+            self._set_pending(tr("连接中..."))
 
     def _set_pending(self, text):
         """Connecting or reconnecting: the fields stay locked and the button cancels the attempt."""
@@ -197,7 +203,7 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
 
     def _on_link_disconnected(self):
         if getattr(self._handler, "is_active", False):
-            self._set_pending("重连中...")  # the link keeps retrying until 断开
+            self._set_pending(tr("重连中..."))  # the link keeps retrying until disconnected
         else:
             self.set_connected(False)
 
@@ -218,7 +224,7 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
             self._failed = False
             self._show_connected()
         elif not self._failed:
-            self._set_status("未连接", "idle")
+            self._set_status(tr("未连接"), "idle")
 
     def _show_connected(self):
         """The connection, and the Modbus poller's status while the link parses Modbus."""
@@ -242,15 +248,13 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
     def set_display_mode(self, mode):
         self._display_mode = mode
         for row in self._full_only:
-            row.setVisible(mode == "完整")
+            row.setVisible(mode == FULL_MODE)
         self._place_button()
         self.adjustSize()
         self.updateGeometry()
 
     def set_default_parser(self, value):
-        index = self._parser_combo.findText(str(value))
-        if index >= 0:
-            self._parser_combo.setCurrentIndex(index)
+        select_value(self._parser_combo, str(value))
 
     def set_parser_config(self, value):
         self._parser_config = dict(value) if isinstance(value, dict) else {}
@@ -258,8 +262,8 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
     @property
     def parser_type(self):
         """None selects the project's parser settings."""
-        text = self._parser_combo.currentText()
-        return None if text == "项目设置" else text
+        mode = self._parser_combo.currentData()
+        return None if mode == CARD_PARSERS[0] else mode
 
     @property
     def parser_config(self):

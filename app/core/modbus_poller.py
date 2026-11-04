@@ -4,17 +4,17 @@ Each running project has one poller. As soon as a link that parses Modbus can se
 server needs a client), it reads what the project's Modbus bindings and chart curves show:
 before each request it gathers what the widgets on screen read, merges neighbouring addresses
 into read blocks (modbus_master.plan_blocks) and sends the block that is due first; a block is
-due again one period after it went out: the shortest 采集周期 (``mbPeriod``) of its bindings, or
+due again one period after it went out: the shortest collection period (``mbPeriod``) of its bindings, or
 the default period; one that falls due between two ticks goes out then, not a tick later. Reads
 go only to the links that parse Modbus, through their ModbusMaster, one request on the wire at a
 time, so a control's write goes out between two reads.
 
 Its settings are the link cards' (serial, TCP, MQTT; link_card.ModbusLinkSettings): the first
-card in document order whose link is connected and parses Modbus hands it its 默认轮询(ms)
-(``modbusPeriod``), 响应超时(ms) (``modbusTimeout``) and 默认从站 (``modbusSlave``, read by the
+card in document order whose link is connected and parses Modbus hands it its default polling
+period (``modbusPeriod``), response timeout (``modbusTimeout``) and default slave (``modbusSlave``, read by the
 bindings that filter no slave). A link answering as a Modbus slave (modbus_slave.py) is not read over, and
 its card neither hands the poller its settings nor shows its status; bindings and curves of a slave address
-that one of the program's 从站 cards answers to are left to that card's table and not read. Without such a card the period is 500 ms, a read waits 1000 ms
+that one of the program's slave-role cards answers to are left to that card's table and not read. Without such a card the period is 500 ms, a read waits 1000 ms
 for its reply and the slave is 1. A change counts at once. A link card whose link is connected,
 parses Modbus and can send shows the poller's status after its own.
 """
@@ -25,17 +25,19 @@ from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal
 
 from .modbus_master import MODBUS_PARSERS, modbus_problem, plan_blocks
 from .signal_lifetime import SignalConnections
+from .i18n import tr, N_
 
-DEFAULT_PERIOD = 500    # ms: how often what sets no 采集周期 of its own is read
+DEFAULT_PERIOD = 500    # ms: how often what sets no collection period of its own is read
 DEFAULT_TIMEOUT = 1000  # ms a read waits for its reply
 DEFAULT_SLAVE = 1       # the slave of bindings that filter none (mbSlaveFilter 0 or less)
 DUE_EARLY = 10          # ms: a block this close to due goes now; how soon to look again past a write
-WAITING = "等待连接"    # the status while no link that parses Modbus can send; link cards do not show it
+NO_REPLY = N_("无响应")  # the problem of a read nothing answered
+WAITING = N_("等待连接")    # the status while no link that parses Modbus can send; link cards do not show it
 
 
 def modbus_block_tip(blocks):
     """The tooltip of the status: one line per block."""
-    return "\n".join(f"从站 {slave} · 功能码 {fc} · 地址 {start}–{start + count - 1} · 周期 {period} ms"
+    return "\n".join(tr("从站 %1 · 功能码 %2 · 地址 %3–%4 · 周期 %5 ms", slave, fc, start, start + count - 1, period)
                      for slave, fc, start, count, period in blocks)
 
 
@@ -160,8 +162,8 @@ class ModbusPoller(QObject):
     def shown_status(self, link):
         """What a link card shows after its connection text: the status, while its ``link`` is
         connected, parses Modbus and can send (a TCP server needs a client); nothing before start()
-        or while no link can send (等待连接)."""
-        if not _parses_modbus(link) or not _can_send(link) or self._status[0] in ("", WAITING):
+        or while no link can send (WAITING)."""
+        if not _parses_modbus(link) or not _can_send(link) or self._status[0] in ("", tr(WAITING)):
             return ""
         return self._status[0]
 
@@ -261,7 +263,7 @@ class ModbusPoller(QObject):
         masters = self._masters()
         if not masters:  # nothing to read with: a link that comes back starts afresh
             self._blocks, self._due, self._results, self._round_status = [], {}, {}, None
-            self._set_status(WAITING)
+            self._set_status(tr(WAITING))
             return
         blocks = self._plan()
         if blocks != self._blocks:  # a new plan: its blocks start their round afresh
@@ -270,9 +272,9 @@ class ModbusPoller(QObject):
             self._results, self._round_status = {}, None
         self._set_interval(min([block[4] for block in blocks] + [self._period]))
         if not blocks:
-            self._set_status("没有 Modbus 绑定")
+            self._set_status(tr("没有 Modbus 绑定"))
             return
-        self._set_status(self._round_status or f"{len(blocks)} 块 · 轮询中", modbus_block_tip(blocks))
+        self._set_status(self._round_status or tr("%1 块 · 轮询中", len(blocks)), modbus_block_tip(blocks))
         if self._read is not None:
             return  # its replies tick again
         now = self._now()
@@ -293,7 +295,7 @@ class ModbusPoller(QObject):
         if read.waiting:
             self._read = read
         else:  # no link took it: the device cannot have answered
-            self._block_done(index, block, "无响应")
+            self._block_done(index, block, tr(NO_REPLY))
 
     def _on_read_done(self, read, result):
         if read is not self._read:
@@ -308,7 +310,7 @@ class ModbusPoller(QObject):
         self._read = None
         result = read.success or read.failure
         # An exception the device answered with, or no reply (a timeout, or a link that could not send).
-        problem = None if result.ok else modbus_problem(result.message) or "无响应"
+        problem = None if result.ok else modbus_problem(result.message) or tr(NO_REPLY)
         self._block_done(read.index, read.block, problem)
 
     def _block_done(self, index, block, problem):
@@ -319,13 +321,14 @@ class ModbusPoller(QObject):
             if len(self._results) == len(self._blocks):
                 failed = [i for i in range(len(self._blocks)) if self._results[i] is not None]
                 if not failed:
-                    self._round_status = f"{len(self._blocks)} 块 · 正常"
+                    self._round_status = tr("%1 块 · 正常", len(self._blocks))
                 else:
                     number, problem = failed[0], self._results[failed[0]]
                     slave, fc, start = self._blocks[number][:3]
-                    if problem == "无响应":
-                        self._round_status = f"第 {number + 1} 块无响应（从站 {slave} 功能码 {fc} 地址 {start}）"
+                    if problem == tr(NO_REPLY):
+                        self._round_status = tr("第 %1 块无响应（从站 %2 功能码 %3 地址 %4）",
+                                                number + 1, slave, fc, start)
                     else:
-                        self._round_status = f"第 {number + 1} 块{problem}"
+                        self._round_status = tr("第 %1 块%2", number + 1, problem)
                 self._results = {}
         self._tick()

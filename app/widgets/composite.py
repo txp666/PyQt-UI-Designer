@@ -16,6 +16,7 @@ from qfluentwidgets import (
 )
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
+from app.core.i18n import tr, N_
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
 
@@ -48,6 +49,8 @@ class DataSendCard(CardWidget):
     """Card with text input + send button for manual data sending over every connected
     link. Auto-wired to the communication hub. Supports HEX mode via checkbox."""
 
+    _NEWLINES = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}  # i18n: value
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -56,14 +59,14 @@ class DataSendCard(CardWidget):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
 
-        self._title = StrongBodyLabel("数据发送")
+        self._title = StrongBodyLabel(tr("数据发送"))
         layout.addWidget(self._title)
 
         input_row = QHBoxLayout()
         input_row.setSpacing(8)
         self._input = LineEdit()
-        self._input.setPlaceholderText("输入要发送的数据...")
-        self._send_btn = PrimaryPushButton(FIF.SEND, "发送")
+        self._input.setPlaceholderText(tr("输入要发送的数据..."))
+        self._send_btn = PrimaryPushButton(FIF.SEND, tr("发送"))
         self._tip_timer = QTimer(self)
         self._tip_timer.setSingleShot(True)
         self._tip_timer.timeout.connect(self._restore_send_button)
@@ -75,30 +78,30 @@ class DataSendCard(CardWidget):
 
         opt_row = QHBoxLayout()
         opt_row.setSpacing(8)
-        self._hex_check = CheckBox("HEX模式")
+        self._hex_check = CheckBox(tr("HEX模式"))
         self._hex_check.setChecked(False)
         self._newline_combo = ComboBox()
-        self._newline_combo.addItems(["无", "\\r\\n", "\\n", "\\r"])
+        for newline in self._NEWLINES:  # the newline's name shown translated, the name itself as data
+            self._newline_combo.addItem(tr(newline), userData=newline)
         self._newline_combo.setCurrentIndex(1)
         self._newline_combo.setFixedWidth(80)
         opt_row.addWidget(self._hex_check)
         opt_row.addStretch()
-        opt_row.addWidget(BodyLabel("换行符"))
+        opt_row.addWidget(BodyLabel(tr("换行符")))
         opt_row.addWidget(self._newline_combo)
         layout.addLayout(opt_row)
 
     def _do_send(self):
         text = self._input.text().strip()
         if not text:
-            self._flash_tip("请输入数据")
+            self._flash_tip(tr("请输入数据"))
             return
         from app.core.comm_manager import commHub
         if not commHub.is_connected:
-            self._flash_tip("未连接")
+            self._flash_tip(tr("未连接"))
             return
 
-        newline_map = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
-        suffix = newline_map.get(self._newline_combo.currentText(), "\r\n")
+        suffix = self._NEWLINES.get(self._newline_combo.currentData(), "\r\n")
 
         if self._hex_check.isChecked():
             hex_str = text.replace(" ", "")
@@ -107,7 +110,7 @@ class DataSendCard(CardWidget):
             try:
                 raw = bytes.fromhex(hex_str)
             except ValueError:
-                self._flash_tip("HEX格式错误")
+                self._flash_tip(tr("HEX格式错误"))
                 return
             commHub.send(raw)
         else:
@@ -121,7 +124,7 @@ class DataSendCard(CardWidget):
         self._tip_timer.start(1200)
 
     def _restore_send_button(self):
-        self._send_btn.setText("发送")
+        self._send_btn.setText(tr("发送"))
         self._send_btn.setEnabled(True)
 
     def set_title(self, t): self._title.setText(t)
@@ -145,8 +148,8 @@ class DataRecvCard(CardWidget):
         layout.setSpacing(6)
 
         title_row = QHBoxLayout()
-        self._title = StrongBodyLabel("数据接收")
-        self._counter = CaptionLabel("0 条")
+        self._title = StrongBodyLabel(tr("数据接收"))
+        self._counter = CaptionLabel(tr("%1 条", 0))
         self._counter.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         title_row.addWidget(self._title)
         title_row.addStretch()
@@ -155,14 +158,14 @@ class DataRecvCard(CardWidget):
 
         opt_row = QHBoxLayout()
         opt_row.setSpacing(8)
-        self._hex_check = CheckBox("HEX显示")
+        self._hex_check = CheckBox(tr("HEX显示"))
         self._hex_check.setChecked(False)
-        self._autoscroll_check = CheckBox("自动滚动")
+        self._autoscroll_check = CheckBox(tr("自动滚动"))
         self._autoscroll_check.setChecked(True)
         for check in (self._hex_check, self._autoscroll_check):
             # macOS lays a check box out by the native style's smaller rect; this one paints all of itself.
             check.setAttribute(Qt.WA_LayoutUsesWidgetRect)
-        self._clear_btn = PushButton("清空")
+        self._clear_btn = PushButton(tr("清空"))
         self._clear_btn.setFixedWidth(60)
         self._clear_btn.clicked.connect(self._clear)
         opt_row.addWidget(self._hex_check)
@@ -195,10 +198,10 @@ class DataRecvCard(CardWidget):
         self._serial_connections.connect(signalBus.serialDisconnected, self._on_disconnected)
 
     def _on_connected(self, port):
-        self._append_sys(f"已连接: {port}")
+        self._append_sys(tr("已连接: %1", port))
 
     def _on_disconnected(self):
-        self._append_sys("已断开")
+        self._append_sys(tr("已断开"))
 
     def _on_raw_recv(self, data: bytes):
         from datetime import datetime
@@ -214,7 +217,7 @@ class DataRecvCard(CardWidget):
             f'<span style="color:#9399b2">[{ts}]</span> '
             f'<span style="color:#a6e3a1">&lt;&lt; {_log_html(text)}</span>')
         self._count += 1
-        self._counter.setText(f"{self._count} 条")
+        self._counter.setText(tr("%1 条", self._count))
         self._trim()
         self._scroll()
 
@@ -248,7 +251,7 @@ class DataRecvCard(CardWidget):
     def _clear(self):
         self._output.clear()
         self._count = 0
-        self._counter.setText("0 条")
+        self._counter.setText(tr("%1 条", 0))
 
     def _trim(self):
         doc = self._output.document()
@@ -301,8 +304,8 @@ SLAVE_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard")
 
 
 class ModbusSlaveTable(RuntimeSlaveTable):
-    """The shared register table. On the designer canvas it shows the areas of the first card in the 从站
-    role with their 初始值, kept current as the design changes; the preview hands it the running slave."""
+    """The shared register table. On the designer canvas it shows the areas of the first card in the slave
+    role with their initial values, kept current as the design changes; the preview hands it the running slave."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -355,82 +358,91 @@ class ModbusSlaveTable(RuntimeSlaveTable):
 # such card in the document counts); the property panel shows them while the card's own parser is a
 # Modbus one.
 MODBUS_LINK_PROPS = [
-    PropDef("modbusPeriod", "默认轮询(ms)", PropType.INT, 500, min_val=10, max_val=60000),
-    PropDef("modbusTimeout", "响应超时(ms)", PropType.INT, 1000, min_val=10, max_val=60000),
-    PropDef("modbusSlave", "默认从站", PropType.INT, 1, min_val=1, max_val=247),
+    PropDef("modbusPeriod", N_("默认轮询(ms)"), PropType.INT, 500, min_val=10, max_val=60000),
+    PropDef("modbusTimeout", N_("响应超时(ms)"), PropType.INT, 1000, min_val=10, max_val=60000),
+    PropDef("modbusSlave", N_("默认从站"), PropType.INT, 1, min_val=1, max_val=247),
 ]
 
 
-def _slave_area_props(table, name):
-    return [PropDef(f"slave{table}Start", f"{name}起始", PropType.INT, 0, min_val=0, max_val=65535),
-            PropDef(f"slave{table}Count", f"{name}数量", PropType.INT, 100, min_val=0, max_val=10000)]
+# The labels of each area's first address and size.
+_SLAVE_AREA_LABELS = {
+    "Co": (N_("线圈起始"), N_("线圈数量")),
+    "Di": (N_("离散输入起始"), N_("离散输入数量")),
+    "Hr": (N_("保持寄存器起始"), N_("保持寄存器数量")),
+    "Ir": (N_("输入寄存器起始"), N_("输入寄存器数量")),
+}
+
+
+def _slave_area_props(table):
+    start, count = _SLAVE_AREA_LABELS[table]
+    return [PropDef(f"slave{table}Start", start, PropType.INT, 0, min_val=0, max_val=65535),
+            PropDef(f"slave{table}Count", count, PropType.INT, 100, min_val=0, max_val=10000)]
 
 
 # A serial or TCP card's Modbus role, the polling settings (主站) and the slave settings (从站): the panel
 # shows the role and 默认从站 while the card's own parser is a Modbus one, and the settings of its role.
 MODBUS_ROLE_PROPS = [
-    PropDef("modbusRole", "Modbus 角色", PropType.ENUM, "主站", options=["主站", "从站"],
-            description="从站：解析模式为 modbus 或 modbus_tcp 时应答外部主站"),
+    PropDef("modbusRole", N_("Modbus 角色"), PropType.ENUM, "主站", options=["主站", "从站"],  # i18n: value
+            description="从站：解析模式为 modbus 或 modbus_tcp 时应答外部主站"),  # i18n: ignore
     *MODBUS_LINK_PROPS,
-    PropDef("modbusDelay", "响应延时(ms)", PropType.INT, 0, min_val=0, max_val=5000),
-    PropDef("modbusExceptions", "异常响应", PropType.BOOL, True, description="关掉后出错的请求不应答"),
-    *_slave_area_props("Co", "线圈"), *_slave_area_props("Di", "离散输入"),
-    *_slave_area_props("Hr", "保持寄存器"), *_slave_area_props("Ir", "输入寄存器"),
-    PropDef("slaveInit", "初始值", PropType.TEXT, "",
-            description="每行一条 `区地址=值`，如 `hr100=1234`、`co3=1`；寄存器 −32768–65535，线圈、离散输入 0 或 1"),
+    PropDef("modbusDelay", N_("响应延时(ms)"), PropType.INT, 0, min_val=0, max_val=5000),
+    PropDef("modbusExceptions", N_("异常响应"), PropType.BOOL, True, description="关掉后出错的请求不应答"),  # i18n: ignore
+    *_slave_area_props("Co"), *_slave_area_props("Di"), *_slave_area_props("Hr"), *_slave_area_props("Ir"),
+    PropDef("slaveInit", N_("初始值"), PropType.TEXT, "",
+            description="每行一条 `区地址=值`，如 `hr100=1234`、`co3=1`；寄存器 −32768–65535，线圈、离散输入 0 或 1"),  # i18n: ignore
 ]
 
 # A link card's own frame format, edited in the property panel's 帧格式 section.
 PARSER_CONFIG_PROP = PropDef(
-    "parserConfig", "帧格式", PropType.OBJECT, {},
-    description="帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，"
-                "空对象表示沿用工程设置（模式相同时）或默认值")
+    "parserConfig", N_("帧格式"), PropType.OBJECT, {},
+    description="帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，"  # i18n: ignore
+                "空对象表示沿用工程设置（模式相同时）或默认值")  # i18n: ignore
 
 SERIAL_CONFIG_META = WidgetMeta(
     type_name="SerialConfigCard",
-    display_name="串口配置卡片",
+    display_name=N_("串口配置卡片"),
     category=WidgetCategory.COMM,
     icon="SERIAL_PORT",
     default_width=360, default_height=320,
     min_width=200, min_height=50,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "串口配置"),
-        PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
-                options=["完整", "简洁", "单行"]),
-        PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        PropDef("title", N_("标题"), PropType.STRING, N_("串口配置")),
+        PropDef("displayMode", N_("显示模式"), PropType.ENUM, "完整",  # i18n: value
+                options=["完整", "简洁", "单行"]),  # i18n: value
+        PropDef("defaultParser", N_("默认解析模式"), PropType.ENUM, "项目设置",  # i18n: value
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),  # i18n: value
         *MODBUS_ROLE_PROPS,
         PARSER_CONFIG_PROP,
-        PropDef("defaultBaud", "默认波特率", PropType.ENUM, "115200",
+        PropDef("defaultBaud", N_("默认波特率"), PropType.ENUM, "115200",
                 options=["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]),
-        PropDef("defaultDatabits", "默认数据位", PropType.ENUM, "8",
+        PropDef("defaultDatabits", N_("默认数据位"), PropType.ENUM, "8",
                 options=["5", "6", "7", "8"]),
-        PropDef("defaultParity", "默认校验位", PropType.ENUM, "None",
+        PropDef("defaultParity", N_("默认校验位"), PropType.ENUM, "None",
                 options=["None", "Even", "Odd", "Mark", "Space"]),
-        PropDef("defaultStopbits", "默认停止位", PropType.ENUM, "1",
+        PropDef("defaultStopbits", N_("默认停止位"), PropType.ENUM, "1",
                 options=["1", "1.5", "2"]),
-        PropDef("defaultFlow", "默认流控制", PropType.ENUM, "无",
-                options=["无", "RTS/CTS", "XON/XOFF", "DTR/DSR"]),
+        PropDef("defaultFlow", N_("默认流控制"), PropType.ENUM, "无",  # i18n: value
+                options=["无", "RTS/CTS", "XON/XOFF", "DTR/DSR"]),  # i18n: value
     ],
 )
 
 TCP_CONFIG_META = WidgetMeta(
     type_name="TcpConfigCard",
-    display_name="TCP 配置卡片",
+    display_name=N_("TCP 配置卡片"),
     category=WidgetCategory.COMM,
     icon="GLOBE",
     default_width=360, default_height=250,
     min_width=240, min_height=50,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "TCP 配置"),
-        PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
-                options=["完整", "简洁"]),
-        PropDef("defaultMode", "默认模式", PropType.ENUM, "客户端",
-                options=["客户端", "服务端"]),
-        PropDef("defaultHost", "默认地址", PropType.STRING, "127.0.0.1"),
-        PropDef("defaultPort", "默认端口", PropType.INT, 8080, min_val=1, max_val=65535),
-        PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        PropDef("title", N_("标题"), PropType.STRING, N_("TCP 配置")),
+        PropDef("displayMode", N_("显示模式"), PropType.ENUM, "完整",  # i18n: value
+                options=["完整", "简洁"]),  # i18n: value
+        PropDef("defaultMode", N_("默认模式"), PropType.ENUM, "客户端",  # i18n: value
+                options=["客户端", "服务端"]),  # i18n: value
+        PropDef("defaultHost", N_("默认地址"), PropType.STRING, "127.0.0.1"),
+        PropDef("defaultPort", N_("默认端口"), PropType.INT, 8080, min_val=1, max_val=65535),
+        PropDef("defaultParser", N_("默认解析模式"), PropType.ENUM, "项目设置",  # i18n: value
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),  # i18n: value
         *MODBUS_ROLE_PROPS,
         PARSER_CONFIG_PROP,
     ],
@@ -438,26 +450,26 @@ TCP_CONFIG_META = WidgetMeta(
 
 MQTT_CONFIG_META = WidgetMeta(
     type_name="MqttConfigCard",
-    display_name="MQTT 配置卡片",
+    display_name=N_("MQTT 配置卡片"),
     category=WidgetCategory.COMM,
     icon="CLOUD",
     default_width=380, default_height=390,
     min_width=260, min_height=50,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "MQTT 配置"),
-        PropDef("displayMode", "显示模式", PropType.ENUM, "完整",
-                options=["完整", "简洁"]),
-        PropDef("defaultHost", "默认服务器", PropType.STRING, "127.0.0.1"),
-        PropDef("defaultPort", "默认端口", PropType.INT, 1883, min_val=1, max_val=65535),
-        PropDef("defaultClientId", "默认客户端ID", PropType.STRING, ""),
-        PropDef("defaultUsername", "默认用户名", PropType.STRING, ""),
-        PropDef("defaultPassword", "默认密码", PropType.STRING, ""),
-        PropDef("defaultSubscribe", "默认订阅主题", PropType.STRING, "device/data"),
-        PropDef("defaultPublish", "默认发布主题", PropType.STRING, "device/cmd"),
-        PropDef("defaultQos", "默认 QoS", PropType.ENUM, "0", options=["0", "1", "2"]),
-        PropDef("defaultTls", "默认启用 TLS", PropType.BOOL, False),
-        PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
-                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
+        PropDef("title", N_("标题"), PropType.STRING, N_("MQTT 配置")),
+        PropDef("displayMode", N_("显示模式"), PropType.ENUM, "完整",  # i18n: value
+                options=["完整", "简洁"]),  # i18n: value
+        PropDef("defaultHost", N_("默认服务器"), PropType.STRING, "127.0.0.1"),
+        PropDef("defaultPort", N_("默认端口"), PropType.INT, 1883, min_val=1, max_val=65535),
+        PropDef("defaultClientId", N_("默认客户端ID"), PropType.STRING, ""),
+        PropDef("defaultUsername", N_("默认用户名"), PropType.STRING, ""),
+        PropDef("defaultPassword", N_("默认密码"), PropType.STRING, ""),
+        PropDef("defaultSubscribe", N_("默认订阅主题"), PropType.STRING, "device/data"),
+        PropDef("defaultPublish", N_("默认发布主题"), PropType.STRING, "device/cmd"),
+        PropDef("defaultQos", N_("默认 QoS"), PropType.ENUM, "0", options=["0", "1", "2"]),
+        PropDef("defaultTls", N_("默认启用 TLS"), PropType.BOOL, False),
+        PropDef("defaultParser", N_("默认解析模式"), PropType.ENUM, "项目设置",  # i18n: value
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),  # i18n: value
         *MODBUS_LINK_PROPS,
         PARSER_CONFIG_PROP,
     ],
@@ -465,54 +477,54 @@ MQTT_CONFIG_META = WidgetMeta(
 
 DATA_SEND_META = WidgetMeta(
     type_name="DataSendCard",
-    display_name="数据发送卡片",
+    display_name=N_("数据发送卡片"),
     category=WidgetCategory.COMM,
     icon="SEND",
     default_width=350, default_height=140,
     min_width=240, min_height=100,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "数据发送"),
-        PropDef("placeholder", "提示文字", PropType.STRING, "输入要发送的数据..."),
+        PropDef("title", N_("标题"), PropType.STRING, N_("数据发送")),
+        PropDef("placeholder", N_("提示文字"), PropType.STRING, N_("输入要发送的数据...")),
     ],
 )
 
 DATA_RECV_META = WidgetMeta(
     type_name="DataRecvCard",
-    display_name="数据接收卡片",
+    display_name=N_("数据接收卡片"),
     category=WidgetCategory.COMM,
     icon="DOWNLOAD",
     default_width=350, default_height=250,
     min_width=240, min_height=120,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "数据接收"),
-        PropDef("maxLines", "最大行数", PropType.INT, 1000, min_val=50, max_val=50000),
+        PropDef("title", N_("标题"), PropType.STRING, N_("数据接收")),
+        PropDef("maxLines", N_("最大行数"), PropType.INT, 1000, min_val=50, max_val=50000),
     ],
 )
 
 LOG_BOX_META = WidgetMeta(
     type_name="LogBox",
-    display_name="日志显示框",
+    display_name=N_("日志显示框"),
     category=WidgetCategory.COMM,
     icon="DOCUMENT",
     default_width=400, default_height=200,
     min_width=200, min_height=80,
     properties=[
-        PropDef("maxLines", "最大行数", PropType.INT, 500, min_val=50, max_val=50000),
+        PropDef("maxLines", N_("最大行数"), PropType.INT, 500, min_val=50, max_val=50000),
     ],
 )
 
 SLAVE_TABLE_META = WidgetMeta(
     type_name="ModbusSlaveTable",
-    display_name="从站寄存器表",
+    display_name=N_("从站寄存器表"),
     category=WidgetCategory.COMM,
     icon="TABLE",
     default_width=260, default_height=300,
     min_width=160, min_height=120,
     properties=[
-        PropDef("mbArea", "区", PropType.ENUM, "保持寄存器",
-                options=["保持寄存器", "输入寄存器", "线圈", "离散输入"]),
-        PropDef("displayFormat", "显示格式", PropType.ENUM, "无符号", options=["无符号", "有符号", "十六进制"],
-                description="线圈和离散输入总是显示 0/1"),
+        PropDef("mbArea", N_("区"), PropType.ENUM, "保持寄存器",  # i18n: value
+                options=["保持寄存器", "输入寄存器", "线圈", "离散输入"]),  # i18n: value
+        PropDef("displayFormat", N_("显示格式"), PropType.ENUM, "无符号", options=["无符号", "有符号", "十六进制"],  # i18n: value
+                description="线圈和离散输入总是显示 0/1"),  # i18n: ignore
     ],
 )
 
@@ -539,12 +551,12 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         return w
     if type_name == "DataSendCard":
         w = DataSendCard(parent)
-        w.set_title(props.get("title", "数据发送"))
-        w.set_placeholder(props.get("placeholder", "输入要发送的数据..."))
+        w.set_title(props.get("title", "数据发送"))  # i18n: value
+        w.set_placeholder(props.get("placeholder", "输入要发送的数据..."))  # i18n: value
         return w
     if type_name == "DataRecvCard":
         w = DataRecvCard(parent)
-        w.set_title(props.get("title", "数据接收"))
+        w.set_title(props.get("title", "数据接收"))  # i18n: value
         w.set_max_lines(props.get("maxLines", 1000))
         return w
     if type_name == "LogBox":
@@ -553,8 +565,8 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         return w
     if type_name == "ModbusSlaveTable":
         w = ModbusSlaveTable(parent)
-        w.set_area(props.get("mbArea", "保持寄存器"))
-        w.set_display_format(props.get("displayFormat", "无符号"))
+        w.set_area(props.get("mbArea", "保持寄存器"))  # i18n: value
+        w.set_display_format(props.get("displayFormat", "无符号"))  # i18n: value
         return w
     return None
 

@@ -3,6 +3,7 @@
 from PyQt5.QtWidgets import QWidget
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
+from app.core.i18n import N_
 from app.core.widget_registry import registry
 from app.core.table_runtime import DataTableWidget as RuntimeTable
 
@@ -18,15 +19,15 @@ class DataTableWidget(RuntimeTable):
 
 DATA_TABLE_META = WidgetMeta(
     type_name="DataTable",
-    display_name="数据表格",
+    display_name=N_("数据表格"),
     category=WidgetCategory.CHART,
     icon="TABLE",
     default_width=350, default_height=250,
     min_width=200, min_height=100,
     properties=[
-        PropDef("columns", "列名", PropType.TEXT, "字段\n值"),
-        PropDef("recordMode", "记录方式", PropType.ENUM, "最新值", options=["最新值", "逐行记录"]),
-        PropDef("maxRows", "最大行数", PropType.INT, 500, min_val=10, max_val=50000),
+        PropDef("columns", N_("列名"), PropType.TEXT, N_("字段\n值")),
+        PropDef("recordMode", N_("记录方式"), PropType.ENUM, "最新值", options=["最新值", "逐行记录"]),  # i18n: value
+        PropDef("maxRows", N_("最大行数"), PropType.INT, 500, min_val=10, max_val=50000),
     ],
 )
 
@@ -41,10 +42,10 @@ def register_comm_widgets():
 def create_comm_widget(type_name: str, props: dict, parent=None) -> QWidget:
     if type_name == "DataTable":
         w = DataTableWidget(parent)
-        cols_text = props.get("columns", "字段\n值")
+        cols_text = props.get("columns", "字段\n值")  # i18n: value
         cols = [c.strip() for c in cols_text.split("\n") if c.strip()]
         w.set_columns(cols)
-        w.set_record_mode(props.get("recordMode", "最新值"))
+        w.set_record_mode(props.get("recordMode", "最新值"))  # i18n: value
         w.set_max_rows(props.get("maxRows", 500))
         return w
     return None

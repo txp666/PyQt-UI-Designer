@@ -21,6 +21,7 @@ MIN_SIZE = 30
 # The link cards: never shorter than their rows, and each can carry its own frame format.
 LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard")
 
+FREE_LAYOUT = "自由"  # i18n: value  (a container whose children keep their own places)
 LAYOUT_TYPES = {"HBoxLayout", "VBoxLayout", "FlexLayout", "GroupBox", "TabWidget", "CardContainer"}
 
 
@@ -100,7 +101,7 @@ class CanvasItem(QGraphicsRectItem):
         if type_name == "TabWidget":
             self.properties["currentTab"] = clamp_tab_index(
                 self.properties.get("currentTab", 0),
-                len(tab_names(self.properties.get("tabNames", "标签1\n标签2"))))
+                len(tab_names(self.properties.get("tabNames", "标签1\n标签2"))))  # i18n: value
         self.binding: Optional[Dict] = None
         self._grid_size = 10
 
@@ -175,8 +176,8 @@ class CanvasItem(QGraphicsRectItem):
                 self.properties.get("currentTab", 0) if tab_index is None else tab_index,
                 self._inner_widget.count())
             mode = self.properties.get(
-                f"_tabLayout_{child.tab_index}", "自由")
-            child.setFlag(QGraphicsItem.ItemIsMovable, mode == "自由")
+                f"_tabLayout_{child.tab_index}", FREE_LAYOUT)
+            child.setFlag(QGraphicsItem.ItemIsMovable, mode == FREE_LAYOUT)
         else:
             child.setFlag(QGraphicsItem.ItemIsMovable, False)
         if relayout:
@@ -252,7 +253,7 @@ class CanvasItem(QGraphicsRectItem):
 
         elif self.type_name == "TabWidget":
             current_tab = self.properties.get("currentTab", 0)
-            mode = self.properties.get(f"_tabLayout_{current_tab}", "自由")
+            mode = self.properties.get(f"_tabLayout_{current_tab}", FREE_LAYOUT)
 
             page = self._inner_widget.currentWidget()
             tab_h = page.mapTo(self._inner_widget, QPoint()).y() if page else 32
@@ -266,18 +267,18 @@ class CanvasItem(QGraphicsRectItem):
                     ch.setVisible(True)
                     visible.append(ch)
 
-            is_free = (mode == "自由")
+            is_free = (mode == FREE_LAYOUT)
             for ch in visible:
                 ch.setFlag(QGraphicsItem.ItemIsMovable, is_free)
 
-            if mode == "自由":
+            if mode == FREE_LAYOUT:
                 pass  # keep children at their current positions
-            elif mode == "水平":
+            elif mode == "水平":  # i18n: value
                 x = pad
                 for ch in visible:
                     ch.setPos(x, tab_h)
                     x += ch.rect().width() + spacing
-            elif mode == "弹性(Flex)":
+            elif mode == "弹性(Flex)":  # i18n: value
                 x, row_h = pad, 0
                 y = tab_h
                 for ch in visible:
@@ -298,17 +299,17 @@ class CanvasItem(QGraphicsRectItem):
                     y += ch.rect().height() + spacing
 
         elif self.type_name == "CardContainer":
-            mode = self.properties.get("layout", "自由")
-            is_free = (mode == "自由")
+            mode = self.properties.get("layout", FREE_LAYOUT)
+            is_free = (mode == FREE_LAYOUT)
             for ch in self._container_children:
                 ch.setFlag(QGraphicsItem.ItemIsMovable, is_free)
 
-            if mode == "水平":
+            if mode == "水平":  # i18n: value
                 x = pad
                 for ch in self._container_children:
                     ch.setPos(x, pad)
                     x += ch.rect().width() + spacing
-            elif mode == "垂直":
+            elif mode == "垂直":  # i18n: value
                 y = pad
                 avail_w = r.width() - 2 * pad
                 for ch in self._container_children:
@@ -375,7 +376,7 @@ class CanvasItem(QGraphicsRectItem):
 
     def fit_min_height(self, rows_only=False):
         """Grow to min_height(), as after a link card's display mode changed. ``rows_only`` grows a
-        link card to what its rows need and no further, as when a project opens: a 48 px 单行 strip
+        link card to what its rows need and no further, as when a project opens: a 48 px one-line strip
         of an old file stays 48."""
         r = self.rect()
         height = self.min_height()

@@ -36,6 +36,7 @@ from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from serial_handler import ModbusRequests, create_parser, text_encoding
 from serial_handler import ModbusMaster
 
+from i18n import tr, N_
 
 try:
     import paho.mqtt.client as mqtt
@@ -68,8 +69,8 @@ def _reason_value(code):
 
 
 # MQTT 5 style CONNACK reason codes; paho 2 also reports MQTT 3.1.1 refusals this way.
-_CONNACK_TEXT = {132: "协议版本不支持", 133: "客户端ID无效", 134: "用户名或密码错误",
-                 135: "未授权，请检查用户名和密码", 136: "服务器不可用"}
+_CONNACK_TEXT = {132: N_("协议版本不支持"), 133: N_("客户端ID无效"), 134: N_("用户名或密码错误"),
+                 135: N_("未授权，请检查用户名和密码"), 136: N_("服务器不可用")}
 _V1_CONNACK = {1: 132, 2: 133, 3: 136, 4: 134, 5: 135}  # paho 1 passes MQTT 3.1.1 return codes
 
 
@@ -77,10 +78,13 @@ def _connack_text(code):
     """Why the broker refused a connection, in the user's language where we know it."""
     if isinstance(code, int):
         text = _CONNACK_TEXT.get(_V1_CONNACK.get(code, code))
-        if text is None and mqtt is not None and hasattr(mqtt, "connack_string"):
+        if text is not None:
+            return tr(text)
+        if mqtt is not None and hasattr(mqtt, "connack_string"):
             text = mqtt.connack_string(code)
         return text or str(code)
-    return _CONNACK_TEXT.get(_reason_value(code)) or str(code)
+    text = _CONNACK_TEXT.get(_reason_value(code))
+    return tr(text) if text else str(code)
 
 
 def _disconnect_text(code):
@@ -168,7 +172,7 @@ class MqttHandler(QObject):
                 parser_config=None):
         """Start connecting; ``connected`` reports success, ``error`` then ``disconnected`` a failure."""
         if mqtt is None:
-            self.error.emit("paho-mqtt 未安装，请运行 pip install paho-mqtt")
+            self.error.emit(tr("paho-mqtt 未安装，请运行 pip install paho-mqtt"))
             return False
         cfg = self._config
 
@@ -179,12 +183,12 @@ class MqttHandler(QObject):
             host = str(pick(host, "host")).strip()
             port = int(pick(port, "port"))
             if not host:
-                raise ValueError("请填写 MQTT 服务器地址")
+                raise ValueError(tr("请填写 MQTT 服务器地址"))
             if not 1 <= port <= 65535:
-                raise ValueError("端口必须在 1–65535 之间")
+                raise ValueError(tr("端口必须在 1–65535 之间"))
             qos = int(pick(qos, "qos"))
             if qos not in (0, 1, 2):
-                raise ValueError("QoS 只能是 0、1 或 2")
+                raise ValueError(tr("QoS 只能是 0、1 或 2"))
             topics = mqtt_topics(pick(subscribe, "subscribe"))
             publish_topic = str(pick(publish, "publish")).strip()
             selected_parser = pick(parser_type, "parser")
@@ -193,7 +197,7 @@ class MqttHandler(QObject):
                 selected_config = cfg["parserConfig"] if selected_parser == cfg["parser"] else {}
             create_parser(selected_parser, selected_config)
         except (TypeError, ValueError) as exc:
-            self.error.emit(f"MQTT 参数无效: {exc}")
+            self.error.emit(tr("MQTT 参数无效: %1", exc))
             return False
         if self.is_active:
             self.disconnect()
@@ -220,7 +224,7 @@ class MqttHandler(QObject):
             client.connect_async(host, port, int(cfg["keepalive"]))
             client.loop_start()
         except Exception as exc:
-            self.error.emit(f"MQTT 连接失败: {exc}")
+            self.error.emit(tr("MQTT 连接失败: %1", exc))
             return False
         self._client = client
         self._up = False
@@ -256,7 +260,7 @@ class MqttHandler(QObject):
         if not self.is_connected:
             return False
         if not self._publish_topic:
-            self.error.emit("发送失败: 未设置发布主题")
+            self.error.emit(tr("发送失败: 未设置发布主题"))
             return False
         payload = bytes(data)
         self.modbus_requests.note_frame(payload, self.parser_type)
@@ -267,7 +271,7 @@ class MqttHandler(QObject):
             if code != 0:
                 raise OSError(mqtt.error_string(code) if hasattr(mqtt, "error_string") else code)
         except Exception as exc:
-            self.error.emit(f"发送失败: {exc}")
+            self.error.emit(tr("发送失败: %1", exc))
             return False
         self.dataSent.emit(payload)
         return True
@@ -281,7 +285,7 @@ class MqttHandler(QObject):
         self._connectResult.emit(generation, _reason_value(code), _connack_text(code))
 
     def _paho_connect_fail(self, client, generation):
-        self._connectResult.emit(generation, -1, "无法连接到服务器")
+        self._connectResult.emit(generation, -1, tr("无法连接到服务器"))
 
     def _paho_disconnect(self, client, generation, *args):
         # paho 1: (rc) or (rc, properties)   paho 2: (disconnect_flags, reason_code, properties)
@@ -299,8 +303,8 @@ class MqttHandler(QObject):
         if code != 0:
             if code == -1 and self._tls:
                 # paho does not say why; an untrusted certificate looks the same as a dead port.
-                message += "（已启用 TLS，请检查端口和服务器证书）"
-            self.error.emit(f"MQTT 连接失败: {message}")
+                message += tr("（已启用 TLS，请检查端口和服务器证书）")
+            self.error.emit(tr("MQTT 连接失败: %1", message))
             self.disconnect()
             return
         for topic in self._topics:
@@ -310,7 +314,7 @@ class MqttHandler(QObject):
                 if code != 0:
                     raise ValueError(mqtt.error_string(code) if hasattr(mqtt, "error_string") else code)
             except Exception as exc:
-                self.error.emit(f"订阅 {topic} 失败: {exc}")
+                self.error.emit(tr("订阅 %1 失败: %2", topic, exc))
         self._up = True
         self.connected.emit(self._description)
         self.connectionChanged.emit(True)
@@ -321,7 +325,7 @@ class MqttHandler(QObject):
         # paho keeps reconnecting; its next successful CONNACK reports connected again.
         self._up = False
         self._parsers = {}
-        self.error.emit("MQTT 连接断开，正在重连" + (f": {message}" if message else ""))
+        self.error.emit(tr("MQTT 连接断开，正在重连") + (f": {message}" if message else ""))
         self.disconnected.emit()
         self.connectionChanged.emit(False)
 

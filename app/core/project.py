@@ -12,9 +12,13 @@ from app.designer.canvas import DesignScene
 from app.designer.canvas_item import CanvasItem, LINK_CARD_TYPES  # noqa: F401  (re-exported)
 from app.common.signal_bus import signalBus
 from app.core.widget_registry import registry
+from app.core.i18n import tr
+from app.core.link_polling import PROJECT_PARSER
 from PyQt5.QtCore import QSignalBlocker
 
 PROJECT_VERSION = "1.0"
+# The application name of a file that has none; a new project starts with it in the interface language.
+DEFAULT_APP_NAME = "上位机"  # i18n: value
 # LINK_CARD_TYPES: the link cards, which can carry their own frame format (properties.parserConfig).
 
 
@@ -44,7 +48,7 @@ class ProjectData:
 
     def __init__(self):
         self.version: str = PROJECT_VERSION
-        self.app_name: str = "上位机"
+        self.app_name: str = tr(DEFAULT_APP_NAME)
         self.canvas_width: int = 1200
         self.canvas_height: int = 800
         self.grid_size: int = 10
@@ -90,7 +94,7 @@ class ProjectData:
         cls.validate(data)
         proj = cls()
         proj.version = data.get("version", PROJECT_VERSION)
-        proj.app_name = data.get("appName", "上位机")
+        proj.app_name = data.get("appName", DEFAULT_APP_NAME)
         canvas = data.get("canvas", {})
         proj.canvas_width = canvas.get("width", 1200)
         proj.canvas_height = canvas.get("height", 800)
@@ -104,24 +108,24 @@ class ProjectData:
     def validate(data):
         """Reject invalid documents before touching the current scene."""
         if not isinstance(data, dict):
-            raise ValueError("项目根节点必须是对象")
+            raise ValueError(tr("项目根节点必须是对象"))
         if data.get("version", PROJECT_VERSION) != PROJECT_VERSION:
-            raise ValueError("不支持的项目版本")
+            raise ValueError(tr("不支持的项目版本"))
         if not isinstance(data.get("appName", ""), str):
-            raise ValueError("应用名称必须是文本")
+            raise ValueError(tr("应用名称必须是文本"))
         if not isinstance(data.get("icon", ""), str):
-            raise ValueError("应用图标必须是文本")
+            raise ValueError(tr("应用图标必须是文本"))
         canvas = data.get("canvas", {})
         if not isinstance(canvas, dict):
-            raise ValueError("画布配置必须是对象")
+            raise ValueError(tr("画布配置必须是对象"))
         for name, default, limit in (("width", 1200, 9999), ("height", 800, 9999),
                                      ("gridSize", 10, 1000)):
             value = canvas.get(name, default)
             if type(value) is not int or not 1 <= value <= limit:
-                raise ValueError(f"无效画布参数: {name}")
+                raise ValueError(tr("无效画布参数: %1", name))
         serial = data.get("serial", {})
         if not isinstance(serial, dict):
-            raise ValueError("串口配置必须是对象")
+            raise ValueError(tr("串口配置必须是对象"))
         from app.core.protocol_parser import create_parser
         project_parser = serial.get("parser", "line")
         create_parser(project_parser, serial.get("parserConfig"))
@@ -131,45 +135,45 @@ class ProjectData:
             card = item.get("id") or ""
             config = props["parserConfig"]
             if not isinstance(config, dict):
-                raise ValueError(f"卡片 {card} 的 parserConfig 必须是对象")
-            mode = props.get("defaultParser", "项目设置")
+                raise ValueError(tr("卡片 %1 的 parserConfig 必须是对象", card))
+            mode = props.get("defaultParser", PROJECT_PARSER)
             try:
-                create_parser(project_parser if mode == "项目设置" else mode, config)
+                create_parser(project_parser if mode == PROJECT_PARSER else mode, config)
             except ValueError as error:
-                raise ValueError(f"卡片 {card}: {error}") from None
+                raise ValueError(tr("卡片 %1: %2", card, error)) from None
 
         def walk(items, depth=0):
             if not isinstance(items, list) or depth > 64:
-                raise ValueError("无效控件树")
+                raise ValueError(tr("无效控件树"))
             for item in items:
                 if not isinstance(item, dict) or not isinstance(item.get("type"), str):
-                    raise ValueError("控件缺少有效类型")
+                    raise ValueError(tr("控件缺少有效类型"))
                 if not registry.get(item["type"]):
-                    raise ValueError(f"未知控件类型: {item['type']}")
+                    raise ValueError(tr("未知控件类型: %1", item["type"]))
                 wid = item.get("id")
                 if wid is not None:
                     if not isinstance(wid, str) or not wid or wid in ids:
-                        raise ValueError("控件 ID 无效或重复")
+                        raise ValueError(tr("控件 ID 无效或重复"))
                     ids.add(wid)
                 props = item.get("properties", {})
                 if not isinstance(props, dict):
-                    raise ValueError("控件属性必须是对象")
+                    raise ValueError(tr("控件属性必须是对象"))
                 if item["type"] in LINK_CARD_TYPES and "parserConfig" in props:
                     check_card_parser(item, props)
                 if item.get("binding") is not None and not isinstance(item["binding"], dict):
-                    raise ValueError("控件绑定必须是对象")
+                    raise ValueError(tr("控件绑定必须是对象"))
                 geo = item.get("geometry", {})
                 if not isinstance(geo, dict):
-                    raise ValueError("控件位置必须是对象")
+                    raise ValueError(tr("控件位置必须是对象"))
                 for key, value in geo.items():
                     if key in ("x", "y", "w", "h"):
                         if type(value) not in (int, float) or not math.isfinite(value):
-                            raise ValueError("控件位置必须是有限数值")
+                            raise ValueError(tr("控件位置必须是有限数值"))
                         if key in ("w", "h") and value <= 0:
-                            raise ValueError("控件尺寸必须大于零")
+                            raise ValueError(tr("控件尺寸必须大于零"))
                 tab = item.get("tabIndex", 0)
                 if type(tab) is not int or tab < 0:
-                    raise ValueError("无效选项卡索引")
+                    raise ValueError(tr("无效选项卡索引"))
                 walk(item.get("children", []), depth + 1)
 
         walk(data.get("widgets", []))

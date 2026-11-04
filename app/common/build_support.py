@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import sys
 
+from app.core.i18n import tr
+
 
 def safe_app_name(name: str) -> str:
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
@@ -44,6 +46,10 @@ def build_nuitka_command(project_dir, python_cmd, app_name, version="1.0.0",
     icons = project / "app" / "resource" / "widget_icons"
     if icons.is_dir():  # the designer's palette icons
         args.append(f"--include-data-dir={icons}=app/resource/widget_icons")
+
+    english = project / "app" / "resource" / "i18n" / "en.json"
+    if english.is_file():  # the designer's English texts, also written into its exports
+        args.append(f"--include-data-files={english}=app/resource/i18n/en.json")
 
     if (project / "app" / "core" / "serial_runtime.py").is_file():
         from app.common.runtime_sources import bundle_runtime_sources
@@ -93,7 +99,7 @@ def archive_build(project_dir, app_name, platform=None):
     build_dir = Path(project_dir).resolve() / "build"
     source = build_dir / ("main.app" if platform == "darwin" else "main.dist")
     if not source.is_dir():
-        raise FileNotFoundError(f"未找到本次编译产物: {source}")
+        raise FileNotFoundError(tr("未找到本次编译产物: %1", source))
 
     name = safe_app_name(app_name)
     final_dir = build_dir / (f"{name}.app" if platform == "darwin" else name)

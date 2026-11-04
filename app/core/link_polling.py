@@ -5,16 +5,16 @@ A link card owns its link. Handed the running application's CommHub, it creates 
 registers it there; any number of cards of one kind each have their own link. Handed None, or destroyed,
 the card disconnects its link and takes it off the hub.
 
-Every link card hands the running application's Modbus poller (modbus_poller.py) its 默认轮询(ms),
-响应超时(ms) and 默认从站 (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which count while the
-card is the first in the document whose link is connected and parses Modbus. While its link is
-connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
-``<connection> · <poller status>``, with the poller's blocks as its tooltip; 等待连接 is never shown
-there.
+Every link card hands the running application's Modbus poller (modbus_poller.py) its default polling
+period, response timeout and default slave (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which
+count while the card is the first in the document whose link is connected and parses Modbus. While its
+link is connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
+``<connection> · <poller status>``, with the poller's blocks as its tooltip; the poller's waiting status
+is never shown there.
 
-A serial or TCP card also has a Modbus role (ModbusSlaveSettings). As 从站 it owns a slave data table
+A serial or TCP card also has a Modbus role (ModbusSlaveSettings). As a slave it owns a slave data table
 (slave_runtime.ModbusSlaveDevice) and connects its link as a slave whenever the link parses modbus or
-modbus_tcp; while the link answers, the card shows ``<connection> · 从站 S · 应答 N`` in place of the
+modbus_tcp; while the link answers, the card shows ``<connection> · <slave status>`` in place of the
 poller's status.
 """
 from functools import partial
@@ -25,12 +25,19 @@ from qfluentwidgets import CaptionLabel, ToolTipFilter, ToolTipPosition
 
 from .signal_lifetime import SignalConnections
 from .slave_runtime import ModbusSlaveDevice
-from .modbus_slave import SLAVE_ROLE
+from .modbus_slave import MASTER_ROLE, SLAVE_ROLE
+from .i18n import tr
 
+# The defaultParser of a link card that uses the project's frame format.
+PROJECT_PARSER = "项目设置"  # i18n: value
+# A link card's displayMode: every row, the main ones, or (the serial card) one toolbar row.
+FULL_MODE, SIMPLE_MODE, ONE_LINE_MODE = "完整", "简洁", "单行"  # i18n: value
+# The parsing modes a link card offers: the project's settings, or one of its own.
+CARD_PARSERS = (PROJECT_PARSER, "line", "hex", "modbus", "modbus_tcp", "modbus_ascii")
 MODBUS_DEFAULTS = (500, 1000, 1)  # modbusPeriod, modbusTimeout, modbusSlave: the poller's own defaults
 MODBUS_RANGES = ((10, 60000), (10, 60000), (1, 247))
-SLAVE_DELAY_RANGE = (0, 5000)  # 响应延时(ms)
-SLAVE_START_RANGE, SLAVE_COUNT_RANGE = (0, 65535), (0, 10000)  # 起始 / 数量 of an area
+SLAVE_DELAY_RANGE = (0, 5000)  # the response delay, ms
+SLAVE_START_RANGE, SLAVE_COUNT_RANGE = (0, 65535), (0, 10000)  # the first address and size of an area
 
 
 def fluent_tooltip(widget, text=""):
@@ -39,6 +46,20 @@ def fluent_tooltip(widget, text=""):
     widget.setToolTip(text)
     widget.installEventFilter(ToolTipFilter(widget, 300, ToolTipPosition.TOP))
     return widget
+
+
+def add_value_items(combo, values):
+    """Fill ``combo`` with stored values: each item shows its value translated and keeps the value itself
+    as its data, which is what the card reads back."""
+    for value in values:
+        combo.addItem(tr(value), userData=value)
+
+
+def select_value(combo, value):
+    """Select the item of ``combo`` holding ``value``; nothing changes when none does."""
+    index = combo.findData(value)
+    if index >= 0:
+        combo.setCurrentIndex(index)
 
 
 def status_label(text):
@@ -127,7 +148,7 @@ class ModbusLinkSettings:
 
     @property
     def modbus_settings(self):
-        """(默认轮询 ms, 响应超时 ms, 默认从站) for the Modbus poller."""
+        """(polling period ms, response timeout ms, default slave) for the Modbus poller."""
         return self._modbus_settings
 
     def set_modbus_period(self, value):
@@ -187,13 +208,14 @@ class ModbusLinkSettings:
 
 class ModbusSlaveSettings(ModbusLinkSettings):
     """The Modbus role of a serial or TCP card (``modbusRole``), set at design time, and the slave settings
-    that count in the 从站 role: 响应延时(ms), 异常响应, the four areas and 初始值, with 默认从站 as this
-    slave's address. ``slave_device`` is the card's slave, None in the 主站 role; the card passes it to its
+    that count in the slave role: the response delay, exception responses, the four areas and the initial
+    values, with the default slave as this slave's address. ``slave_device`` is the card's slave, None in
+    the master role; the card passes it to its
     link's connect(), which answers with it while it parses modbus or modbus_tcp."""
 
     def _init_modbus(self):
         super()._init_modbus()
-        self._modbus_role = "主站"
+        self._modbus_role = MASTER_ROLE
         self._slave_device = ModbusSlaveDevice(self)
         self._slave_device.written.connect(self._on_slave_written)
         self._slave_device.statusChanged.connect(self._on_slave_status)
@@ -203,7 +225,7 @@ class ModbusSlaveSettings(ModbusLinkSettings):
         return self._slave_device if self._modbus_role == SLAVE_ROLE else None
 
     def set_modbus_role(self, value):
-        self._modbus_role = SLAVE_ROLE if value == SLAVE_ROLE else "主站"
+        self._modbus_role = SLAVE_ROLE if value == SLAVE_ROLE else MASTER_ROLE
 
     def set_modbus_slave(self, value):
         super().set_modbus_slave(value)

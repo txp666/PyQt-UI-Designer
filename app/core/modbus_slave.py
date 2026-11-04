@@ -1,4 +1,4 @@
-"""The Modbus slave (RTU and TCP) of a link card in the 从站 role, shared by the designer preview and exports.
+"""The Modbus slave (RTU and TCP) of a link card in the slave role, shared by the designer preview and exports.
 
 Pure Python, no Qt: the data table (SlaveStore), how a request is answered (ModbusSlave.request), how requests
 are cut out of a byte stream (RtuRequestFramer, TcpRequestFramer) and the log lines. slave_runtime.py puts it on
@@ -13,20 +13,24 @@ written addresses and their neighbours in the area, keyed like a Modbus reply's 
 import re
 
 from .protocol_parser import BaseParser, modbus_crc
+from .i18n import tr, N_
 
 # The link parsers a slave answers with: RTU frames (modbus) or MBAP frames (modbus_tcp).
 SLAVE_PARSERS = ("modbus", "modbus_tcp")
-SLAVE_ROLE = "从站"
+# A link card's modbusRole: it polls slaves as a master, or answers a master as a slave.
+MASTER_ROLE = "主站"  # i18n: value
+SLAVE_ROLE = "从站"  # i18n: value
 TABLES = ("co", "di", "hr", "ir")
 READ_FUNCTIONS = {"co": 1, "di": 2, "hr": 3, "ir": 4}
 # The tables by the area names bindings use, as binding_values.MODBUS_AREAS.
-AREA_TABLES = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}
+AREA_TABLES = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}  # i18n: value
 DEFAULT_AREA = (0, 100)  # start, count
 MAX_COUNT = 10000
 
-EXCEPTION_NAMES = {1: "非法功能码", 2: "非法数据地址", 3: "非法数据值"}
-FUNCTION_NAMES = {1: "读线圈", 2: "读离散输入", 3: "读保持寄存器", 4: "读输入寄存器",
-                  5: "写单线圈", 6: "写单寄存器", 15: "写多个线圈", 16: "写多个寄存器"}
+# Translated where a log line shows them.
+EXCEPTION_NAMES = {1: N_("非法功能码"), 2: N_("非法数据地址"), 3: N_("非法数据值")}
+FUNCTION_NAMES = {1: N_("读线圈"), 2: N_("读离散输入"), 3: N_("读保持寄存器"), 4: N_("读输入寄存器"),
+                  5: N_("写单线圈"), 6: N_("写单寄存器"), 15: N_("写多个线圈"), 16: N_("写多个寄存器")}
 
 _INIT_LINE = re.compile(r"\s*(co|di|hr|ir)([0-9]+)\s*=\s*(-?[0-9]+)\s*", re.I | re.A)
 
@@ -137,16 +141,16 @@ def describe(pdu):
     """What a request asks for, as its log line says."""
     fc = pdu[0]
     if fc not in FUNCTION_NAMES:
-        return f"功能码 {fc:02X}"
-    text = FUNCTION_NAMES[fc]
+        return tr("功能码 %1", f"{fc:02X}")
+    text = tr(FUNCTION_NAMES[fc])
     if len(pdu) >= 5:
         address, value = _u16(pdu, 1), _u16(pdu, 3)
         if fc == 5:
-            text += f" 地址 {address} 值 {value:04X}"
+            text += " " + tr("地址 %1 值 %2", address, f"{value:04X}")
         elif fc == 6:
-            text += f" 地址 {address} 值 {value}"
+            text += " " + tr("地址 %1 值 %2", address, value)
         else:
-            text += f" 地址 {address} 数量 {value}"
+            text += " " + tr("地址 %1 数量 %2", address, value)
     return text
 
 
@@ -240,29 +244,30 @@ class ModbusSlave:
                 return None, [], []
             broadcast = False
         fc = pdu[0]
-        line = f"收 {hex_text(frame)} · {describe(pdu)}"
+        line = f"{tr('收')} {hex_text(frame)} · {describe(pdu)}"
+        unanswered = f" · {tr('广播')} · {tr('不应答')}"
         if broadcast and fc in (1, 2, 3, 4):
-            return None, [[f"{line} · 广播 · 不应答", "info"]], []
+            return None, [[line + unanswered, "info"]], []
         result, written = handle(self.store, pdu)
         emits = [self.store.message(self.slave, *written)] if written else []
         if isinstance(result, int):
-            problem = f"异常 {result:02X} {EXCEPTION_NAMES[result]}"
+            problem = tr("异常 %1 %2", f"{result:02X}", tr(EXCEPTION_NAMES[result]))
             if broadcast:
-                return None, [[f"{line} · {problem} · 广播 · 不应答", "warn"]], emits
+                return None, [[f"{line} · {problem}{unanswered}", "warn"]], emits
             if not self.exceptions:
-                return None, [[f"{line} · {problem} · 不应答", "warn"]], emits
+                return None, [[f"{line} · {problem} · {tr('不应答')}", "warn"]], emits
             reply_pdu, ok = bytes([fc | 0x80, result]), False
         else:
             if broadcast:
-                return None, [[f"{line} · 广播 · 不应答", "info"]], emits
+                return None, [[line + unanswered, "info"]], emits
             reply_pdu, ok = result, True
         if self.framing == "rtu":
             body = bytes([unit]) + reply_pdu
             reply = body + modbus_crc(body)
         else:
             reply = frame[:4] + (len(reply_pdu) + 1).to_bytes(2, "big") + bytes([unit]) + reply_pdu
-        tail = "正常" if ok else problem
-        return reply, [[line, "info"], [f"发 {hex_text(reply)} · {tail}", "ok" if ok else "warn"]], emits
+        tail = tr("正常") if ok else problem
+        return reply, [[line, "info"], [f"{tr('发')} {hex_text(reply)} · {tail}", "ok" if ok else "warn"]], emits
 
 
 class RtuRequestFramer(BaseParser):

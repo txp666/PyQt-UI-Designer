@@ -1,12 +1,12 @@
-"""The Modbus slave of a link card in the 从站 role, on its link: shared by the designer preview and exports.
+"""The Modbus slave of a link card in the slave role, on its link: shared by the designer preview and exports.
 
-A serial or TCP card whose 设计角色 is 从站 owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
-built from the card's areas and 初始值 when it is first needed and kept while the program runs, whether the
+A serial or TCP card whose Modbus role is slave owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
+built from the card's areas and initial values when it is first needed and kept while the program runs, whether the
 link is connected or not. Every write to it (an external master's, a control's, a command's, the register
 table's) gives a slave message on ``written``, which the card publishes on its link like a parsed frame.
 
 When the card connects its link and the link parses modbus or modbus_tcp, the link frames requests with the
-device's framer and hands each one to ``receive``. A write takes effect at once; the reply goes out 响应延时
+device's framer and hands each one to ``receive``. A write takes effect at once; the reply goes out the response delay
 (``delay``) ms after its request came in, the replies one after another in the order the requests came. The
 link's ``slaveLog`` carries the log lines (the reply's when it goes out), and the counts of replies and of
 failed requests start from 0 at each connection.
@@ -16,6 +16,7 @@ import time
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
 from .modbus_slave import DEFAULT_AREA, TABLES, ModbusSlave, SlaveStore, request_framer
+from .i18n import tr
 
 
 class ModbusSlaveDevice(QObject):
@@ -127,6 +128,7 @@ class ModbusSlaveDevice(QObject):
             self._link.slaveLog.emit(text, level)
 
     def status_text(self):
-        """What the card shows after its connection: 从站 S · 应答 N, and · 异常 M once a request failed."""
-        text = f"从站 {self.address} · 应答 {self.replies}"
-        return f"{text} · 异常 {self.errors}" if self.errors else text
+        """What the card shows after its connection: the slave address and the replies so far, then the
+        failed requests once there are any."""
+        text = tr("从站 %1 · 应答 %2", self.address, self.replies)
+        return text + tr(" · 异常 %1", self.errors) if self.errors else text

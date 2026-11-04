@@ -3,14 +3,15 @@ from qfluentwidgets import CaptionLabel, CheckBox, ComboBox, LineEdit, PasswordL
 
 from .link_card import LinkConfigCard
 from .mqtt_runtime import MqttHandler
+from .i18n import tr, N_
 
 
 class MqttConfigCard(LinkConfigCard):
     LINK_CLASS = MqttHandler
-    TITLE = "MQTT 配置"
+    TITLE = N_("MQTT 配置")
     PROPERTY_SETTERS = (
-        ("title", "set_title", "MQTT 配置"),
-        ("displayMode", "set_display_mode", "完整"),
+        ("title", "set_title", "MQTT 配置"),  # i18n: value
+        ("displayMode", "set_display_mode", "完整"),  # i18n: value
         ("defaultHost", "set_default_host", "127.0.0.1"),
         ("defaultPort", "set_default_port", 1883),
         ("defaultClientId", "set_default_client_id", ""),
@@ -20,7 +21,7 @@ class MqttConfigCard(LinkConfigCard):
         ("defaultPublish", "set_default_publish", "device/cmd"),
         ("defaultQos", "set_default_qos", "0"),
         ("defaultTls", "set_default_tls", False),
-        ("defaultParser", "set_default_parser", "项目设置"),
+        ("defaultParser", "set_default_parser", "项目设置"),  # i18n: value
         ("modbusPeriod", "set_modbus_period", 500),
         ("modbusTimeout", "set_modbus_timeout", 1000),
         ("modbusSlave", "set_modbus_slave", 1),
@@ -30,35 +31,34 @@ class MqttConfigCard(LinkConfigCard):
     def _build_rows(self):
         self._host_edit = LineEdit()
         self._host_edit.setText("127.0.0.1")
-        self._host_edit.setPlaceholderText("broker 地址")
+        self._host_edit.setPlaceholderText(tr("broker 地址"))
         self._port_spin = SpinBox()
         self._port_spin.setRange(1, 65535)
         self._port_spin.setValue(1883)
-        self.add_row("服务器", (self._host_edit, 3), (self._port_spin, 1))
+        self.add_row(tr("服务器"), (self._host_edit, 3), (self._port_spin, 1))
         self._client_id_edit = LineEdit()
-        self._client_id_edit.setPlaceholderText("留空自动生成")
-        self.add_row("客户端ID", self._client_id_edit, full_only=True)
+        self._client_id_edit.setPlaceholderText(tr("留空自动生成"))
+        self.add_row(tr("客户端ID"), self._client_id_edit, full_only=True)
         self._username_edit = LineEdit()
-        self._username_edit.setPlaceholderText("可选")
+        self._username_edit.setPlaceholderText(tr("可选"))
         self._password_edit = PasswordLineEdit()
-        self._password_edit.setPlaceholderText("可选")
-        self.add_row("用户名", (self._username_edit, 1), (CaptionLabel("密码"), 0),
+        self._password_edit.setPlaceholderText(tr("可选"))
+        self.add_row(tr("用户名"), (self._username_edit, 1), (CaptionLabel(tr("密码")), 0),
                      (self._password_edit, 1), full_only=True)
         self._subscribe_edit = LineEdit()
         self._subscribe_edit.setText("device/data")
-        self._subscribe_edit.setPlaceholderText("多个主题用逗号分隔，支持 + 和 #")
-        self.add_row("订阅主题", self._subscribe_edit)
+        self._subscribe_edit.setPlaceholderText(tr("多个主题用逗号分隔，支持 + 和 #"))
+        self.add_row(tr("订阅主题"), self._subscribe_edit)
         self._publish_edit = LineEdit()
         self._publish_edit.setText("device/cmd")
-        self._publish_edit.setPlaceholderText("命令发往的主题")
-        self.add_row("发布主题", self._publish_edit)
+        self._publish_edit.setPlaceholderText(tr("命令发往的主题"))
+        self.add_row(tr("发布主题"), self._publish_edit)
         self._qos_combo = ComboBox()
         self._qos_combo.addItems(["0", "1", "2"])
         self._tls_check = CheckBox("TLS")
         self.add_row("QoS", (self._qos_combo, 1), (self._tls_check, 0), full_only=True)
-        self._parser_combo = ComboBox()
-        self._parser_combo.addItems(self.PARSERS)
-        self.add_row("解析模式", self._parser_combo, full_only=True)
+        self._parser_combo = self._parser_box()
+        self.add_row(tr("解析模式"), self._parser_combo, full_only=True)
         self._editors = [self._host_edit, self._port_spin, self._client_id_edit,
                          self._username_edit, self._password_edit, self._subscribe_edit,
                          self._publish_edit, self._qos_combo, self._tls_check,

@@ -9,13 +9,14 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import isDarkTheme, CardWidget, qconfig
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
+from app.core.i18n import tr, N_
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
 
 
 def tab_names(names_text: str) -> list:
     """A tab container always has at least one usable page."""
-    return [name.strip() for name in names_text.split("\n") if name.strip()] or ["标签1"]
+    return [name.strip() for name in names_text.split("\n") if name.strip()] or ["标签1"]  # i18n: value
 
 
 def clamp_tab_index(index: int, count: int) -> int:
@@ -30,7 +31,7 @@ class HBoxContainer(QFrame):
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(4, 4, 4, 4)
         self._layout.setSpacing(8)
-        self._title = "水平布局"
+        self._title = tr("水平布局")
         self.apply_theme()
         self._theme_connections = SignalConnections(self)
         self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
@@ -65,7 +66,7 @@ class VBoxContainer(QFrame):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(4, 4, 4, 4)
         self._layout.setSpacing(8)
-        self._title = "垂直布局"
+        self._title = tr("垂直布局")
         self.apply_theme()
         self._theme_connections = SignalConnections(self)
         self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
@@ -97,7 +98,7 @@ class FlexContainer(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._title = "弹性布局"
+        self._title = tr("弹性布局")
         self._spacing = 8
         self._direction = "row"
         self.apply_theme()
@@ -130,7 +131,7 @@ class GroupBoxContainer(QGroupBox):
     """Styled group box with title."""
 
     def __init__(self, parent=None):
-        super().__init__("分组", parent)
+        super().__init__(tr("分组"), parent)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(8, 20, 8, 8)
         self._layout.setSpacing(6)
@@ -157,7 +158,7 @@ class TabContainer(QTabWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._tab_names = ["标签1", "标签2"]
+        self._tab_names = [tr("标签1"), tr("标签2")]
         self._rebuild_tabs()
         self.apply_theme()
         self._theme_connections = SignalConnections(self)
@@ -268,96 +269,96 @@ class CardContainer(CardWidget):
 
 HBOX_META = WidgetMeta(
     type_name="HBoxLayout",
-    display_name="水平布局",
+    display_name=N_("水平布局"),
     category=WidgetCategory.LAYOUT,
     icon="COLUMNS",
     default_width=300, default_height=80,
     min_width=60, min_height=40,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "水平布局"),
-        PropDef("spacing", "间距", PropType.INT, 8, min_val=0, max_val=100),
+        PropDef("title", N_("标题"), PropType.STRING, N_("水平布局")),
+        PropDef("spacing", N_("间距"), PropType.INT, 8, min_val=0, max_val=100),
     ],
 )
 
 VBOX_META = WidgetMeta(
     type_name="VBoxLayout",
-    display_name="垂直布局",
+    display_name=N_("垂直布局"),
     category=WidgetCategory.LAYOUT,
     icon="ROWS",
     default_width=200, default_height=200,
     min_width=60, min_height=40,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "垂直布局"),
-        PropDef("spacing", "间距", PropType.INT, 8, min_val=0, max_val=100),
+        PropDef("title", N_("标题"), PropType.STRING, N_("垂直布局")),
+        PropDef("spacing", N_("间距"), PropType.INT, 8, min_val=0, max_val=100),
     ],
 )
 
 FLEX_META = WidgetMeta(
     type_name="FlexLayout",
-    display_name="弹性布局",
+    display_name=N_("弹性布局"),
     category=WidgetCategory.LAYOUT,
     icon="LAYOUT",
     default_width=400, default_height=200,
     min_width=100, min_height=60,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "弹性布局"),
-        PropDef("direction", "方向", PropType.ENUM, "row", options=["row", "column"]),
-        PropDef("spacing", "间距", PropType.INT, 8, min_val=0, max_val=100),
+        PropDef("title", N_("标题"), PropType.STRING, N_("弹性布局")),
+        PropDef("direction", N_("方向"), PropType.ENUM, "row", options=["row", "column"]),
+        PropDef("spacing", N_("间距"), PropType.INT, 8, min_val=0, max_val=100),
     ],
 )
 
 GROUPBOX_META = WidgetMeta(
     type_name="GroupBox",
-    display_name="分组框",
+    display_name=N_("分组框"),
     category=WidgetCategory.LAYOUT,
     icon="GROUP_BOX",
     default_width=280, default_height=180,
     min_width=80, min_height=60,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "分组"),
+        PropDef("title", N_("标题"), PropType.STRING, N_("分组")),
     ],
 )
 
 TAB_META = WidgetMeta(
     type_name="TabWidget",
-    display_name="选项卡",
+    display_name=N_("选项卡"),
     category=WidgetCategory.LAYOUT,
     icon="TABS",
     default_width=350, default_height=250,
     min_width=150, min_height=80,
     properties=[
-        PropDef("tabNames", "标签名称", PropType.TEXT, "标签1\n标签2\n标签3"),
-        PropDef("currentTab", "当前标签页", PropType.INT, 0, min_val=0, max_val=9999),
-        PropDef("tabLayout", "当前页布局", PropType.ENUM, "自由",
-                options=["自由", "垂直", "水平", "弹性(Flex)"]),
+        PropDef("tabNames", N_("标签名称"), PropType.TEXT, N_("标签1\n标签2\n标签3")),
+        PropDef("currentTab", N_("当前标签页"), PropType.INT, 0, min_val=0, max_val=9999),
+        PropDef("tabLayout", N_("当前页布局"), PropType.ENUM, "自由",  # i18n: value
+                options=["自由", "垂直", "水平", "弹性(Flex)"]),  # i18n: value
     ],
 )
 
 SEPARATOR_META = WidgetMeta(
     type_name="Separator",
-    display_name="分割线",
+    display_name=N_("分割线"),
     category=WidgetCategory.LAYOUT,
     icon="REMOVE",
     default_width=200, default_height=2,
     min_width=20, min_height=2,
     properties=[
-        PropDef("orientation", "方向", PropType.ENUM, "horizontal",
+        PropDef("orientation", N_("方向"), PropType.ENUM, "horizontal",
                 options=["horizontal", "vertical"]),
     ],
 )
 
 CARD_META = WidgetMeta(
     type_name="CardContainer",
-    display_name="卡片容器",
+    display_name=N_("卡片容器"),
     category=WidgetCategory.LAYOUT,
     icon="CARD",
     default_width=300, default_height=200,
     min_width=80, min_height=60,
     properties=[
-        PropDef("title", "标题", PropType.STRING, ""),
-        PropDef("layout", "布局", PropType.ENUM, "自由",
-                options=["自由", "垂直", "水平"]),
-        PropDef("spacing", "间距", PropType.INT, 8, min_val=0, max_val=100),
+        PropDef("title", N_("标题"), PropType.STRING, ""),
+        PropDef("layout", N_("布局"), PropType.ENUM, "自由",  # i18n: value
+                options=["自由", "垂直", "水平"]),  # i18n: value
+        PropDef("spacing", N_("间距"), PropType.INT, 8, min_val=0, max_val=100),
     ],
 )
 
@@ -372,27 +373,27 @@ def register_layout_widgets():
 def create_layout_widget(type_name: str, props: dict, parent=None) -> QWidget:
     if type_name == "HBoxLayout":
         w = HBoxContainer(parent)
-        w.set_title(props.get("title", "水平布局"))
+        w.set_title(props.get("title", "水平布局"))  # i18n: value
         w.set_spacing(props.get("spacing", 8))
         return w
     if type_name == "VBoxLayout":
         w = VBoxContainer(parent)
-        w.set_title(props.get("title", "垂直布局"))
+        w.set_title(props.get("title", "垂直布局"))  # i18n: value
         w.set_spacing(props.get("spacing", 8))
         return w
     if type_name == "FlexLayout":
         w = FlexContainer(parent)
-        w.set_title(props.get("title", "弹性布局"))
+        w.set_title(props.get("title", "弹性布局"))  # i18n: value
         w.set_direction(props.get("direction", "row"))
         w.set_spacing(props.get("spacing", 8))
         return w
     if type_name == "GroupBox":
         w = GroupBoxContainer(parent)
-        w.set_title(props.get("title", "分组"))
+        w.set_title(props.get("title", "分组"))  # i18n: value
         return w
     if type_name == "TabWidget":
         w = TabContainer(parent)
-        w.set_tab_names(props.get("tabNames", "标签1\n标签2"))
+        w.set_tab_names(props.get("tabNames", "标签1\n标签2"))  # i18n: value
         w.setCurrentIndex(clamp_tab_index(props.get("currentTab", 0), w.count()))
         return w
     if type_name == "Separator":

@@ -5,7 +5,7 @@ import ctypes
 from pathlib import Path
 
 from PyQt5 import sip
-from PyQt5.QtCore import Qt, QEvent
+from PyQt5.QtCore import Qt, QEvent, QLocale
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentTranslator
@@ -14,7 +14,11 @@ from app.common.dist_smoke import DistributionSmokeTest
 
 smoke_test = DistributionSmokeTest.from_arguments(sys.argv)
 
-from app.common.config import cfg
+from app.common.config import cfg, english_table, language_setting
+from app.core.i18n import language, set_language
+
+# Before any module with interface texts is imported, and before the first window exists.
+set_language(language_setting(), english_table())
 
 if cfg.get(cfg.dpiScale) != "Auto":
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
@@ -34,9 +38,9 @@ from app.core.theme_runtime import ThemeController
 
 theme_controller = ThemeController(app, cfg.get(cfg.themeMode))
 
-locale = cfg.get(cfg.language).value
-translator = FluentTranslator(locale)
-app.installTranslator(translator)
+if language() == "zh_CN":  # the Fluent library's own texts are English in its source
+    translator = FluentTranslator(QLocale(QLocale.Chinese, QLocale.China))
+    app.installTranslator(translator)
 
 from app.view.main_window import MainWindow  # noqa: E402
 

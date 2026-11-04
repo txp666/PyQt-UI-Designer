@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from app.core.i18n import tr, N_
+
 
 def normalized_range_properties(type_name, properties, changed=None):
     """Keep editable numeric endpoints and their initial value consistent."""
@@ -48,11 +50,12 @@ class PropDef:
 
 
 class WidgetCategory(Enum):
-    BASIC = "基础控件"
-    LAYOUT = "布局容器"
-    DISPLAY = "显示控件"
-    CHART = "图表控件"
-    COMM = "通信控件"
+    """A palette category; its value is the Chinese name, shown translated."""
+    BASIC = N_("基础控件")
+    LAYOUT = N_("布局容器")
+    DISPLAY = N_("显示控件")
+    CHART = N_("图表控件")
+    COMM = N_("通信控件")
 
 
 @dataclass
@@ -70,8 +73,20 @@ class WidgetMeta:
     min_height: int = 20
 
     def get_default_props(self) -> Dict[str, Any]:
+        """The properties a widget has when its file leaves them out; the same in every language."""
         # A copy each, so editing one widget's object property cannot change the default.
         return {p.name: copy.deepcopy(p.default) for p in self.properties}
+
+    def get_new_props(self) -> Dict[str, Any]:
+        """The properties of a widget added from the palette: the default texts in the interface
+        language (a default text is marked with N_ where it is defined), the rest as get_default_props."""
+        props = self.get_default_props()
+        for p in self.properties:
+            if p.prop_type in (PropType.STRING, PropType.TEXT) and isinstance(p.default, str) and p.default:
+                props[p.name] = tr(p.default)
+        if self.type_name == "RealtimeChart":  # a curve without a name shows 曲线1 whatever the language
+            props["_curve_0_name"] = tr("曲线%1", 1)
+        return props
 
     def get_prop_def(self, name: str) -> Optional[PropDef]:
         for p in self.properties:

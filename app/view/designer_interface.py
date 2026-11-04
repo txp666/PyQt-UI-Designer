@@ -29,6 +29,7 @@ from app.designer import selection_manager as sel
 from app.common.config import cfg
 from app.common.icon import WidgetIcon
 from app.common.signal_bus import signalBus
+from app.core.i18n import tr
 from app.core.project import ProjectManager, rebased_asset_path
 from app.core.signal_lifetime import SignalConnections
 
@@ -37,7 +38,7 @@ _REDO_KEYS = ("Ctrl+Shift+Z",) if sys.platform == "darwin" else ("Ctrl+Y", "Ctrl
 
 
 class _MirroredIcon(FluentIconBase):
-    """A Fluent icon turned left to right: 重做 is 撤销's arrow pointing the other way."""
+    """A Fluent icon turned left to right: redo is undo's arrow pointing the other way."""
 
     def __init__(self, icon):
         self._icon = icon
@@ -104,26 +105,26 @@ class DesignerInterface(QWidget):
         self._icon_button = ToolButton()
         self._icon_button.setFixedSize(32, 32)
         self._icon_button.setIconSize(QSize(20, 20))
-        self._icon_button.setToolTip("应用图标")
+        self._icon_button.setToolTip(tr("应用图标"))
         self._icon_button.installEventFilter(ToolTipFilter(self._icon_button, 300, ToolTipPosition.TOP))
         self._icon_button.clicked.connect(self._show_icon_menu)
         toolbar_row.addWidget(self._icon_button)
 
-        lbl_name = BodyLabel("名称:")
+        lbl_name = BodyLabel(tr("名称:"))
         self._app_name_edit = LineEdit()
-        self._app_name_edit.setText("上位机")
-        self._app_name_edit.setPlaceholderText("上位机名称")
+        self._app_name_edit.setText(tr("上位机"))
+        self._app_name_edit.setPlaceholderText(tr("上位机名称"))
         self._app_name_edit.setFixedWidth(120)
         self._app_name_edit.editingFinished.connect(self._on_app_name_changed)
         toolbar_row.addWidget(lbl_name)
         toolbar_row.addWidget(self._app_name_edit)
 
-        lbl_w = BodyLabel("宽:")
+        lbl_w = BodyLabel(tr("宽:"))
         self._canvas_w_edit = LineEdit()
         self._canvas_w_edit.setText("1200")
         self._canvas_w_edit.setFixedWidth(60)
         self._canvas_w_edit.editingFinished.connect(self._on_canvas_size_changed)
-        lbl_h = BodyLabel("高:")
+        lbl_h = BodyLabel(tr("高:"))
         self._canvas_h_edit = LineEdit()
         self._canvas_h_edit.setText("800")
         self._canvas_h_edit.setFixedWidth(60)
@@ -171,41 +172,43 @@ class DesignerInterface(QWidget):
             return action
 
         # The side panels' switches sit at the two ends of the bar; the canvas takes a hidden panel's room.
-        self._palette_action = add(WidgetIcon.PANEL_LEFT_ON, "隐藏控件库", lambda: self._toggle_panel(
-            self._palette, self._palette_action, "控件库", WidgetIcon.PANEL_LEFT, WidgetIcon.PANEL_LEFT_ON))
+        self._palette_action = add(WidgetIcon.PANEL_LEFT_ON, tr("隐藏%1", tr("控件库")), lambda: self._toggle_panel(
+            self._palette, self._palette_action, tr("控件库"), WidgetIcon.PANEL_LEFT, WidgetIcon.PANEL_LEFT_ON))
         bar.addSeparator()
-        add(FIF.ADD, "新建", self.newRequested.emit, QKeySequence.New)
-        add(FIF.FOLDER, "打开", self.openRequested.emit, QKeySequence.Open)
-        add(FIF.SAVE, "保存", self.saveRequested.emit, QKeySequence.Save)
-        add(FIF.SAVE_AS, "另存为", self.saveAsRequested.emit, QKeySequence.SaveAs)
+        add(FIF.ADD, tr("新建"), self.newRequested.emit, QKeySequence.New)
+        add(FIF.FOLDER, tr("打开"), self.openRequested.emit, QKeySequence.Open)
+        add(FIF.SAVE, tr("保存"), self.saveRequested.emit, QKeySequence.Save)
+        add(FIF.SAVE_AS, tr("另存为"), self.saveAsRequested.emit, QKeySequence.SaveAs)
         bar.addSeparator()
-        self._undo_action = add(FIF.CANCEL, "撤销", self.undo, QKeySequence.Undo)
-        self._redo_action = add(_MirroredIcon(FIF.CANCEL), "重做", self.redo, _REDO_KEYS[0])
+        self._undo_action = add(FIF.CANCEL, tr("撤销"), self.undo, QKeySequence.Undo)
+        self._redo_action = add(_MirroredIcon(FIF.CANCEL), tr("重做"), self.redo, _REDO_KEYS[0])
         bar.addSeparator()
-        self._copy_action = add(FIF.COPY, "复制", self.copy_selection, QKeySequence.Copy)
-        self._paste_action = add(FIF.PASTE, "粘贴", self.paste, QKeySequence.Paste)
-        add(FIF.DELETE, "删除", self._delete_selected)
+        self._copy_action = add(FIF.COPY, tr("复制"), self.copy_selection, QKeySequence.Copy)
+        self._paste_action = add(FIF.PASTE, tr("粘贴"), self.paste, QKeySequence.Paste)
+        add(FIF.DELETE, tr("删除"), self._delete_selected)
         bar.addSeparator()
         menu = self._align_menu = RoundMenu(parent=self)
-        for text, align in (("左对齐", sel.align_left), ("右对齐", sel.align_right),
-                            ("顶对齐", sel.align_top), ("底对齐", sel.align_bottom),
-                            ("水平居中", sel.align_horizontal_center), ("垂直居中", sel.align_vertical_center),
-                            ("横向等距分布", sel.distribute_horizontal), ("纵向等距分布", sel.distribute_vertical)):
+        for text, align in ((tr("左对齐"), sel.align_left), (tr("右对齐"), sel.align_right),
+                            (tr("顶对齐"), sel.align_top), (tr("底对齐"), sel.align_bottom),
+                            (tr("水平居中"), sel.align_horizontal_center),
+                            (tr("垂直居中"), sel.align_vertical_center),
+                            (tr("横向等距分布"), sel.distribute_horizontal),
+                            (tr("纵向等距分布"), sel.distribute_vertical)):
             menu.addAction(Action(text, triggered=lambda _=False, align=align: align(self._scene)))
-        add(FIF.ALIGNMENT, "对齐", lambda: menu.exec(QCursor.pos()))
+        add(FIF.ALIGNMENT, tr("对齐"), lambda: menu.exec(QCursor.pos()))
         bar.addSeparator()
         # The same switch as 设置 › 显示网格.
-        self._grid_action = add(FIF.TILES, "网格", lambda: None)
+        self._grid_action = add(FIF.TILES, tr("网格"), lambda: None)
         self._grid_action.setCheckable(True)
         self._grid_action.setChecked(cfg.get(cfg.showGrid))
         self._grid_action.toggled.connect(lambda shown: cfg.set(cfg.showGrid, shown))
-        add(FIF.ZOOM_IN, "放大", lambda: self._view.zoom_by(1.15), QKeySequence.ZoomIn)
-        add(FIF.ZOOM_OUT, "缩小", lambda: self._view.zoom_by(1 / 1.15), QKeySequence.ZoomOut)
-        add(FIF.FIT_PAGE, "适应窗口", lambda: self._view.fit_canvas(), "Ctrl+0")
-        add(FIF.ZOOM, "实际大小", lambda: self._view.reset_zoom())
+        add(FIF.ZOOM_IN, tr("放大"), lambda: self._view.zoom_by(1.15), QKeySequence.ZoomIn)
+        add(FIF.ZOOM_OUT, tr("缩小"), lambda: self._view.zoom_by(1 / 1.15), QKeySequence.ZoomOut)
+        add(FIF.FIT_PAGE, tr("适应窗口"), lambda: self._view.fit_canvas(), "Ctrl+0")
+        add(FIF.ZOOM, tr("实际大小"), lambda: self._view.reset_zoom())
         bar.addSeparator()
-        self._properties_action = add(WidgetIcon.PANEL_RIGHT_ON, "隐藏属性", lambda: self._toggle_panel(
-            self._prop_editor, self._properties_action, "属性", WidgetIcon.PANEL_RIGHT, WidgetIcon.PANEL_RIGHT_ON))
+        self._properties_action = add(WidgetIcon.PANEL_RIGHT_ON, tr("隐藏%1", tr("属性")), lambda: self._toggle_panel(
+            self._prop_editor, self._properties_action, tr("属性"), WidgetIcon.PANEL_RIGHT, WidgetIcon.PANEL_RIGHT_ON))
 
         return bar
 
@@ -214,7 +217,7 @@ class DesignerInterface(QWidget):
         shown = panel.isHidden()
         panel.setVisible(shown)
         action.setIcon(shown_icon if shown else hidden_icon)
-        action.setText(("隐藏" if shown else "显示") + title)
+        action.setText(tr("隐藏%1", title) if shown else tr("显示%1", title))
         action.setToolTip(action.text())
 
     def _on_grid_setting(self, shown):
@@ -240,7 +243,7 @@ class DesignerInterface(QWidget):
         self._palette.populate()
 
     def set_project_source(self, source):
-        """Where the designer finds the open project: for the property panel's 默认帧格式 and the app icon."""
+        """Where the designer finds the open project: for the property panel's default frame format and the app icon."""
         self._project_source = source
         self._prop_editor.set_project_source(source)
         self._on_project_replaced()
@@ -254,11 +257,11 @@ class DesignerInterface(QWidget):
 
     @property
     def app_name(self) -> str:
-        return self._app_name_edit.text().strip() or "上位机"
+        return self._app_name_edit.text().strip() or tr("上位机")
 
     @app_name.setter
     def app_name(self, value: str):
-        self._app_name_edit.setText(value or "上位机")
+        self._app_name_edit.setText(value or tr("上位机"))
 
     def _on_app_name_changed(self):
         signalBus.canvasChanged.emit()
@@ -308,15 +311,15 @@ class DesignerInterface(QWidget):
         if project is None:
             return
         menu = RoundMenu(parent=self)
-        menu.addAction(Action("选择图标…", triggered=self._choose_icon))
-        default = Action("使用默认图标", triggered=lambda: self._set_icon(""))
+        menu.addAction(Action(tr("选择图标…"), triggered=self._choose_icon))
+        default = Action(tr("使用默认图标"), triggered=lambda: self._set_icon(""))
         default.setEnabled(bool(project.icon))
         menu.addAction(default)
         menu.exec(self._icon_button.mapToGlobal(QPoint(0, self._icon_button.height())))
 
     def _choose_icon(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择应用图标", "", "图片 (*.png *.jpg *.jpeg *.ico)")
+            self, tr("选择应用图标"), "", tr("图片 (*.png *.jpg *.jpeg *.ico)"))
         if path:
             self._set_icon(path)
 
@@ -486,7 +489,7 @@ class DesignerInterface(QWidget):
             except Exception:  # values opening would also choke on; nothing is added
                 items = []
         if not items:
-            InfoBar.warning("提示", "剪贴板里没有可粘贴的控件",
+            InfoBar.warning(tr("提示"), tr("剪贴板里没有可粘贴的控件"),
                             parent=self, position=InfoBarPosition.TOP, duration=3000)
             return
 

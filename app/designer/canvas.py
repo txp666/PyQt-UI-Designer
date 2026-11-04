@@ -314,7 +314,7 @@ class DesignView(QGraphicsView):
             type_name = bytes(event.mimeData().data(MIME_WIDGET_TYPE)).decode("utf-8")
             meta = registry.get(type_name)
             if meta:
-                props = meta.get_default_props()
+                props = meta.get_new_props()
                 item = CanvasItem(type_name, props)
                 scene_pos = self.mapToScene(event.pos())
 
