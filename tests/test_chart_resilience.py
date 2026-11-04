@@ -91,7 +91,7 @@ class ChartResilienceTests(unittest.TestCase):
         project = ProjectData()
         project.widgets = [{"id": "chart", "type": "RealtimeChart"}]
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(project, folder, theme_mode="Light")
+            generate_project(project, folder, theme_mode="Light", language="zh_CN")
             runner = _EXPORT_RUNNER.replace(
                 "__CHECKS__", textwrap.indent(checks.strip(), "    "))
             result = subprocess.run(

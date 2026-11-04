@@ -9,7 +9,7 @@ RUNTIME_FILES = ("theme_runtime.py", "protocol_parser.py", "serial_runtime.py",
                  "mqtt_card.py", "modbus_master.py", "modbus_poller.py", "modbus_slave.py",
                  "slave_runtime.py", "slave_table.py",
                  "binding_values.py", "command_runtime.py", "tab_geometry.py", "slider_release.py",
-                 "signal_lifetime.py", "qt_window_lifetime.py")
+                 "signal_lifetime.py", "qt_window_lifetime.py", "i18n.py")
 ROOT = Path(__file__).resolve().parents[2]
 
 

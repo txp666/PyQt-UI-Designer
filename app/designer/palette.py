@@ -8,6 +8,7 @@ from qfluentwidgets import (
 )
 
 from app.common.icon import widget_icon
+from app.core.i18n import tr
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
 from app.widgets.base import WidgetCategory, WidgetMeta
@@ -69,13 +70,13 @@ class _CategoryCard(SimpleCardWidget):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(4)
 
-        header = StrongBodyLabel(category.value)
+        header = StrongBodyLabel(tr(category.value))
         layout.addWidget(header)
 
         self._list = _DraggableListWidget()
         theme = Theme.DARK if isDarkTheme() else Theme.LIGHT
         for meta in widgets:
-            item = QListWidgetItem(meta.display_name)
+            item = QListWidgetItem(tr(meta.display_name))
             item.setData(Qt.UserRole, meta.type_name)
             item.setToolTip(meta.type_name)
             icon = widget_icon(meta.icon)

@@ -7,6 +7,7 @@ from urllib.error import URLError, HTTPError
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
+from app.core.i18n import tr
 from app.core.tls_runtime import system_ssl_context
 
 GITHUB_REPO = "txp666/PyQt-UI-Designer"
@@ -56,11 +57,11 @@ class UpdateCheckThread(QThread):
                 self._emit_result(False, "", self._current, "", "", "")
             else:
                 self._emit_result(False, "", self._current, "", "",
-                                  f"服务器错误: HTTP {e.code}")
+                                  tr("服务器返回 HTTP %1", e.code))
         except URLError as e:
-            self._emit_result(False, "", self._current, "", "", f"网络错误: {e.reason}")
+            self._emit_result(False, "", self._current, "", "", tr("网络错误: %1", e.reason))
         except Exception as e:
-            self._emit_result(False, "", self._current, "", "", f"检查失败: {e}")
+            self._emit_result(False, "", self._current, "", "", tr("检查失败: %1", e))
 
     def _emit_result(self, *values):
         if not self.isInterruptionRequested():

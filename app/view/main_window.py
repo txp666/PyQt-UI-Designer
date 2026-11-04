@@ -13,6 +13,7 @@ from qfluentwidgets import (
 
 from app.common.config import cfg, APP_NAME, isWin11
 from app.common.signal_bus import signalBus
+from app.core.i18n import tr
 from app.core.project import ProjectManager
 from app.core.qt_window_lifetime import TitleBarLifecycleMixin
 from app.core.signal_lifetime import SignalConnections
@@ -30,7 +31,7 @@ from app.widgets.composite import register_composite_widgets
 
 def _project_name(path):
     """The project's file name, as the title bar shows it."""
-    return path.split("/")[-1].split("\\")[-1] if path else "未保存项目"
+    return path.split("/")[-1].split("\\")[-1] if path else tr("未保存项目")
 
 
 class MainWindow(TitleBarLifecycleMixin, FluentWindow):
@@ -89,7 +90,7 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
     def _on_canvas_changed(self):
         self._project_mgr.mark_dirty()
         if hasattr(self, "preview_interface"):
-            self.preview_interface.invalidate_project("设计已更改，请重新运行预览")
+            self.preview_interface.invalidate_project(tr("设计已更改，请重新运行预览"))
         self._update_title()
 
     def _on_history_changed(self):
@@ -106,11 +107,11 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
 
     def _init_navigation(self):
         self.addSubInterface(
-            self.designer_interface, FIF.EDIT, "设计器",
+            self.designer_interface, FIF.EDIT, tr("设计器"),
             NavigationItemPosition.TOP,
         )
         self.addSubInterface(
-            self.preview_interface, FIF.PLAY, "预览运行",
+            self.preview_interface, FIF.PLAY, tr("预览运行"),
             NavigationItemPosition.TOP,
         )
 
@@ -118,13 +119,13 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
 
         # 新建、打开、保存 are on the designer toolbar
         self.navigationInterface.addItem(
-            "nav_export", FIF.CODE, "导出代码",
+            "nav_export", FIF.CODE, tr("导出代码"),
             onClick=lambda: self._export_code(),
             position=NavigationItemPosition.BOTTOM,
         )
 
         self.addSubInterface(
-            self.setting_interface, FIF.SETTING, "设置",
+            self.setting_interface, FIF.SETTING, tr("设置"),
             NavigationItemPosition.BOTTOM,
         )
 
@@ -160,15 +161,15 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
     # --- Project operations ---
 
     def _confirm_unsaved_changes(self):
-        """Whether the current project may be replaced or closed: 保存 saves it first (and fails if
-        the save does), 不保存 drops the changes, 取消 and Esc keep everything as it is."""
+        """Whether the current project may be replaced or closed: Save saves it first (and fails if
+        the save does), Don't Save drops the changes, Cancel and Esc keep everything as it is."""
         if not self._project_mgr.is_dirty:
             return True
         name = _project_name(self._project_mgr.current.file_path)
-        box = MessageBox("保存更改？", f"“{name}”有未保存的更改。", self)
-        box.yesButton.setText("保存")
-        box.cancelButton.setText("取消")
-        discard = PushButton("不保存", box.buttonGroup)
+        box = MessageBox(tr("保存更改？"), tr("“%1”有未保存的更改。", name), self)
+        box.yesButton.setText(tr("保存"))
+        box.cancelButton.setText(tr("取消"))
+        discard = PushButton(tr("不保存"), box.buttonGroup)
         # Stretch 1, like the box's own buttons, so the three share the row evenly.
         box.buttonLayout.insertWidget(1, discard, 1, Qt.AlignVCenter)
         discarded = []
@@ -186,7 +187,7 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
             self.designer_interface.scene.clear_all()
             self.designer_interface.scene.set_canvas_size(1200, 800)
             self.designer_interface.scene.set_grid_size(10)
-            self.designer_interface.app_name = "上位机"
+            self.designer_interface.app_name = tr("上位机")
             self.designer_interface.canvas_size = (1200, 800)
         self._project_mgr.new_project()
         if hasattr(self, "preview_interface"):
@@ -194,13 +195,13 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
             self.preview_interface.set_project_data(self._project_mgr.current)
         signalBus.widgetDeselected.emit()
         self._update_title()
-        InfoBar.success("成功", "已新建项目", parent=self, position=InfoBarPosition.TOP, duration=2000)
+        InfoBar.success(tr("成功"), tr("已新建项目"), parent=self, position=InfoBarPosition.TOP, duration=2000)
 
     def _open_project(self):
         if not self._confirm_unsaved_changes():
             return
         path, _ = QFileDialog.getOpenFileName(
-            self, "打开项目", "", "UI Designer Project (*.uidp);;All Files (*)"
+            self, tr("打开项目"), "", "UI Designer Project (*.uidp);;All Files (*)"
         )
         if not path:
             return
@@ -216,9 +217,9 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
                     self._project_mgr.current.canvas_height,
                 )
             self._update_title()
-            InfoBar.success("成功", f"已加载: {path}", parent=self, position=InfoBarPosition.TOP, duration=2000)
+            InfoBar.success(tr("成功"), tr("已加载: %1", path), parent=self, position=InfoBarPosition.TOP, duration=2000)
         except Exception as e:
-            InfoBar.error("错误", f"加载失败: {e}", parent=self, position=InfoBarPosition.TOP, duration=5000)
+            InfoBar.error(tr("错误"), tr("加载失败: %1", e), parent=self, position=InfoBarPosition.TOP, duration=5000)
 
     def _save_project_as(self):
         return self._save_project(choose_path=True)
@@ -227,7 +228,7 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
         path = self._project_mgr.current.file_path
         if choose_path or not path:
             path, _ = QFileDialog.getSaveFileName(
-                self, "另存为" if choose_path else "保存项目", path or "project.uidp",
+                self, tr("另存为") if choose_path else tr("保存项目"), path or "project.uidp",
                 "UI Designer Project (*.uidp);;All Files (*)"
             )
         if not path:
@@ -236,14 +237,14 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
             self._project_mgr.save_from_scene(self.designer_interface.scene, path, self.designer_interface.app_name)
             self.designer_interface.mark_saved(path)
             self._update_title()
-            InfoBar.success("成功", f"已保存: {path}", parent=self, position=InfoBarPosition.TOP, duration=2000)
+            InfoBar.success(tr("成功"), tr("已保存: %1", path), parent=self, position=InfoBarPosition.TOP, duration=2000)
             return True
         except Exception as e:
-            InfoBar.error("错误", f"保存失败: {e}", parent=self, position=InfoBarPosition.TOP, duration=5000)
+            InfoBar.error(tr("错误"), tr("保存失败: %1", e), parent=self, position=InfoBarPosition.TOP, duration=5000)
             return False
 
     def _export_code(self):
-        directory = QFileDialog.getExistingDirectory(self, "选择导出目录")
+        directory = QFileDialog.getExistingDirectory(self, tr("选择导出目录"))
         if not directory:
             return
         try:
@@ -251,12 +252,12 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
             data = self._project_mgr.export_scene_data(self.designer_interface.scene, self.designer_interface.app_name)
             generate_project(data, directory)
             InfoBar.success(
-                "导出成功", f"代码已导出到: {directory}",
+                tr("导出成功"), tr("代码已导出到: %1", directory),
                 parent=self, position=InfoBarPosition.TOP, duration=3000,
             )
         except Exception as e:
             InfoBar.error(
-                "导出失败", str(e),
+                tr("导出失败"), str(e),
                 parent=self, position=InfoBarPosition.TOP, duration=5000,
             )
 

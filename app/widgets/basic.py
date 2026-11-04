@@ -11,6 +11,7 @@ from app.widgets.base import (
     WidgetMeta, WidgetCategory, PropDef, PropType, normalized_range_properties,
 )
 from app.core.widget_registry import registry
+from app.core.i18n import N_
 from app.core.command_runtime import MODBUS_DATA_TYPES, MODBUS_FUNCTIONS, MODBUS_ORDERS
 
 
@@ -25,235 +26,235 @@ def _modbus_functions(*codes):
 
 PUSH_BUTTON_META = WidgetMeta(
     type_name="PushButton",
-    display_name="按钮",
+    display_name=N_("按钮"),
     category=WidgetCategory.BASIC,
     icon="BUTTON",
     default_width=120, default_height=36,
     properties=[
-        PropDef("text", "文本", PropType.STRING, "按钮"),
-        PropDef("enabled", "启用", PropType.BOOL, True),
-        PropDef("commandMode", "发送模式", PropType.ENUM, "文本",
-                options=["文本", "HEX", "Modbus"]),
-        PropDef("command", "发送内容", PropType.COMMAND, ""),
-        PropDef("commandTemplate", "发送模板", PropType.STRING, "{value}"),
-        PropDef("frameHeader", "帧头(HEX)", PropType.STRING, ""),
-        PropDef("frameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("dataType", "数据类型", PropType.ENUM, "HEX字符串",
-                options=["HEX字符串", "uint8", "int8", "uint16", "int16",
+        PropDef("text", N_("文本"), PropType.STRING, N_("按钮")),
+        PropDef("enabled", N_("启用"), PropType.BOOL, True),
+        PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
+                options=["文本", "HEX", "Modbus"]),  # i18n: value
+        PropDef("command", N_("发送内容"), PropType.COMMAND, ""),
+        PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
+        PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
+        PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
+                options=["HEX字符串", "uint8", "int8", "uint16", "int16",  # i18n: value
                          "uint32", "int32", "float32"]),
-        PropDef("byteOrder", "字节序", PropType.ENUM, "大端(BE)",
-                options=["大端(BE)", "小端(LE)"]),
-        PropDef("commandNewline", "换行符", PropType.ENUM, "\\r\\n",
-                options=["无", "\\r\\n", "\\n", "\\r"]),
-        PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("mbFunc", "功能码", PropType.ENUM, "03 读保持寄存器",
+        PropDef("byteOrder", N_("字节序"), PropType.ENUM, "大端(BE)",  # i18n: value
+                options=["大端(BE)", "小端(LE)"]),  # i18n: value
+        PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
+        PropDef("mbSlave", N_("从站地址"), PropType.INT, 1, min_val=1, max_val=247),
+        PropDef("mbFunc", N_("功能码"), PropType.ENUM, "03 读保持寄存器",  # i18n: value
                 options=_modbus_functions(1, 2, 3, 4, 5, 6, 0x10)),
-        PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+        PropDef("mbAddress", N_("寄存器地址"), PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", N_("数据类型"), PropType.ENUM, "uint16",
                 options=list(MODBUS_DATA_TYPES)),
-        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+        PropDef("mbRegOrder", N_("寄存器序"), PropType.ENUM, MODBUS_ORDERS[0],
                 options=list(MODBUS_ORDERS)),
-        PropDef("mbValue", "值/数量", PropType.INT, 1,
+        PropDef("mbValue", N_("值/数量"), PropType.INT, 1,
                 min_val=-2147483648, max_val=2147483647),  # negative for int16 / int32 writes
-        PropDef("notify", "按下通知", PropType.BOOL, False),
-        PropDef("notifyTitle", "通知标题", PropType.STRING, "提示"),
-        PropDef("notifyContent", "通知内容", PropType.STRING, "按钮已按下"),
-        PropDef("notifyType", "通知类型", PropType.ENUM, "成功",
-                options=["成功", "信息", "警告", "错误"]),
-        PropDef("notifyDuration", "通知时长(ms)", PropType.INT, 3000,
+        PropDef("notify", N_("按下通知"), PropType.BOOL, False),
+        PropDef("notifyTitle", N_("通知标题"), PropType.STRING, N_("提示")),
+        PropDef("notifyContent", N_("通知内容"), PropType.STRING, N_("按钮已按下")),
+        PropDef("notifyType", N_("通知类型"), PropType.ENUM, "成功",  # i18n: value
+                options=["成功", "信息", "警告", "错误"]),  # i18n: value
+        PropDef("notifyDuration", N_("通知时长(ms)"), PropType.INT, 3000,
                 min_val=500, max_val=30000),
     ],
 )
 
 LABEL_META = WidgetMeta(
     type_name="Label",
-    display_name="标签",
+    display_name=N_("标签"),
     category=WidgetCategory.BASIC,
     icon="FONT",
     default_width=120, default_height=30,
     properties=[
-        PropDef("text", "文本", PropType.STRING, "标签"),
-        PropDef("fontSize", "字号", PropType.INT, 14, min_val=8, max_val=72),
-        PropDef("bold", "加粗", PropType.BOOL, False),
-        PropDef("alignment", "对齐", PropType.ENUM, "Left",
+        PropDef("text", N_("文本"), PropType.STRING, N_("标签")),
+        PropDef("fontSize", N_("字号"), PropType.INT, 14, min_val=8, max_val=72),
+        PropDef("bold", N_("加粗"), PropType.BOOL, False),
+        PropDef("alignment", N_("对齐"), PropType.ENUM, "Left",
                 options=["Left", "Center", "Right"]),
-        PropDef("displayFormat", "显示格式", PropType.ENUM, "自动",
-                options=["自动", "十进制", "十六进制(HEX)", "二进制(BIN)"]),
-        PropDef("decimals", "小数位数", PropType.ENUM, "自动",
-                options=["自动", "0", "1", "2", "3", "4"]),
+        PropDef("displayFormat", N_("显示格式"), PropType.ENUM, "自动",  # i18n: value
+                options=["自动", "十进制", "十六进制(HEX)", "二进制(BIN)"]),  # i18n: value
+        PropDef("decimals", N_("小数位数"), PropType.ENUM, "自动",  # i18n: value
+                options=["自动", "0", "1", "2", "3", "4"]),  # i18n: value
     ],
 )
 
 LINE_EDIT_META = WidgetMeta(
     type_name="LineEdit",
-    display_name="输入框",
+    display_name=N_("输入框"),
     category=WidgetCategory.BASIC,
     icon="TEXT_FIELD",
     default_width=200, default_height=36,
     properties=[
-        PropDef("placeholderText", "占位文本", PropType.STRING, "请输入..."),
-        PropDef("text", "默认值", PropType.STRING, ""),
-        PropDef("readOnly", "只读", PropType.BOOL, False),
-        PropDef("sendOnEnter", "回车发送", PropType.BOOL, False),
-        PropDef("commandMode", "发送模式", PropType.ENUM, "文本",
-                options=["文本", "HEX", "Modbus"]),
-        PropDef("commandTemplate", "发送模板", PropType.STRING, "{value}"),
-        PropDef("frameHeader", "帧头(HEX)", PropType.STRING, ""),
-        PropDef("frameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("dataType", "数据类型", PropType.ENUM, "HEX字符串",
-                options=["HEX字符串", "uint8", "int8", "uint16", "int16",
+        PropDef("placeholderText", N_("占位文本"), PropType.STRING, N_("请输入...")),
+        PropDef("text", N_("默认值"), PropType.STRING, ""),
+        PropDef("readOnly", N_("只读"), PropType.BOOL, False),
+        PropDef("sendOnEnter", N_("回车发送"), PropType.BOOL, False),
+        PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
+                options=["文本", "HEX", "Modbus"]),  # i18n: value
+        PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
+        PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
+        PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
+                options=["HEX字符串", "uint8", "int8", "uint16", "int16",  # i18n: value
                          "uint32", "int32", "float32"]),
-        PropDef("byteOrder", "字节序", PropType.ENUM, "大端(BE)",
-                options=["大端(BE)", "小端(LE)"]),
-        PropDef("commandNewline", "换行符", PropType.ENUM, "\\r\\n",
-                options=["无", "\\r\\n", "\\n", "\\r"]),
-        PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
+        PropDef("byteOrder", N_("字节序"), PropType.ENUM, "大端(BE)",  # i18n: value
+                options=["大端(BE)", "小端(LE)"]),  # i18n: value
+        PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
+        PropDef("mbSlave", N_("从站地址"), PropType.INT, 1, min_val=1, max_val=247),
+        PropDef("mbFunc", N_("功能码"), PropType.ENUM, "06 写单寄存器",  # i18n: value
                 options=_modbus_functions(3, 4, 5, 6, 0x10)),
-        PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+        PropDef("mbAddress", N_("寄存器地址"), PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", N_("数据类型"), PropType.ENUM, "uint16",
                 options=list(MODBUS_DATA_TYPES)),
-        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+        PropDef("mbRegOrder", N_("寄存器序"), PropType.ENUM, MODBUS_ORDERS[0],
                 options=list(MODBUS_ORDERS)),
     ],
 )
 
 COMBO_BOX_META = WidgetMeta(
     type_name="ComboBox",
-    display_name="下拉框",
+    display_name=N_("下拉框"),
     category=WidgetCategory.BASIC,
     icon="DROPDOWN",
     default_width=160, default_height=36,
     properties=[
-        PropDef("items", "选项", PropType.TEXT, "选项1\n选项2\n选项3"),
-        PropDef("currentIndex", "默认选项", PropType.INT, 0, min_val=0, max_val=99),
-        PropDef("sendOnSelect", "选中发送", PropType.BOOL, False),
-        PropDef("commands", "发送命令表", PropType.TEXT, "",),
-        PropDef("commandMode", "发送模式", PropType.ENUM, "文本",
-                options=["文本", "HEX", "Modbus"]),
-        PropDef("commandTemplate", "发送模板", PropType.STRING, "{value}"),
-        PropDef("frameHeader", "帧头(HEX)", PropType.STRING, ""),
-        PropDef("frameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("dataType", "数据类型", PropType.ENUM, "HEX字符串",
-                options=["HEX字符串", "uint8", "int8", "uint16", "int16",
+        PropDef("items", N_("选项"), PropType.TEXT, N_("选项1\n选项2\n选项3")),
+        PropDef("currentIndex", N_("默认选项"), PropType.INT, 0, min_val=0, max_val=99),
+        PropDef("sendOnSelect", N_("选中发送"), PropType.BOOL, False),
+        PropDef("commands", N_("发送命令表"), PropType.TEXT, "",),
+        PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
+                options=["文本", "HEX", "Modbus"]),  # i18n: value
+        PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
+        PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
+        PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
+                options=["HEX字符串", "uint8", "int8", "uint16", "int16",  # i18n: value
                          "uint32", "int32", "float32"]),
-        PropDef("byteOrder", "字节序", PropType.ENUM, "大端(BE)",
-                options=["大端(BE)", "小端(LE)"]),
-        PropDef("commandNewline", "换行符", PropType.ENUM, "\\r\\n",
-                options=["无", "\\r\\n", "\\n", "\\r"]),
-        PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
+        PropDef("byteOrder", N_("字节序"), PropType.ENUM, "大端(BE)",  # i18n: value
+                options=["大端(BE)", "小端(LE)"]),  # i18n: value
+        PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
+        PropDef("mbSlave", N_("从站地址"), PropType.INT, 1, min_val=1, max_val=247),
+        PropDef("mbFunc", N_("功能码"), PropType.ENUM, "06 写单寄存器",  # i18n: value
                 options=_modbus_functions(3, 4, 5, 6, 0x10)),
-        PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+        PropDef("mbAddress", N_("寄存器地址"), PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", N_("数据类型"), PropType.ENUM, "uint16",
                 options=list(MODBUS_DATA_TYPES)),
-        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+        PropDef("mbRegOrder", N_("寄存器序"), PropType.ENUM, MODBUS_ORDERS[0],
                 options=list(MODBUS_ORDERS)),
-        PropDef("mbValue", "值/数量", PropType.INT, 1,
+        PropDef("mbValue", N_("值/数量"), PropType.INT, 1,
                 min_val=-2147483648, max_val=2147483647),  # negative for int16 / int32 writes
     ],
 )
 
 SWITCH_META = WidgetMeta(
     type_name="ToggleSwitch",
-    display_name="开关",
+    display_name=N_("开关"),
     category=WidgetCategory.BASIC,
     icon="TOGGLE",
     default_width=140, default_height=30,
     properties=[
-        PropDef("label", "标签", PropType.STRING, "开关"),
-        PropDef("checked", "默认开启", PropType.BOOL, False),
-        PropDef("commandMode", "发送模式", PropType.ENUM, "文本",
-                options=["文本", "HEX", "Modbus"]),
-        PropDef("onCommand", "开启命令", PropType.COMMAND, ""),
-        PropDef("offCommand", "关闭命令", PropType.COMMAND, ""),
-        PropDef("commandTemplate", "发送模板", PropType.STRING, "{value}"),
-        PropDef("frameHeader", "帧头(HEX)", PropType.STRING, ""),
-        PropDef("frameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("dataType", "数据类型", PropType.ENUM, "HEX字符串",
-                options=["HEX字符串", "uint8", "int8", "uint16", "int16",
+        PropDef("label", N_("标签"), PropType.STRING, N_("开关")),
+        PropDef("checked", N_("默认开启"), PropType.BOOL, False),
+        PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
+                options=["文本", "HEX", "Modbus"]),  # i18n: value
+        PropDef("onCommand", N_("开启命令"), PropType.COMMAND, ""),
+        PropDef("offCommand", N_("关闭命令"), PropType.COMMAND, ""),
+        PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
+        PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
+        PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
+                options=["HEX字符串", "uint8", "int8", "uint16", "int16",  # i18n: value
                          "uint32", "int32", "float32"]),
-        PropDef("byteOrder", "字节序", PropType.ENUM, "大端(BE)",
-                options=["大端(BE)", "小端(LE)"]),
-        PropDef("commandNewline", "换行符", PropType.ENUM, "\\r\\n",
-                options=["无", "\\r\\n", "\\n", "\\r"]),
-        PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("mbAddress", "线圈地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("notify", "切换通知", PropType.BOOL, False),
-        PropDef("notifyTitle", "通知标题", PropType.STRING, "提示"),
-        PropDef("notifyContent", "通知内容", PropType.STRING, "开关已切换"),
-        PropDef("notifyType", "通知类型", PropType.ENUM, "信息",
-                options=["成功", "信息", "警告", "错误"]),
-        PropDef("notifyDuration", "通知时长(ms)", PropType.INT, 3000,
+        PropDef("byteOrder", N_("字节序"), PropType.ENUM, "大端(BE)",  # i18n: value
+                options=["大端(BE)", "小端(LE)"]),  # i18n: value
+        PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
+        PropDef("mbSlave", N_("从站地址"), PropType.INT, 1, min_val=1, max_val=247),
+        PropDef("mbAddress", N_("线圈地址"), PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("notify", N_("切换通知"), PropType.BOOL, False),
+        PropDef("notifyTitle", N_("通知标题"), PropType.STRING, N_("提示")),
+        PropDef("notifyContent", N_("通知内容"), PropType.STRING, N_("开关已切换")),
+        PropDef("notifyType", N_("通知类型"), PropType.ENUM, "信息",  # i18n: value
+                options=["成功", "信息", "警告", "错误"]),  # i18n: value
+        PropDef("notifyDuration", N_("通知时长(ms)"), PropType.INT, 3000,
                 min_val=500, max_val=30000),
     ],
 )
 
 SLIDER_META = WidgetMeta(
     type_name="Slider",
-    display_name="滑块",
+    display_name=N_("滑块"),
     category=WidgetCategory.BASIC,
     icon="SLIDER",
     default_width=200, default_height=30,
     properties=[
-        PropDef("minimum", "最小值", PropType.INT, 0, min_val=-99999, max_val=99999),
-        PropDef("maximum", "最大值", PropType.INT, 100, min_val=-99999, max_val=99999),
-        PropDef("value", "默认值", PropType.INT, 50, min_val=-99999, max_val=99999),
-        PropDef("sendOnChange", "变化发送", PropType.BOOL, False),
-        PropDef("commandMode", "发送模式", PropType.ENUM, "文本",
-                options=["文本", "HEX", "Modbus"]),
-        PropDef("commandTemplate", "发送模板", PropType.STRING, "{value}"),
-        PropDef("frameHeader", "帧头(HEX)", PropType.STRING, ""),
-        PropDef("frameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("commandNewline", "换行符", PropType.ENUM, "\\r\\n",
-                options=["无", "\\r\\n", "\\n", "\\r"]),
-        PropDef("dataType", "数据类型", PropType.ENUM, "uint16",
+        PropDef("minimum", N_("最小值"), PropType.INT, 0, min_val=-99999, max_val=99999),
+        PropDef("maximum", N_("最大值"), PropType.INT, 100, min_val=-99999, max_val=99999),
+        PropDef("value", N_("默认值"), PropType.INT, 50, min_val=-99999, max_val=99999),
+        PropDef("sendOnChange", N_("变化发送"), PropType.BOOL, False),
+        PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
+                options=["文本", "HEX", "Modbus"]),  # i18n: value
+        PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
+        PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
+        PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
+        PropDef("dataType", N_("数据类型"), PropType.ENUM, "uint16",
                 options=["uint8", "int8", "uint16", "int16",
                          "uint32", "int32", "float32"]),
-        PropDef("byteOrder", "字节序", PropType.ENUM, "大端(BE)",
-                options=["大端(BE)", "小端(LE)"]),
-        PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
+        PropDef("byteOrder", N_("字节序"), PropType.ENUM, "大端(BE)",  # i18n: value
+                options=["大端(BE)", "小端(LE)"]),  # i18n: value
+        PropDef("mbSlave", N_("从站地址"), PropType.INT, 1, min_val=1, max_val=247),
+        PropDef("mbFunc", N_("功能码"), PropType.ENUM, "06 写单寄存器",  # i18n: value
                 options=_modbus_functions(5, 6, 0x10)),
-        PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+        PropDef("mbAddress", N_("寄存器地址"), PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", N_("数据类型"), PropType.ENUM, "uint16",
                 options=list(MODBUS_DATA_TYPES)),
-        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+        PropDef("mbRegOrder", N_("寄存器序"), PropType.ENUM, MODBUS_ORDERS[0],
                 options=list(MODBUS_ORDERS)),
     ],
 )
 
 SPIN_BOX_META = WidgetMeta(
     type_name="SpinBox",
-    display_name="数值框",
+    display_name=N_("数值框"),
     category=WidgetCategory.BASIC,
     icon="SPIN_BOX",
     default_width=140, default_height=36,
     properties=[
-        PropDef("minimum", "最小值", PropType.INT, 0, min_val=-99999, max_val=99999),
-        PropDef("maximum", "最大值", PropType.INT, 100, min_val=-99999, max_val=99999),
-        PropDef("value", "默认值", PropType.INT, 0, min_val=-99999, max_val=99999),
-        PropDef("suffix", "后缀", PropType.STRING, ""),
-        PropDef("sendOnChange", "变化发送", PropType.BOOL, False),
-        PropDef("commandMode", "发送模式", PropType.ENUM, "文本",
-                options=["文本", "HEX", "Modbus"]),
-        PropDef("commandTemplate", "发送模板", PropType.STRING, "{value}"),
-        PropDef("frameHeader", "帧头(HEX)", PropType.STRING, ""),
-        PropDef("frameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("commandNewline", "换行符", PropType.ENUM, "\\r\\n",
-                options=["无", "\\r\\n", "\\n", "\\r"]),
-        PropDef("dataType", "数据类型", PropType.ENUM, "uint16",
+        PropDef("minimum", N_("最小值"), PropType.INT, 0, min_val=-99999, max_val=99999),
+        PropDef("maximum", N_("最大值"), PropType.INT, 100, min_val=-99999, max_val=99999),
+        PropDef("value", N_("默认值"), PropType.INT, 0, min_val=-99999, max_val=99999),
+        PropDef("suffix", N_("后缀"), PropType.STRING, ""),
+        PropDef("sendOnChange", N_("变化发送"), PropType.BOOL, False),
+        PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
+                options=["文本", "HEX", "Modbus"]),  # i18n: value
+        PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
+        PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
+        PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
+        PropDef("dataType", N_("数据类型"), PropType.ENUM, "uint16",
                 options=["uint8", "int8", "uint16", "int16",
                          "uint32", "int32", "float32"]),
-        PropDef("byteOrder", "字节序", PropType.ENUM, "大端(BE)",
-                options=["大端(BE)", "小端(LE)"]),
-        PropDef("mbSlave", "从站地址", PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("mbFunc", "功能码", PropType.ENUM, "06 写单寄存器",
+        PropDef("byteOrder", N_("字节序"), PropType.ENUM, "大端(BE)",  # i18n: value
+                options=["大端(BE)", "小端(LE)"]),  # i18n: value
+        PropDef("mbSlave", N_("从站地址"), PropType.INT, 1, min_val=1, max_val=247),
+        PropDef("mbFunc", N_("功能码"), PropType.ENUM, "06 写单寄存器",  # i18n: value
                 options=_modbus_functions(5, 6, 0x10)),
-        PropDef("mbAddress", "寄存器地址", PropType.INT, 0, min_val=0, max_val=65535),
-        PropDef("mbDataType", "数据类型", PropType.ENUM, "uint16",
+        PropDef("mbAddress", N_("寄存器地址"), PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbDataType", N_("数据类型"), PropType.ENUM, "uint16",
                 options=list(MODBUS_DATA_TYPES)),
-        PropDef("mbRegOrder", "寄存器序", PropType.ENUM, MODBUS_ORDERS[0],
+        PropDef("mbRegOrder", N_("寄存器序"), PropType.ENUM, MODBUS_ORDERS[0],
                 options=list(MODBUS_ORDERS)),
     ],
 )
@@ -284,12 +285,12 @@ def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidge
     """Create a real QWidget instance from type name and properties dict."""
     props = normalized_range_properties(type_name, props)
     if type_name == "PushButton":
-        w = PushButton(props.get("text", "按钮"), parent)
+        w = PushButton(props.get("text", "按钮"), parent)  # i18n: value
         w.setEnabled(props.get("enabled", True))
         return w
 
     if type_name == "Label":
-        w = BodyLabel(props.get("text", "标签"), parent)
+        w = BodyLabel(props.get("text", "标签"), parent)  # i18n: value
         font = w.font()
         font.setPointSize(props.get("fontSize", 14))
         font.setBold(props.get("bold", False))
@@ -319,7 +320,7 @@ def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidge
         container = QWidget(parent)
         layout = QHBoxLayout(container)
         layout.setContentsMargins(4, 0, 4, 0)
-        label = BodyLabel(props.get("label", "开关"))
+        label = BodyLabel(props.get("label", "开关"))  # i18n: value
         sw = SwitchButton()
         sw.setChecked(props.get("checked", False))
         layout.addWidget(label)

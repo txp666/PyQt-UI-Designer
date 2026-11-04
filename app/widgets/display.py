@@ -9,6 +9,7 @@ from qfluentwidgets import (
 )
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
+from app.core.i18n import tr, N_
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
 
@@ -99,7 +100,7 @@ class NumericDisplay(QWidget):
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(0)
 
-        self._title_label = CaptionLabel("标题")
+        self._title_label = CaptionLabel(tr("标题"))
         self._value_label = BodyLabel("0.00")
         self._unit_label = CaptionLabel("")
         for label in (self._title_label, self._unit_label):
@@ -157,7 +158,7 @@ class ProgressRingDisplay(QWidget):
         self._ring.setFixedSize(80, 80)
         self._ring.setTextVisible(True)
 
-        self._label = CaptionLabel("进度")
+        self._label = CaptionLabel(tr("进度"))
         self._label.setAlignment(Qt.AlignCenter)
 
         layout.addWidget(self._ring, 0, Qt.AlignCenter)
@@ -178,7 +179,7 @@ class ImageDisplay(QWidget):
         self._image = QImage()
         self._label = ImageLabel(self)
         self._label.hide()
-        self._placeholder = CaptionLabel("未选择图片", self)
+        self._placeholder = CaptionLabel(tr("未选择图片"), self)
         self._placeholder.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
         self._placeholder.setAlignment(Qt.AlignCenter)
         layout = QVBoxLayout(self)
@@ -195,7 +196,7 @@ class ImageDisplay(QWidget):
         self._image = QImage(path) if path else QImage()
         if self._image.isNull():
             self._label.hide()
-            self._placeholder.setText("无法加载图片" if path else "未选择图片")
+            self._placeholder.setText(tr("无法加载图片") if path else tr("未选择图片"))
             self._placeholder.show()
         else:
             self._placeholder.hide()
@@ -236,73 +237,73 @@ class ImageDisplay(QWidget):
 
 LED_META = WidgetMeta(
     type_name="LEDIndicator",
-    display_name="LED指示灯",
+    display_name=N_("LED指示灯"),
     category=WidgetCategory.DISPLAY,
     icon="LED",
     default_width=140, default_height=30,
     properties=[
-        PropDef("label", "标签", PropType.STRING, "状态"),
-        PropDef("color", "颜色", PropType.ENUM, "green",
+        PropDef("label", N_("标签"), PropType.STRING, N_("状态")),
+        PropDef("color", N_("颜色"), PropType.ENUM, "green",
                 options=["green", "red", "yellow", "blue", "gray"]),
-        PropDef("on", "点亮", PropType.BOOL, True),
-        PropDef("onValue", "亮值", PropType.STRING, "1"),
-        PropDef("offValue", "灭值", PropType.STRING, "0"),
+        PropDef("on", N_("点亮"), PropType.BOOL, True),
+        PropDef("onValue", N_("亮值"), PropType.STRING, "1"),
+        PropDef("offValue", N_("灭值"), PropType.STRING, "0"),
     ],
 )
 
 NUMERIC_DISPLAY_META = WidgetMeta(
     type_name="NumericDisplay",
-    display_name="数值显示",
+    display_name=N_("数值显示"),
     category=WidgetCategory.DISPLAY,
     icon="SEVEN_SEGMENT",
     default_width=160, default_height=90,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "温度"),
-        PropDef("value", "数值", PropType.STRING, "0.00"),
-        PropDef("unit", "单位", PropType.STRING, "°C"),
-        PropDef("fontSize", "字号", PropType.INT, 28, min_val=12, max_val=72),
-        PropDef("displayFormat", "显示格式", PropType.ENUM, "自动",
-                options=["自动", "十进制", "十六进制(HEX)", "二进制(BIN)"]),
-        PropDef("decimals", "小数位数", PropType.ENUM, "自动",
-                options=["自动", "0", "1", "2", "3", "4"]),
+        PropDef("title", N_("标题"), PropType.STRING, N_("温度")),
+        PropDef("value", N_("数值"), PropType.STRING, "0.00"),
+        PropDef("unit", N_("单位"), PropType.STRING, "°C"),
+        PropDef("fontSize", N_("字号"), PropType.INT, 28, min_val=12, max_val=72),
+        PropDef("displayFormat", N_("显示格式"), PropType.ENUM, "自动",  # i18n: value
+                options=["自动", "十进制", "十六进制(HEX)", "二进制(BIN)"]),  # i18n: value
+        PropDef("decimals", N_("小数位数"), PropType.ENUM, "自动",  # i18n: value
+                options=["自动", "0", "1", "2", "3", "4"]),  # i18n: value
     ],
 )
 
 PROGRESS_BAR_META = WidgetMeta(
     type_name="ProgressBar",
-    display_name="进度条",
+    display_name=N_("进度条"),
     category=WidgetCategory.DISPLAY,
     icon="PROGRESS_BAR",
     default_width=250, default_height=20,
     min_height=10,
     properties=[
-        PropDef("value", "当前值", PropType.INT, 50, min_val=0, max_val=100),
-        PropDef("maximum", "最大值", PropType.INT, 100, min_val=1, max_val=99999),
+        PropDef("value", N_("当前值"), PropType.INT, 50, min_val=0, max_val=100),
+        PropDef("maximum", N_("最大值"), PropType.INT, 100, min_val=1, max_val=99999),
     ],
 )
 
 PROGRESS_RING_META = WidgetMeta(
     type_name="ProgressRingDisplay",
-    display_name="进度环",
+    display_name=N_("进度环"),
     category=WidgetCategory.DISPLAY,
     icon="PROGRESS_RING",
     default_width=120, default_height=130,
     min_width=80, min_height=80,
     properties=[
-        PropDef("label", "标签", PropType.STRING, "进度"),
-        PropDef("value", "当前值", PropType.INT, 0, min_val=0, max_val=100),
-        PropDef("maximum", "最大值", PropType.INT, 100, min_val=1, max_val=99999),
+        PropDef("label", N_("标签"), PropType.STRING, N_("进度")),
+        PropDef("value", N_("当前值"), PropType.INT, 0, min_val=0, max_val=100),
+        PropDef("maximum", N_("最大值"), PropType.INT, 100, min_val=1, max_val=99999),
     ],
 )
 
 IMAGE_DISPLAY_META = WidgetMeta(
     type_name="ImageDisplay",
-    display_name="图片显示",
+    display_name=N_("图片显示"),
     category=WidgetCategory.DISPLAY,
     icon="PHOTO",
     default_width=200, default_height=150,
     properties=[
-        PropDef("imagePath", "图片路径", PropType.STRING, ""),
+        PropDef("imagePath", N_("图片路径"), PropType.STRING, ""),
     ],
 )
 
@@ -322,14 +323,14 @@ def register_display_widgets():
 def create_display_widget(type_name: str, props: dict, parent=None) -> QWidget:
     if type_name == "LEDIndicator":
         w = LEDIndicator(parent)
-        w.set_label(props.get("label", "状态"))
+        w.set_label(props.get("label", "状态"))  # i18n: value
         w.set_color(props.get("color", "green"))
         w.set_on(props.get("on", True))
         return w
 
     if type_name == "NumericDisplay":
         w = NumericDisplay(parent)
-        w.set_title(props.get("title", "温度"))
+        w.set_title(props.get("title", "温度"))  # i18n: value
         w.set_value(props.get("value", "0.00"))
         w.set_unit(props.get("unit", "°C"))
         w.set_font_size(props.get("fontSize", 28))
@@ -343,7 +344,7 @@ def create_display_widget(type_name: str, props: dict, parent=None) -> QWidget:
 
     if type_name == "ProgressRingDisplay":
         w = ProgressRingDisplay(parent)
-        w.set_label(props.get("label", "进度"))
+        w.set_label(props.get("label", "进度"))  # i18n: value
         w.set_maximum(props.get("maximum", 100))
         w.set_value(props.get("value", 0))
         return w

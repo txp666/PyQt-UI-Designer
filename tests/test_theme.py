@@ -330,7 +330,7 @@ with patch.object(QApplication, "exec", staticmethod(report)):
     runpy.run_path("main.py", run_name="__main__")
 """
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(ProjectData(), folder, theme_mode="Light")
+            generate_project(ProjectData(), folder, theme_mode="Light", language="zh_CN")
             result = subprocess.run(
                 [sys.executable, "-c", code], cwd=folder,
                 env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
@@ -435,7 +435,7 @@ with ExitStack() as stack:
         for mode in ("Light", "Dark", "Auto", None):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
                 self.change_theme(Theme.DARK)
-                generate_project(project, folder, theme_mode=mode)
+                generate_project(project, folder, theme_mode=mode, language="zh_CN")
                 self.assertTrue((Path(folder) / "theme_support.py").is_file())
                 for source in Path(folder).glob("*.py"):
                     compile(source.read_text(encoding="utf-8"), str(source), "exec")

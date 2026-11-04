@@ -60,7 +60,7 @@ class ProjectRuntimeGeometryTests(unittest.TestCase):
             '    widgets = dict(bindingEngine._widget_map)')
         script = script.replace("__CHECKS__", textwrap.indent(textwrap.dedent(checks).strip(), "    "))
         output = self.folder / "standalone"
-        generate_project(project, output, theme_mode="Light")
+        generate_project(project, output, theme_mode="Light", language="zh_CN")
         # The export must work after relocation, outside the source project tree.
         moved = self.folder / "relocated-export"
         output.rename(moved)

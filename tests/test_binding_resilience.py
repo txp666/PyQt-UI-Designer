@@ -132,7 +132,7 @@ class BindingResilienceTests(unittest.TestCase):
         project = ProjectData()
         project.widgets = specifications
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(project, folder, theme_mode="Light")
+            generate_project(project, folder, theme_mode="Light", language="zh_CN")
             for path in Path(folder).glob("*.py"):
                 compile(path.read_text(encoding="utf-8"), str(path), "exec")
             script = _RUN_EXPORT.replace(

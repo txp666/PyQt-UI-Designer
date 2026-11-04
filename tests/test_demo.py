@@ -322,7 +322,7 @@ class DemoTests(unittest.TestCase):
         project = ProjectData.from_dict(json.loads(source.read_text(encoding="utf-8")))
         project.file_path = str(source)
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(project, folder, theme_mode="Auto", theme_color="#009faa")
+            generate_project(project, folder, theme_mode="Auto", theme_color="#009faa", language="zh_CN")
             generated = Path(folder)
             self.assertTrue((generated / "main.py").is_file())
             for expected in generated.iterdir():

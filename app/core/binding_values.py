@@ -2,12 +2,14 @@
 import math
 import struct
 
+from .i18n import tr
+
 
 def binding_integer(value):
     """Accept integer-compatible values that fit Qt's signed 32-bit API."""
     number = int(value)
     if not -(2 ** 31) <= number < 2 ** 31:
-        raise OverflowError("绑定整数超出 Qt 支持的范围")
+        raise OverflowError(tr("绑定整数超出 Qt 支持的范围"))
     return number
 
 
@@ -15,21 +17,21 @@ def binding_float(value):
     """Reject NaN/infinity before passing a sample to a numeric widget."""
     number = float(value)
     if not math.isfinite(number):
-        raise ValueError("绑定数值必须是有限数")
+        raise ValueError(tr("绑定数值必须是有限数"))
     return number
 
 
 def binding_register(value):
     """Modbus register payloads must be unsigned 16-bit integers."""
     if not isinstance(value, int) or not 0 <= value <= 65535:
-        raise ValueError("Modbus 寄存器值必须是 0 到 65535 的整数")
+        raise ValueError(tr("Modbus 寄存器值必须是 0 到 65535 的整数"))
     return value
 
 
 # Where a Modbus binding or chart curve reads: a register table, whose registers a reply names by
 # address (hr100), from the request it answers. 保持寄存器 when a binding names none.
-MODBUS_AREAS = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}
-DEFAULT_MODBUS_AREA = "保持寄存器"
+MODBUS_AREAS = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}  # i18n: value
+DEFAULT_MODBUS_AREA = "保持寄存器"  # i18n: value
 # The registers a value of each type takes; coils and discrete inputs are one bit each.
 MODBUS_REGISTERS = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2}
 
@@ -45,7 +47,7 @@ def modbus_need(area, address, data_type="uint16", slave_filter=-1, period=0):
     return int(slave_filter), table, int(address), count, max(0, min(60000, int(period)))
 
 
-def modbus_value(data, address, data_type="uint16", reg_order="大端(AB CD)",
+def modbus_value(data, address, data_type="uint16", reg_order="大端(AB CD)",  # i18n: value
                  fc_filter=-1, slave_filter=-1, area=DEFAULT_MODBUS_AREA):
     """One value from a parsed Modbus response, or None when the response does not hold it.
 
@@ -76,7 +78,7 @@ def modbus_value(data, address, data_type="uint16", reg_order="大端(AB CD)",
     if r1 is None:
         return None
     r1 = binding_register(r1)
-    high, low = (r0, r1) if reg_order == "大端(AB CD)" else (r1, r0)
+    high, low = (r0, r1) if reg_order == "大端(AB CD)" else (r1, r0)  # i18n: value
     raw = high.to_bytes(2, "big") + low.to_bytes(2, "big")
     if data_type == "uint32":
         return int.from_bytes(raw, "big")
@@ -98,9 +100,9 @@ def binding_boolean(value):
     return bool(binding_float(value))
 
 
-def binding_decimals(value, places="自动"):
+def binding_decimals(value, places="自动"):  # i18n: value
     """A number shown with a fixed count of decimal places; anything else (text, flags, NaN) as it came."""
-    if places in ("自动", "", None) or isinstance(value, bool):
+    if places in ("自动", "", None) or isinstance(value, bool):  # i18n: value
         if isinstance(value, float) and math.isfinite(value):
             # 15 significant digits: the noise of binary arithmetic (267 * 0.1 = 26.700000000000003)
             # goes, every digit a double really holds stays.

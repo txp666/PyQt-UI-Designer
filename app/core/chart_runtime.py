@@ -21,6 +21,7 @@ from .chart_history import ChartHistory
 from .protocol_parser import RawFrameBuffer
 from .binding_values import modbus_need, modbus_value
 from .signal_lifetime import SignalConnections
+from .i18n import tr
 
 try:
     import pyqtgraph as pg
@@ -51,12 +52,12 @@ _STRUCT_FMT = {
 # ---------------------------------------------------------------------------
 
 _DEFAULT_CURVE_CFG = {
-    "name": "曲线1", "parseMode": "键值匹配",
+    "name": "曲线1", "parseMode": "键值匹配",  # i18n: value
     "key": "", "jsonPath": "",
-    "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",
+    "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",  # i18n: value
     "frameHeader": "", "frameTail": "",
-    "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",
-    "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器",
+    "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",  # i18n: value
+    "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器",  # i18n: value
 }
 
 # Virtual prop name -> per-curve storage suffix
@@ -83,17 +84,22 @@ def _history_json_channels(document):
         channels = []
         for entry in document:
             if not isinstance(entry, _HistoryObjectPairs):
-                raise ValueError("曲线 JSON 通道必须包含 name 和 values")
+                raise ValueError(tr("曲线 JSON 通道必须包含 name 和 values"))
             entry = dict(entry)
             if set(entry) != {"name", "values"}:
-                raise ValueError("曲线 JSON 通道必须包含 name 和 values")
+                raise ValueError(tr("曲线 JSON 通道必须包含 name 和 values"))
             channels.append((entry["name"], entry["values"]))
     else:
-        raise ValueError("曲线 JSON 必须是对象或通道数组")
+        raise ValueError(tr("曲线 JSON 必须是对象或通道数组"))
     for name, values in channels:
         if not isinstance(name, str) or not isinstance(values, list) or isinstance(values, _HistoryObjectPairs):
-            raise ValueError("曲线 JSON 通道名称必须是文本，样本必须是数组")
+            raise ValueError(tr("曲线 JSON 通道名称必须是文本，样本必须是数组"))
     return channels
+
+
+def default_curve_name(index):
+    """The name of curve ``index`` (from 0) when the file gives none; the same in every language."""
+    return "曲线%1".replace("%1", str(index + 1))  # i18n: value
 
 
 def build_cfgs_from_props(props: dict) -> list:
@@ -102,7 +108,7 @@ def build_cfgs_from_props(props: dict) -> list:
     cfgs = []
     for i in range(count):
         cfg = dict(_DEFAULT_CURVE_CFG)
-        cfg["name"] = props.get(f"_curve_{i}_name", f"曲线{i + 1}")
+        cfg["name"] = props.get(f"_curve_{i}_name", default_curve_name(i))
         for field in _DEFAULT_CURVE_CFG:
             stored = props.get(f"_curve_{i}_{field}")
             if stored is not None:
@@ -253,7 +259,7 @@ class RealtimeLineChart(QWidget):
         self._root.setSpacing(2)
 
         self._display_points = 200
-        self._title = "实时曲线"
+        self._title = tr("实时曲线")
         self._cfgs: list = [dict(_DEFAULT_CURVE_CFG)]
         self._curves = []
         self._data: list = []
@@ -290,7 +296,7 @@ class RealtimeLineChart(QWidget):
             self._external_connections.connect(
                 self._plot.scene().sigMouseClicked, self._on_plot_clicked)
         else:
-            self._missing_label = BodyLabel("需要安装 pyqtgraph")
+            self._missing_label = BodyLabel(tr("需要安装 pyqtgraph"))
             self._missing_label.setAlignment(Qt.AlignCenter)
             self._root.addWidget(self._missing_label, 1)
             self._plot = None
@@ -300,29 +306,29 @@ class RealtimeLineChart(QWidget):
         tb = QHBoxLayout()
         tb.setContentsMargins(4, 2, 4, 0)
         tb.setSpacing(6)
-        tb.addWidget(BodyLabel("显示点数"))
+        tb.addWidget(BodyLabel(tr("显示点数")))
         self._disp_edit = FluentLineEdit()
         self._disp_edit.setText(str(self._display_points))
         self._disp_edit.setFixedWidth(80)
         self._disp_edit.editingFinished.connect(self._on_disp_changed)
         tb.addWidget(self._disp_edit)
         # 实时, the cursor's sample, or what went wrong saving, loading or recording
-        self._mode_label = CaptionLabel("实时")
+        self._mode_label = CaptionLabel(tr("实时"))
         self._mode_label.setTextColor(QColor("#0078d4"), QColor("#4aa3df"))
         self._mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._mode_label.setMinimumWidth(1)  # a long message is cut short rather than widening the chart
         tb.addWidget(self._mode_label)
         tb.addStretch()
         self._save_btn = FluentToolButton(FluentIcon.SAVE)
-        self._save_btn.setToolTip("保存完整曲线数据")
+        self._save_btn.setToolTip(tr("保存完整曲线数据"))
         self._save_btn.clicked.connect(self._save_data)
         tb.addWidget(self._save_btn)
         self._load_btn = FluentToolButton(FluentIcon.FOLDER)
-        self._load_btn.setToolTip("加载对比曲线")
+        self._load_btn.setToolTip(tr("加载对比曲线"))
         self._load_btn.clicked.connect(self._load_data)
         tb.addWidget(self._load_btn)
         self._clear_ref_btn = FluentToolButton(FluentIcon.BROOM)
-        self._clear_ref_btn.setToolTip("清除对比")
+        self._clear_ref_btn.setToolTip(tr("清除对比"))
         self._clear_ref_btn.clicked.connect(self.clear_reference)
         self._clear_ref_btn.hide()
         tb.addWidget(self._clear_ref_btn)
@@ -391,7 +397,7 @@ class RealtimeLineChart(QWidget):
         while len(self._cfgs) < n:
             idx = len(self._cfgs)
             cfg = dict(_DEFAULT_CURVE_CFG)
-            cfg["name"] = f"曲线{idx + 1}"
+            cfg["name"] = default_curve_name(idx)
             self._cfgs.append(cfg)
         if len(self._cfgs) != old:
             self._rebuild_curves()
@@ -440,7 +446,7 @@ class RealtimeLineChart(QWidget):
                                 if self._plot else None)
         self._header.renew(0)
         self._cursor_mode = False
-        self._mode_label.setText("实时")
+        self._mode_label.setText(tr("实时"))
         self.apply_theme()
 
     def _toggle_curve(self, index):
@@ -457,7 +463,7 @@ class RealtimeLineChart(QWidget):
         their history stay as they are; the two line up sample for sample from the start of each."""
         names, histories = self._read_history(path)
         try:
-            refs = [(f"{name}（{Path(path).stem}）", list(history.values()))
+            refs = [(tr("%1（%2）", name, Path(path).stem), list(history.values()))
                     for name, history in zip(names, histories)]
         finally:
             for history in histories:
@@ -496,7 +502,7 @@ class RealtimeLineChart(QWidget):
         entries = []
         for i, value in enumerate(live):
             curve = self._curves[i] if i < len(self._curves) else None
-            entries.append((self._cfgs[i].get("name", f"曲线{i+1}"), value, self._curve_color(i), False,
+            entries.append((self._cfgs[i].get("name", default_curve_name(i)), value, self._curve_color(i), False,
                             curve is None or curve.isVisible()))
         for index, (curve, (name, values)) in enumerate(zip(self._ref_curves, self._refs)):
             val = f"{values[sample]:.4g}" if 0 <= sample < len(values) else "--"
@@ -508,7 +514,7 @@ class RealtimeLineChart(QWidget):
     def _on_plot_clicked(self, evt):
         if evt.double():
             self._cursor_mode = False
-            self._mode_label.setText("实时")
+            self._mode_label.setText(tr("实时"))
             if self._cursor_line:
                 self._cursor_line.setVisible(False)
             self._show_live_values()
@@ -542,7 +548,7 @@ class RealtimeLineChart(QWidget):
 
     def _show_cursor_values(self, x: float):
         idx = int(round(x))
-        self._mode_label.setText(f"游标: x={idx}")
+        self._mode_label.setText(tr("游标: x=%1", idx))
         values = []
         for i in range(len(self._cfgs)):
             visible = self._data[i].tail(self._display_points) if i < len(self._data) else []
@@ -566,7 +572,7 @@ class RealtimeLineChart(QWidget):
             try:
                 self._data[channel].append(value)
             except OSError as error:
-                self._mode_label.setText(f"记录失败: {error}")
+                self._mode_label.setText(tr("记录失败: %1", error))
                 return
             if not self._refresh_timer.isActive():
                 self._refresh_timer.start()
@@ -583,7 +589,7 @@ class RealtimeLineChart(QWidget):
 
     def save_data(self, path):
         """Stream the complete history, including samples evicted from display."""
-        names = [c.get("name", f"曲线{i+1}") for i, c in enumerate(self._cfgs)]
+        names = [c.get("name", default_curve_name(i)) for i, c in enumerate(self._cfgs)]
         with open(path, "w", newline="", encoding="utf-8") as output:
             if str(path).lower().endswith(".json"):
                 # Objects retain the original format for unique names. Ordered
@@ -609,12 +615,12 @@ class RealtimeLineChart(QWidget):
 
     def _save_data(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "保存完整曲线数据", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
+            self, tr("保存完整曲线数据"), "", tr("CSV文件 (*.csv);;JSON文件 (*.json)"))
         if path:
             try:
                 self.save_data(path)
             except OSError as error:
-                self._mode_label.setText(f"保存失败: {error}")
+                self._mode_label.setText(tr("保存失败: %1", error))
 
     def load_data(self, path):
         """Replace samples for existing channels without changing live parsing.
@@ -673,11 +679,11 @@ class RealtimeLineChart(QWidget):
         return names, histories
 
     def _history_channel_order(self, names, adopt_channels=False):
-        expected = [cfg.get("name", f"曲线{i+1}") for i, cfg in enumerate(self._cfgs)]
+        expected = [cfg.get("name", default_curve_name(i)) for i, cfg in enumerate(self._cfgs)]
         if not names:
-            raise ValueError("曲线文件没有通道")
+            raise ValueError(tr("曲线文件没有通道"))
         if len(names) > 8:
-            raise ValueError("曲线文件最多支持 8 个通道")
+            raise ValueError(tr("曲线文件最多支持 8 个通道"))
         if adopt_channels:
             return list(range(len(names)))
         if names == expected:
@@ -685,16 +691,16 @@ class RealtimeLineChart(QWidget):
         if (len(names) == len(expected) and len(set(names)) == len(names)
                 and set(names) == set(expected)):
             return [names.index(name) for name in expected]
-        raise ValueError("曲线文件通道名称或数量与当前配置不一致，请加载对应通道的历史文件")
+        raise ValueError(tr("曲线文件通道名称或数量与当前配置不一致，请加载对应通道的历史文件"))
 
     def _load_data(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "加载对比曲线", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
+            self, tr("加载对比曲线"), "", tr("CSV文件 (*.csv);;JSON文件 (*.json)"))
         if path:
             try:
                 self.load_reference(path)
             except (OSError, ValueError, TypeError, OverflowError) as error:
-                self._mode_label.setText(f"加载失败: {error}")
+                self._mode_label.setText(tr("加载失败: %1", error))
 
     def configure(self, cfgs, disp_pts=200):
         if isinstance(cfgs, str):
@@ -718,13 +724,13 @@ class RealtimeLineChart(QWidget):
     def _on_parsed_data(self, data: dict):
         for i, cfg in enumerate(self._cfgs):
             try:
-                pm = cfg.get("parseMode", "键值匹配")
+                pm = cfg.get("parseMode", "键值匹配")  # i18n: value
                 val = None
-                if pm == "键值匹配":
+                if pm == "键值匹配":  # i18n: value
                     key = cfg.get("key") or cfg.get("name", "")
                     if key and key in data:
                         val = data[key]
-                elif pm == "JSON路径":
+                elif pm == "JSON路径":  # i18n: value
                     jp = cfg.get("jsonPath", "")
                     if jp:
                         val = self._resolve_path(data, jp)
@@ -738,13 +744,13 @@ class RealtimeLineChart(QWidget):
 
     def _on_raw_data(self, raw: bytes):
         for i, cfg in enumerate(self._cfgs):
-            if cfg.get("parseMode") != "HEX字节提取":
+            if cfg.get("parseMode") != "HEX字节提取":  # i18n: value
                 continue
             fi = _STRUCT_FMT.get(cfg.get("dataType", "float32"))
             if not fi:
                 continue
             fmt_c, sz = fi
-            bo = ">" if cfg.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"
+            bo = ">" if cfg.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"  # i18n: value
             off = int(cfg.get("byteOffset", 0))
             for frame in self._raw_frames[i].feed(raw):
                 payload = self._strip_frame(frame, cfg)
@@ -763,7 +769,7 @@ class RealtimeLineChart(QWidget):
             if cfg.get("parseMode") != "Modbus":
                 continue
             try:
-                need = modbus_need(cfg.get("mbArea", "保持寄存器"), int(cfg.get("regIndex", 0)),
+                need = modbus_need(cfg.get("mbArea", "保持寄存器"), int(cfg.get("regIndex", 0)),  # i18n: value
                                    cfg.get("mbDataType", "uint16"), int(cfg.get("mbSlaveFilter", -1)))
             except (TypeError, ValueError):
                 continue
@@ -775,8 +781,8 @@ class RealtimeLineChart(QWidget):
     def _extract_modbus(cfg: dict, data: dict):
         return modbus_value(
             data, int(cfg.get("regIndex", 0)), cfg.get("mbDataType", "uint16"),
-            cfg.get("mbRegOrder", "大端(AB CD)"), int(cfg.get("mbFcFilter", -1)),
-            int(cfg.get("mbSlaveFilter", -1)), cfg.get("mbArea", "保持寄存器"))
+            cfg.get("mbRegOrder", "大端(AB CD)"), int(cfg.get("mbFcFilter", -1)),  # i18n: value
+            int(cfg.get("mbSlaveFilter", -1)), cfg.get("mbArea", "保持寄存器"))  # i18n: value
 
     @staticmethod
     def _strip_frame(raw: bytes, cfg: dict):

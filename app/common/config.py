@@ -1,10 +1,10 @@
 # coding: utf-8
+import json
 import sys
 import os
 from enum import Enum
 from pathlib import Path
 
-from PyQt5.QtCore import QLocale
 from qfluentwidgets import (
     qconfig, QConfig, ConfigItem, OptionsConfigItem,
     BoolValidator, OptionsValidator, Theme, ConfigSerializer,
@@ -14,20 +14,26 @@ from app.common.metadata import APP_NAME, APP_VERSION
 CONFIG_DIR = Path(os.path.expanduser("~")) / ".pyqt_ui_designer"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = CONFIG_DIR / "config.json"
+# The English texts, {Chinese source text: English}; also exported with the applications.
+TRANSLATION_FILE = Path(__file__).resolve().parents[1] / "resource" / "i18n" / "en.json"
 
 
 class Language(Enum):
-    CHINESE_SIMPLIFIED = QLocale(QLocale.Chinese, QLocale.China)
-    ENGLISH = QLocale(QLocale.English)
-    AUTO = QLocale()
+    """The interface language setting, in the order the settings page offers it."""
+    AUTO = "Auto"
+    CHINESE_SIMPLIFIED = "zh_CN"
+    ENGLISH = "en_US"
 
 
 class LanguageSerializer(ConfigSerializer):
     def serialize(self, language):
-        return language.value.name() if language != Language.AUTO else "Auto"
+        return language.value
 
     def deserialize(self, value: str):
-        return Language(QLocale(value)) if value != "Auto" else Language.AUTO
+        try:
+            return Language(value)
+        except ValueError:
+            return Language.AUTO
 
 
 def isWin11():
@@ -68,3 +74,13 @@ qconfig.load(str(CONFIG_FILE), cfg)
 cfg.themeColorChanged.connect(qconfig.themeColorChanged)
 if sys.platform == "darwin" and hasattr(cfg, "fontFamilies"):
     qconfig.set(cfg.fontFamilies, ["PingFang SC", "Helvetica Neue"], save=False)
+
+
+def language_setting():
+    """The language setting as stored: "Auto", "zh_CN" or "en_US"."""
+    return cfg.get(cfg.language).value
+
+
+def english_table():
+    """The English table, {Chinese source text: English}."""
+    return json.loads(TRANSLATION_FILE.read_text(encoding="utf-8"))

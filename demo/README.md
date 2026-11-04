@@ -67,6 +67,7 @@ python main.py
 | `mqtt_handler.py` | 生成的 MQTT 链路（同上） |
 | `data_binding.py` | 生成的数据绑定 |
 | `theme_support.py` | 生成的浅色、深色及跟随系统主题支持 |
+| `i18n.py` | 生成的界面语言支持：导出时的语言设置和用到的英文文本（本示例导出为简体中文） |
 | `requirements.txt` | 独立运行依赖，不需要 Nuitka |
 | `simulate.py` | 手写的可选模拟设备入口 |
 | `logo.png` / `logo.ico` | 随导出复制的应用图标 |

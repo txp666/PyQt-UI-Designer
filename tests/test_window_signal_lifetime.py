@@ -223,7 +223,7 @@ class WindowSignalLifetimeTests(unittest.TestCase):
         from app.core.project import ProjectData
 
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(ProjectData(), folder)
+            generate_project(ProjectData(), folder, language="zh_CN")
             self.run_script(
                 "from ui import MainUI\n"
                 "opaque_slots(stack, MainUI, ('apply_theme',))\n"

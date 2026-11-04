@@ -26,6 +26,7 @@ from qfluentwidgets import (
     qconfig, setCustomStyleSheet, themeColor,
 )
 
+from i18n import tr, N_
 from serial_handler import _list_all_ports
 
 try:
@@ -148,6 +149,7 @@ from serial_handler import (  # noqa: F401  (_transaction: the MBAP counter, for
     _transaction, modbus_dispatch, modbus_frame as _modbus_frame, next_modbus_transaction,
 )
 from serial_handler import AREA_TABLES
+from i18n import tr
 
 
 def _command_hex(text):
@@ -158,7 +160,7 @@ def _command_hex(text):
     try:
         return bytes.fromhex(compact)
     except ValueError as exc:
-        raise ValueError("HEX 格式错误，请检查内容、帧头和帧尾") from exc
+        raise ValueError(tr("HEX 格式错误，请检查内容、帧头和帧尾")) from exc
 
 
 def command_hex_frame(command, header="", tail=""):
@@ -172,40 +174,40 @@ def command_packed_frame(value, fmt, cast=int, template="{value}", header="", ta
             raise ValueError("non-finite value")
         payload = struct.pack(fmt, number)
     except (TypeError, ValueError, OverflowError, struct.error) as exc:
-        raise ValueError("数值无效或超出数据类型范围") from exc
+        raise ValueError(tr("数值无效或超出数据类型范围")) from exc
     return command_hex_frame(template.replace("{value}", payload.hex()), header, tail)
 
 
 # Function codes by the names the designer shows, for widgets and exports.
 MODBUS_FUNCTIONS = {
-    "01 读线圈": 0x01, "02 读离散输入": 0x02,
-    "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,
-    "05 写单线圈": 0x05, "06 写单寄存器": 0x06, "16 写多个寄存器": 0x10,
+    "01 读线圈": 0x01, "02 读离散输入": 0x02,  # i18n: value
+    "03 读保持寄存器": 0x03, "04 读输入寄存器": 0x04,  # i18n: value
+    "05 写单线圈": 0x05, "06 写单寄存器": 0x06, "16 写多个寄存器": 0x10,  # i18n: value
 }
 MODBUS_DATA_TYPES = ("uint16", "int16", "uint32", "int32", "float32")
-MODBUS_ORDERS = ("大端(AB CD)", "小端(CD AB)")
+MODBUS_ORDERS = ("大端(AB CD)", "小端(CD AB)")  # i18n: value
 _REGISTER_FORMATS = {"uint16": "H", "int16": "h", "uint32": "I", "int32": "i", "float32": "f"}
 
 
-def modbus_registers(value, data_type="uint16", reg_order="大端(AB CD)"):
+def modbus_registers(value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A value as the 16-bit registers that hold it: one for 16-bit types, two for 32-bit ones."""
     fmt = _REGISTER_FORMATS.get(data_type)
     if fmt is None:
-        raise ValueError(f"未知的 Modbus 数据类型: {data_type}")
+        raise ValueError(tr("未知的 Modbus 数据类型: %1", data_type))
     try:
         number = float(value) if fmt == "f" else int(value)
         if fmt == "f" and not math.isfinite(number):
             raise ValueError("non-finite value")
         raw = struct.pack(">" + fmt, number)
     except (TypeError, ValueError, OverflowError, struct.error) as exc:
-        raise ValueError(f"Modbus 值无效或超出 {data_type} 的范围") from exc
+        raise ValueError(tr("Modbus 值无效或超出 %1 的范围", data_type)) from exc
     registers = [int.from_bytes(raw[i:i + 2], "big") for i in range(0, len(raw), 2)]
     if reg_order != MODBUS_ORDERS[0]:
         registers.reverse()
     return tuple(registers)
 
 
-def modbus_request(slave, func, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def modbus_request(slave, func, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """Validate a Modbus request and return its integer fields.
 
     The value is the count for reads and the coil or register value for FC 05/06 (FC 06
@@ -216,15 +218,15 @@ def modbus_request(slave, func, address, value, data_type="uint16", reg_order="�
         if func not in (0x06, 0x10):
             value = int(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("Modbus 地址和值必须是整数") from exc
+        raise ValueError(tr("Modbus 地址和值必须是整数")) from exc
     if not 1 <= slave <= 247 or not 0 <= address <= 65535:
-        raise ValueError("Modbus 从站地址或寄存器地址超出范围")
+        raise ValueError(tr("Modbus 从站地址或寄存器地址超出范围"))
     if func in (0x06, 0x10):
         if func == 0x06 and data_type not in ("uint16", "int16"):
-            raise ValueError("32 位数据占两个寄存器，请用 16 写多个寄存器")
+            raise ValueError(tr("32 位数据占两个寄存器，请用 16 写多个寄存器"))
         registers = modbus_registers(value, data_type, reg_order)
         if address + len(registers) > 65536:
-            raise ValueError("Modbus 从站地址或寄存器地址超出范围")
+            raise ValueError(tr("Modbus 从站地址或寄存器地址超出范围"))
         return slave, func, address, registers[0] if func == 0x06 else registers
     if func in (1, 2):
         valid = 1 <= value <= 2000
@@ -235,17 +237,17 @@ def modbus_request(slave, func, address, value, data_type="uint16", reg_order="�
     else:
         valid = False
     if not valid:
-        raise ValueError("Modbus 值或读取数量超出功能码允许范围")
+        raise ValueError(tr("Modbus 值或读取数量超出功能码允许范围"))
     return slave, func, address, value
 
 
-def command_modbus_frame(slave, func, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def command_modbus_frame(slave, func, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A validated Modbus RTU request frame (CRC16 appended)."""
     return _modbus_frame(modbus_request(slave, func, address, value, data_type, reg_order))
 
 
 def command_modbus_tcp_frame(slave, func, address, value, transaction=None,
-                             data_type="uint16", reg_order="大端(AB CD)"):
+                             data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A validated Modbus TCP request ADU (MBAP header, no CRC)."""
     request = modbus_request(slave, func, address, value, data_type, reg_order)
     if transaction is None:
@@ -253,7 +255,7 @@ def command_modbus_tcp_frame(slave, func, address, value, transaction=None,
     return _modbus_frame(request, transaction)
 
 
-def send_modbus_command(hub, slave, func, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def send_modbus_command(hub, slave, func, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """Validate once, then send the request over every connected link, framed for that link.
 
     A link parsing Modbus TCP gets an MBAP frame, one parsing Modbus ASCII an ASCII frame,
@@ -274,12 +276,12 @@ _TYPE_RANGES = {"uint16": (0, 0xFFFF), "int16": (-0x8000, 0x7FFF), "uint32": (0,
 
 
 def slave_devices(widgets):
-    """The slaves of the link cards in the 从站 role among ``widgets``, in their order (the document's)."""
+    """The slaves of the link cards in the slave role among ``widgets``, in their order (the document's)."""
     return [device for device in (getattr(widget, "slave_device", None) for widget in widgets)
             if device is not None]
 
 
-def slave_control_write(devices, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+def slave_control_write(devices, area, address, value, data_type="uint16", reg_order=MODBUS_ORDERS[0]):
     """A user's change of a control with a Modbus binding, written into every slave's data table at the
     binding's area and address: 1 or 0 for a coil or discrete input, the registers of the value packed as its
     type (and clamped to the type's range) for registers, as a Modbus write command packs them. A table that
@@ -452,7 +454,7 @@ class NumericDisplay(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8,4,8,4); layout.setSpacing(0)
-        self._title = CaptionLabel("标题")
+        self._title = CaptionLabel(tr("标题"))
         self._value = BodyLabel("0.00")
         self._unit = CaptionLabel("")
         for label in (self._title, self._unit):
@@ -522,12 +524,14 @@ class SignalConnections:
 import math
 import struct
 
+from i18n import tr
+
 
 def binding_integer(value):
     """Accept integer-compatible values that fit Qt's signed 32-bit API."""
     number = int(value)
     if not -(2 ** 31) <= number < 2 ** 31:
-        raise OverflowError("绑定整数超出 Qt 支持的范围")
+        raise OverflowError(tr("绑定整数超出 Qt 支持的范围"))
     return number
 
 
@@ -535,21 +539,21 @@ def binding_float(value):
     """Reject NaN/infinity before passing a sample to a numeric widget."""
     number = float(value)
     if not math.isfinite(number):
-        raise ValueError("绑定数值必须是有限数")
+        raise ValueError(tr("绑定数值必须是有限数"))
     return number
 
 
 def binding_register(value):
     """Modbus register payloads must be unsigned 16-bit integers."""
     if not isinstance(value, int) or not 0 <= value <= 65535:
-        raise ValueError("Modbus 寄存器值必须是 0 到 65535 的整数")
+        raise ValueError(tr("Modbus 寄存器值必须是 0 到 65535 的整数"))
     return value
 
 
 # Where a Modbus binding or chart curve reads: a register table, whose registers a reply names by
 # address (hr100), from the request it answers. 保持寄存器 when a binding names none.
-MODBUS_AREAS = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}
-DEFAULT_MODBUS_AREA = "保持寄存器"
+MODBUS_AREAS = {"保持寄存器": "hr", "输入寄存器": "ir", "线圈": "co", "离散输入": "di"}  # i18n: value
+DEFAULT_MODBUS_AREA = "保持寄存器"  # i18n: value
 # The registers a value of each type takes; coils and discrete inputs are one bit each.
 MODBUS_REGISTERS = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2}
 
@@ -565,7 +569,7 @@ def modbus_need(area, address, data_type="uint16", slave_filter=-1, period=0):
     return int(slave_filter), table, int(address), count, max(0, min(60000, int(period)))
 
 
-def modbus_value(data, address, data_type="uint16", reg_order="大端(AB CD)",
+def modbus_value(data, address, data_type="uint16", reg_order="大端(AB CD)",  # i18n: value
                  fc_filter=-1, slave_filter=-1, area=DEFAULT_MODBUS_AREA):
     """One value from a parsed Modbus response, or None when the response does not hold it.
 
@@ -596,7 +600,7 @@ def modbus_value(data, address, data_type="uint16", reg_order="大端(AB CD)",
     if r1 is None:
         return None
     r1 = binding_register(r1)
-    high, low = (r0, r1) if reg_order == "大端(AB CD)" else (r1, r0)
+    high, low = (r0, r1) if reg_order == "大端(AB CD)" else (r1, r0)  # i18n: value
     raw = high.to_bytes(2, "big") + low.to_bytes(2, "big")
     if data_type == "uint32":
         return int.from_bytes(raw, "big")
@@ -618,9 +622,9 @@ def binding_boolean(value):
     return bool(binding_float(value))
 
 
-def binding_decimals(value, places="自动"):
+def binding_decimals(value, places="自动"):  # i18n: value
     """A number shown with a fixed count of decimal places; anything else (text, flags, NaN) as it came."""
-    if places in ("自动", "", None) or isinstance(value, bool):
+    if places in ("自动", "", None) or isinstance(value, bool):  # i18n: value
         if isinstance(value, float) and math.isfinite(value):
             # 15 significant digits: the noise of binary arithmetic (267 * 0.1 = 26.700000000000003)
             # goes, every digit a double really holds stays.
@@ -655,6 +659,8 @@ import math
 import struct
 import tempfile
 
+from i18n import tr
+
 
 class ChartHistory:
     def __init__(self, capacity=10000):
@@ -665,7 +671,7 @@ class ChartHistory:
     def append(self, value):
         value = float(value)
         if not math.isfinite(value):
-            raise ValueError("曲线样本必须是有限数")
+            raise ValueError(tr("曲线样本必须是有限数"))
         if self._file is None:
             self._file = tempfile.TemporaryFile()
         self._file.write(struct.pack("<d", value))
@@ -731,6 +737,7 @@ from qfluentwidgets import (
 from serial_handler import RawFrameBuffer
 
 
+from i18n import tr
 
 try:
     import pyqtgraph as pg
@@ -761,12 +768,12 @@ _STRUCT_FMT = {
 # ---------------------------------------------------------------------------
 
 _DEFAULT_CURVE_CFG = {
-    "name": "曲线1", "parseMode": "键值匹配",
+    "name": "曲线1", "parseMode": "键值匹配",  # i18n: value
     "key": "", "jsonPath": "",
-    "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",
+    "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",  # i18n: value
     "frameHeader": "", "frameTail": "",
-    "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",
-    "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器",
+    "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",  # i18n: value
+    "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器",  # i18n: value
 }
 
 # Virtual prop name -> per-curve storage suffix
@@ -793,17 +800,22 @@ def _history_json_channels(document):
         channels = []
         for entry in document:
             if not isinstance(entry, _HistoryObjectPairs):
-                raise ValueError("曲线 JSON 通道必须包含 name 和 values")
+                raise ValueError(tr("曲线 JSON 通道必须包含 name 和 values"))
             entry = dict(entry)
             if set(entry) != {"name", "values"}:
-                raise ValueError("曲线 JSON 通道必须包含 name 和 values")
+                raise ValueError(tr("曲线 JSON 通道必须包含 name 和 values"))
             channels.append((entry["name"], entry["values"]))
     else:
-        raise ValueError("曲线 JSON 必须是对象或通道数组")
+        raise ValueError(tr("曲线 JSON 必须是对象或通道数组"))
     for name, values in channels:
         if not isinstance(name, str) or not isinstance(values, list) or isinstance(values, _HistoryObjectPairs):
-            raise ValueError("曲线 JSON 通道名称必须是文本，样本必须是数组")
+            raise ValueError(tr("曲线 JSON 通道名称必须是文本，样本必须是数组"))
     return channels
+
+
+def default_curve_name(index):
+    """The name of curve ``index`` (from 0) when the file gives none; the same in every language."""
+    return "曲线%1".replace("%1", str(index + 1))  # i18n: value
 
 
 def build_cfgs_from_props(props: dict) -> list:
@@ -812,7 +824,7 @@ def build_cfgs_from_props(props: dict) -> list:
     cfgs = []
     for i in range(count):
         cfg = dict(_DEFAULT_CURVE_CFG)
-        cfg["name"] = props.get(f"_curve_{i}_name", f"曲线{i + 1}")
+        cfg["name"] = props.get(f"_curve_{i}_name", default_curve_name(i))
         for field in _DEFAULT_CURVE_CFG:
             stored = props.get(f"_curve_{i}_{field}")
             if stored is not None:
@@ -963,7 +975,7 @@ class RealtimeLineChart(QWidget):
         self._root.setSpacing(2)
 
         self._display_points = 200
-        self._title = "实时曲线"
+        self._title = tr("实时曲线")
         self._cfgs: list = [dict(_DEFAULT_CURVE_CFG)]
         self._curves = []
         self._data: list = []
@@ -1000,7 +1012,7 @@ class RealtimeLineChart(QWidget):
             self._external_connections.connect(
                 self._plot.scene().sigMouseClicked, self._on_plot_clicked)
         else:
-            self._missing_label = BodyLabel("需要安装 pyqtgraph")
+            self._missing_label = BodyLabel(tr("需要安装 pyqtgraph"))
             self._missing_label.setAlignment(Qt.AlignCenter)
             self._root.addWidget(self._missing_label, 1)
             self._plot = None
@@ -1010,29 +1022,29 @@ class RealtimeLineChart(QWidget):
         tb = QHBoxLayout()
         tb.setContentsMargins(4, 2, 4, 0)
         tb.setSpacing(6)
-        tb.addWidget(BodyLabel("显示点数"))
+        tb.addWidget(BodyLabel(tr("显示点数")))
         self._disp_edit = FluentLineEdit()
         self._disp_edit.setText(str(self._display_points))
         self._disp_edit.setFixedWidth(80)
         self._disp_edit.editingFinished.connect(self._on_disp_changed)
         tb.addWidget(self._disp_edit)
         # 实时, the cursor's sample, or what went wrong saving, loading or recording
-        self._mode_label = CaptionLabel("实时")
+        self._mode_label = CaptionLabel(tr("实时"))
         self._mode_label.setTextColor(QColor("#0078d4"), QColor("#4aa3df"))
         self._mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._mode_label.setMinimumWidth(1)  # a long message is cut short rather than widening the chart
         tb.addWidget(self._mode_label)
         tb.addStretch()
         self._save_btn = FluentToolButton(FluentIcon.SAVE)
-        self._save_btn.setToolTip("保存完整曲线数据")
+        self._save_btn.setToolTip(tr("保存完整曲线数据"))
         self._save_btn.clicked.connect(self._save_data)
         tb.addWidget(self._save_btn)
         self._load_btn = FluentToolButton(FluentIcon.FOLDER)
-        self._load_btn.setToolTip("加载对比曲线")
+        self._load_btn.setToolTip(tr("加载对比曲线"))
         self._load_btn.clicked.connect(self._load_data)
         tb.addWidget(self._load_btn)
         self._clear_ref_btn = FluentToolButton(FluentIcon.BROOM)
-        self._clear_ref_btn.setToolTip("清除对比")
+        self._clear_ref_btn.setToolTip(tr("清除对比"))
         self._clear_ref_btn.clicked.connect(self.clear_reference)
         self._clear_ref_btn.hide()
         tb.addWidget(self._clear_ref_btn)
@@ -1101,7 +1113,7 @@ class RealtimeLineChart(QWidget):
         while len(self._cfgs) < n:
             idx = len(self._cfgs)
             cfg = dict(_DEFAULT_CURVE_CFG)
-            cfg["name"] = f"曲线{idx + 1}"
+            cfg["name"] = default_curve_name(idx)
             self._cfgs.append(cfg)
         if len(self._cfgs) != old:
             self._rebuild_curves()
@@ -1150,7 +1162,7 @@ class RealtimeLineChart(QWidget):
                                 if self._plot else None)
         self._header.renew(0)
         self._cursor_mode = False
-        self._mode_label.setText("实时")
+        self._mode_label.setText(tr("实时"))
         self.apply_theme()
 
     def _toggle_curve(self, index):
@@ -1167,7 +1179,7 @@ class RealtimeLineChart(QWidget):
         their history stay as they are; the two line up sample for sample from the start of each."""
         names, histories = self._read_history(path)
         try:
-            refs = [(f"{name}（{Path(path).stem}）", list(history.values()))
+            refs = [(tr("%1（%2）", name, Path(path).stem), list(history.values()))
                     for name, history in zip(names, histories)]
         finally:
             for history in histories:
@@ -1206,7 +1218,7 @@ class RealtimeLineChart(QWidget):
         entries = []
         for i, value in enumerate(live):
             curve = self._curves[i] if i < len(self._curves) else None
-            entries.append((self._cfgs[i].get("name", f"曲线{i+1}"), value, self._curve_color(i), False,
+            entries.append((self._cfgs[i].get("name", default_curve_name(i)), value, self._curve_color(i), False,
                             curve is None or curve.isVisible()))
         for index, (curve, (name, values)) in enumerate(zip(self._ref_curves, self._refs)):
             val = f"{values[sample]:.4g}" if 0 <= sample < len(values) else "--"
@@ -1218,7 +1230,7 @@ class RealtimeLineChart(QWidget):
     def _on_plot_clicked(self, evt):
         if evt.double():
             self._cursor_mode = False
-            self._mode_label.setText("实时")
+            self._mode_label.setText(tr("实时"))
             if self._cursor_line:
                 self._cursor_line.setVisible(False)
             self._show_live_values()
@@ -1252,7 +1264,7 @@ class RealtimeLineChart(QWidget):
 
     def _show_cursor_values(self, x: float):
         idx = int(round(x))
-        self._mode_label.setText(f"游标: x={idx}")
+        self._mode_label.setText(tr("游标: x=%1", idx))
         values = []
         for i in range(len(self._cfgs)):
             visible = self._data[i].tail(self._display_points) if i < len(self._data) else []
@@ -1276,7 +1288,7 @@ class RealtimeLineChart(QWidget):
             try:
                 self._data[channel].append(value)
             except OSError as error:
-                self._mode_label.setText(f"记录失败: {error}")
+                self._mode_label.setText(tr("记录失败: %1", error))
                 return
             if not self._refresh_timer.isActive():
                 self._refresh_timer.start()
@@ -1293,7 +1305,7 @@ class RealtimeLineChart(QWidget):
 
     def save_data(self, path):
         """Stream the complete history, including samples evicted from display."""
-        names = [c.get("name", f"曲线{i+1}") for i, c in enumerate(self._cfgs)]
+        names = [c.get("name", default_curve_name(i)) for i, c in enumerate(self._cfgs)]
         with open(path, "w", newline="", encoding="utf-8") as output:
             if str(path).lower().endswith(".json"):
                 # Objects retain the original format for unique names. Ordered
@@ -1319,12 +1331,12 @@ class RealtimeLineChart(QWidget):
 
     def _save_data(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "保存完整曲线数据", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
+            self, tr("保存完整曲线数据"), "", tr("CSV文件 (*.csv);;JSON文件 (*.json)"))
         if path:
             try:
                 self.save_data(path)
             except OSError as error:
-                self._mode_label.setText(f"保存失败: {error}")
+                self._mode_label.setText(tr("保存失败: %1", error))
 
     def load_data(self, path):
         """Replace samples for existing channels without changing live parsing.
@@ -1383,11 +1395,11 @@ class RealtimeLineChart(QWidget):
         return names, histories
 
     def _history_channel_order(self, names, adopt_channels=False):
-        expected = [cfg.get("name", f"曲线{i+1}") for i, cfg in enumerate(self._cfgs)]
+        expected = [cfg.get("name", default_curve_name(i)) for i, cfg in enumerate(self._cfgs)]
         if not names:
-            raise ValueError("曲线文件没有通道")
+            raise ValueError(tr("曲线文件没有通道"))
         if len(names) > 8:
-            raise ValueError("曲线文件最多支持 8 个通道")
+            raise ValueError(tr("曲线文件最多支持 8 个通道"))
         if adopt_channels:
             return list(range(len(names)))
         if names == expected:
@@ -1395,16 +1407,16 @@ class RealtimeLineChart(QWidget):
         if (len(names) == len(expected) and len(set(names)) == len(names)
                 and set(names) == set(expected)):
             return [names.index(name) for name in expected]
-        raise ValueError("曲线文件通道名称或数量与当前配置不一致，请加载对应通道的历史文件")
+        raise ValueError(tr("曲线文件通道名称或数量与当前配置不一致，请加载对应通道的历史文件"))
 
     def _load_data(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "加载对比曲线", "", "CSV文件 (*.csv);;JSON文件 (*.json)")
+            self, tr("加载对比曲线"), "", tr("CSV文件 (*.csv);;JSON文件 (*.json)"))
         if path:
             try:
                 self.load_reference(path)
             except (OSError, ValueError, TypeError, OverflowError) as error:
-                self._mode_label.setText(f"加载失败: {error}")
+                self._mode_label.setText(tr("加载失败: %1", error))
 
     def configure(self, cfgs, disp_pts=200):
         if isinstance(cfgs, str):
@@ -1428,13 +1440,13 @@ class RealtimeLineChart(QWidget):
     def _on_parsed_data(self, data: dict):
         for i, cfg in enumerate(self._cfgs):
             try:
-                pm = cfg.get("parseMode", "键值匹配")
+                pm = cfg.get("parseMode", "键值匹配")  # i18n: value
                 val = None
-                if pm == "键值匹配":
+                if pm == "键值匹配":  # i18n: value
                     key = cfg.get("key") or cfg.get("name", "")
                     if key and key in data:
                         val = data[key]
-                elif pm == "JSON路径":
+                elif pm == "JSON路径":  # i18n: value
                     jp = cfg.get("jsonPath", "")
                     if jp:
                         val = self._resolve_path(data, jp)
@@ -1448,13 +1460,13 @@ class RealtimeLineChart(QWidget):
 
     def _on_raw_data(self, raw: bytes):
         for i, cfg in enumerate(self._cfgs):
-            if cfg.get("parseMode") != "HEX字节提取":
+            if cfg.get("parseMode") != "HEX字节提取":  # i18n: value
                 continue
             fi = _STRUCT_FMT.get(cfg.get("dataType", "float32"))
             if not fi:
                 continue
             fmt_c, sz = fi
-            bo = ">" if cfg.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"
+            bo = ">" if cfg.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"  # i18n: value
             off = int(cfg.get("byteOffset", 0))
             for frame in self._raw_frames[i].feed(raw):
                 payload = self._strip_frame(frame, cfg)
@@ -1473,7 +1485,7 @@ class RealtimeLineChart(QWidget):
             if cfg.get("parseMode") != "Modbus":
                 continue
             try:
-                need = modbus_need(cfg.get("mbArea", "保持寄存器"), int(cfg.get("regIndex", 0)),
+                need = modbus_need(cfg.get("mbArea", "保持寄存器"), int(cfg.get("regIndex", 0)),  # i18n: value
                                    cfg.get("mbDataType", "uint16"), int(cfg.get("mbSlaveFilter", -1)))
             except (TypeError, ValueError):
                 continue
@@ -1485,8 +1497,8 @@ class RealtimeLineChart(QWidget):
     def _extract_modbus(cfg: dict, data: dict):
         return modbus_value(
             data, int(cfg.get("regIndex", 0)), cfg.get("mbDataType", "uint16"),
-            cfg.get("mbRegOrder", "大端(AB CD)"), int(cfg.get("mbFcFilter", -1)),
-            int(cfg.get("mbSlaveFilter", -1)), cfg.get("mbArea", "保持寄存器"))
+            cfg.get("mbRegOrder", "大端(AB CD)"), int(cfg.get("mbFcFilter", -1)),  # i18n: value
+            int(cfg.get("mbSlaveFilter", -1)), cfg.get("mbArea", "保持寄存器"))  # i18n: value
 
     @staticmethod
     def _strip_frame(raw: bytes, cfg: dict):
@@ -1549,11 +1561,11 @@ from qfluentwidgets import TableWidget
 class DataTableWidget(QWidget):
     """Either the latest frame as field / value rows, or a log with one row per frame.
 
-    In the log, each column takes the value of the key it is named after and a column named 时间 takes the
+    In the log, each column takes the value of the key it is named after and a column named TIME_COLUMN takes the
     time the frame arrived; frames carrying none of the named keys belong to some other message and are
     skipped. Beyond the row limit the oldest rows go."""
 
-    TIME_COLUMN = "时间"
+    TIME_COLUMN = "时间"  # i18n: value
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1563,11 +1575,11 @@ class DataTableWidget(QWidget):
         layout.setSpacing(2)
         self._table = TableWidget()
         self._table.setColumnCount(2)
-        self._table.setHorizontalHeaderLabels(["字段", "值"])
+        self._table.setHorizontalHeaderLabels(["字段", "值"])  # i18n: value  (the default columns, user content)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         layout.addWidget(self._table)
-        self._columns = ["字段", "值"]
+        self._columns = ["字段", "值"]  # i18n: value
         self._max_rows = 500
         self._logging = False
         self._fit_columns()
@@ -1577,7 +1589,7 @@ class DataTableWidget(QWidget):
         self._serial_connections.connect(handler.dataReceived, self.on_data)
 
     def set_columns(self, columns):
-        self._columns = list(columns) or ["字段", "值"]
+        self._columns = list(columns) or ["字段", "值"]  # i18n: value
         self._table.setColumnCount(len(self._columns))
         self._table.setHorizontalHeaderLabels(self._columns)
         self._fit_columns()
@@ -1601,8 +1613,8 @@ class DataTableWidget(QWidget):
             self._table.removeRow(0 if self._logging else self._table.rowCount() - 1)
 
     def set_record_mode(self, mode):
-        """最新值 (the latest frame) or 逐行记录 (one row per frame)."""
-        logging = mode == "逐行记录"
+        """The recordMode: the latest frame only, or a log with one row per frame."""
+        logging = mode == "逐行记录"  # i18n: value
         if logging != self._logging:
             self._logging = logging
             self.clear_data()
@@ -1655,7 +1667,7 @@ class ProgressRingDisplay(QWidget):
         self._ring = ProgressRing(); self._ring.setRange(0,100); self._ring.setValue(0)
         self._ring.setFixedSize(80,80)
         self._ring.setTextVisible(True)
-        self._lbl = CaptionLabel("进度"); self._lbl.setAlignment(Qt.AlignCenter)
+        self._lbl = CaptionLabel(tr("进度")); self._lbl.setAlignment(Qt.AlignCenter)
         lo.addWidget(self._ring, 0, Qt.AlignCenter)
         lo.addWidget(self._lbl)
     def set_label(self, t): self._lbl.setText(t)
@@ -1671,6 +1683,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from qfluentwidgets import TextEdit, setCustomStyleSheet
 
 
+from i18n import tr
 
 LOG_STYLE = ("QTextEdit { font-family: Menlo, Consolas, 'Courier New', monospace; font-size: 11px; "
              "background: #1a1a2e; color: #a8d8ea; border: 1px solid #333; border-radius: 6px; padding: 6px; }")
@@ -1721,13 +1734,13 @@ class LogDisplayBox(QWidget):
                 self._serial_connections.connect(handler.slaveLog, self.append_log)
 
     def _on_connected(self, port):
-        self.append_log(f"已连接: {port}", "ok")
+        self.append_log(tr("已连接: %1", port), "ok")
 
     def _on_disconnected(self):
-        self.append_log("已断开", "warn")
+        self.append_log(tr("已断开"), "warn")
 
     def _on_serial_error(self, message):
-        self.append_log(f"错误: {message}", "error")
+        self.append_log(tr("错误: %1", message), "error")
 
     def _on_parsed_data(self, data):
         if getattr(self._handler, "slave_data", False):
@@ -1764,16 +1777,16 @@ A link card owns its link. Handed the running application's CommHub, it creates 
 registers it there; any number of cards of one kind each have their own link. Handed None, or destroyed,
 the card disconnects its link and takes it off the hub.
 
-Every link card hands the running application's Modbus poller (modbus_poller.py) its 默认轮询(ms),
-响应超时(ms) and 默认从站 (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which count while the
-card is the first in the document whose link is connected and parses Modbus. While its link is
-connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
-``<connection> · <poller status>``, with the poller's blocks as its tooltip; 等待连接 is never shown
-there.
+Every link card hands the running application's Modbus poller (modbus_poller.py) its default polling
+period, response timeout and default slave (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which
+count while the card is the first in the document whose link is connected and parses Modbus. While its
+link is connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
+``<connection> · <poller status>``, with the poller's blocks as its tooltip; the poller's waiting status
+is never shown there.
 
-A serial or TCP card also has a Modbus role (ModbusSlaveSettings). As 从站 it owns a slave data table
+A serial or TCP card also has a Modbus role (ModbusSlaveSettings). As a slave it owns a slave data table
 (slave_runtime.ModbusSlaveDevice) and connects its link as a slave whenever the link parses modbus or
-modbus_tcp; while the link answers, the card shows ``<connection> · 从站 S · 应答 N`` in place of the
+modbus_tcp; while the link answers, the card shows ``<connection> · <slave status>`` in place of the
 poller's status.
 """
 from functools import partial
@@ -1784,12 +1797,19 @@ from qfluentwidgets import CaptionLabel, ToolTipFilter, ToolTipPosition
 
 
 from serial_handler import ModbusSlaveDevice
-from serial_handler import SLAVE_ROLE
+from serial_handler import MASTER_ROLE, SLAVE_ROLE
+from i18n import tr
 
+# The defaultParser of a link card that uses the project's frame format.
+PROJECT_PARSER = "项目设置"  # i18n: value
+# A link card's displayMode: every row, the main ones, or (the serial card) one toolbar row.
+FULL_MODE, SIMPLE_MODE, ONE_LINE_MODE = "完整", "简洁", "单行"  # i18n: value
+# The parsing modes a link card offers: the project's settings, or one of its own.
+CARD_PARSERS = (PROJECT_PARSER, "line", "hex", "modbus", "modbus_tcp", "modbus_ascii")
 MODBUS_DEFAULTS = (500, 1000, 1)  # modbusPeriod, modbusTimeout, modbusSlave: the poller's own defaults
 MODBUS_RANGES = ((10, 60000), (10, 60000), (1, 247))
-SLAVE_DELAY_RANGE = (0, 5000)  # 响应延时(ms)
-SLAVE_START_RANGE, SLAVE_COUNT_RANGE = (0, 65535), (0, 10000)  # 起始 / 数量 of an area
+SLAVE_DELAY_RANGE = (0, 5000)  # the response delay, ms
+SLAVE_START_RANGE, SLAVE_COUNT_RANGE = (0, 65535), (0, 10000)  # the first address and size of an area
 
 
 def fluent_tooltip(widget, text=""):
@@ -1798,6 +1818,20 @@ def fluent_tooltip(widget, text=""):
     widget.setToolTip(text)
     widget.installEventFilter(ToolTipFilter(widget, 300, ToolTipPosition.TOP))
     return widget
+
+
+def add_value_items(combo, values):
+    """Fill ``combo`` with stored values: each item shows its value translated and keeps the value itself
+    as its data, which is what the card reads back."""
+    for value in values:
+        combo.addItem(tr(value), userData=value)
+
+
+def select_value(combo, value):
+    """Select the item of ``combo`` holding ``value``; nothing changes when none does."""
+    index = combo.findData(value)
+    if index >= 0:
+        combo.setCurrentIndex(index)
 
 
 def status_label(text):
@@ -1886,7 +1920,7 @@ class ModbusLinkSettings:
 
     @property
     def modbus_settings(self):
-        """(默认轮询 ms, 响应超时 ms, 默认从站) for the Modbus poller."""
+        """(polling period ms, response timeout ms, default slave) for the Modbus poller."""
         return self._modbus_settings
 
     def set_modbus_period(self, value):
@@ -1946,13 +1980,14 @@ class ModbusLinkSettings:
 
 class ModbusSlaveSettings(ModbusLinkSettings):
     """The Modbus role of a serial or TCP card (``modbusRole``), set at design time, and the slave settings
-    that count in the 从站 role: 响应延时(ms), 异常响应, the four areas and 初始值, with 默认从站 as this
-    slave's address. ``slave_device`` is the card's slave, None in the 主站 role; the card passes it to its
+    that count in the slave role: the response delay, exception responses, the four areas and the initial
+    values, with the default slave as this slave's address. ``slave_device`` is the card's slave, None in
+    the master role; the card passes it to its
     link's connect(), which answers with it while it parses modbus or modbus_tcp."""
 
     def _init_modbus(self):
         super()._init_modbus()
-        self._modbus_role = "主站"
+        self._modbus_role = MASTER_ROLE
         self._slave_device = ModbusSlaveDevice(self)
         self._slave_device.written.connect(self._on_slave_written)
         self._slave_device.statusChanged.connect(self._on_slave_status)
@@ -1962,7 +1997,7 @@ class ModbusSlaveSettings(ModbusLinkSettings):
         return self._slave_device if self._modbus_role == SLAVE_ROLE else None
 
     def set_modbus_role(self, value):
-        self._modbus_role = SLAVE_ROLE if value == SLAVE_ROLE else "主站"
+        self._modbus_role = SLAVE_ROLE if value == SLAVE_ROLE else MASTER_ROLE
 
     def set_modbus_slave(self, value):
         super().set_modbus_slave(value)
@@ -2036,29 +2071,31 @@ from qfluentwidgets import (
 
 from serial_handler import SerialHandler, _list_all_ports
 
+from i18n import tr
 
 class SerialConfigCard(ModbusSlaveSettings, CardWidget):
-    """Serial port configuration card with three display modes:
-    完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
+    """Serial port configuration card with three display modes (link_polling.FULL_MODE and the others):
+    full, simple (port and baud) and one line (a toolbar row).
     One button connects or disconnects the card's own serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
     height is what the rows of its display mode need. Like every link card it hands the Modbus
-    poller its settings and shows the poller's status while its link parses Modbus; in the 从站 role
+    poller its settings and shows the poller's status while its link parses Modbus; in the slave role
     it answers as a Modbus slave instead (link_polling.ModbusSlaveSettings)."""
 
     LINK_CLASS = SerialHandler
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
+    _FLOWS = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}  # i18n: value
     PROPERTY_SETTERS = (
-        ("title", "set_title", "串口配置"),
-        ("displayMode", "set_display_mode", "完整"),
+        ("title", "set_title", "串口配置"),  # i18n: value
+        ("displayMode", "set_display_mode", "完整"),  # i18n: value
         ("defaultBaud", "set_default_baud", "115200"),
         ("defaultDatabits", "set_default_databits", "8"),
         ("defaultParity", "set_default_parity", "None"),
         ("defaultStopbits", "set_default_stopbits", "1"),
-        ("defaultFlow", "set_default_flow", "无"),
-        ("defaultParser", "set_default_parser", "项目设置"),
-        ("modbusRole", "set_modbus_role", "主站"),
+        ("defaultFlow", "set_default_flow", "无"),  # i18n: value
+        ("defaultParser", "set_default_parser", "项目设置"),  # i18n: value
+        ("modbusRole", "set_modbus_role", "主站"),  # i18n: value
         ("modbusPeriod", "set_modbus_period", 500),
         ("modbusTimeout", "set_modbus_timeout", 1000),
         ("modbusSlave", "set_modbus_slave", 1),
@@ -2069,7 +2106,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._display_mode = "完整"
+        self._display_mode = FULL_MODE
         self._parser_config = {}
         self._connected = False
         self._handler = None
@@ -2085,8 +2122,8 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         # ---- title row ----
         self._title_w = self._make_row()
         tl = self._title_w.layout()
-        self._title = StrongBodyLabel("串口配置")
-        self._status = status_label("未连接")
+        self._title = StrongBodyLabel(tr("串口配置"))
+        self._status = status_label(tr("未连接"))
         self._status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         tl.addWidget(self._title); tl.addWidget(self._status, 1)
         self._root.addWidget(self._title_w)
@@ -2096,10 +2133,10 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         # ---- port row ----
         self._port_w = self._make_row()
         pl = self._port_w.layout()
-        self._port_label = BodyLabel("端口"); self._port_label.setFixedWidth(LW)
+        self._port_label = BodyLabel(tr("端口")); self._port_label.setFixedWidth(LW)
         self._port_combo = ComboBox(); self._port_combo.setMinimumWidth(120)
-        self._port_combo.setPlaceholderText("选择串口")
-        self._search_btn = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
+        self._port_combo.setPlaceholderText(tr("选择串口"))
+        self._search_btn = fluent_tooltip(ToolButton(FIF.SEARCH), tr("搜索串口"))
         self._search_btn.clicked.connect(self.refresh_ports)
         pl.addWidget(self._port_label); pl.addWidget(self._port_combo, 1)
         pl.addWidget(self._search_btn)
@@ -2108,7 +2145,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         # ---- baud row ----
         self._baud_w = self._make_row()
         bl = self._baud_w.layout()
-        self._baud_label = BodyLabel("波特率"); self._baud_label.setFixedWidth(LW)
+        self._baud_label = BodyLabel(tr("波特率")); self._baud_label.setFixedWidth(LW)
         self._baud_combo = ComboBox()
         self._baud_combo.addItems(self._BAUDS); self._baud_combo.setCurrentIndex(4)
         bl.addWidget(self._baud_label); bl.addWidget(self._baud_combo, 1)
@@ -2119,9 +2156,9 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         pal = self._params_w.layout()
         first = True
         for lbl_text, cb_items, attr, idx in [
-            ("数据位", ["5", "6", "7", "8"], "_databits_combo", 3),
-            ("校验",   ["None", "Even", "Odd", "Mark", "Space"], "_parity_combo", 0),
-            ("停止位", ["1", "1.5", "2"], "_stopbits_combo", 0),
+            (tr("数据位"), ["5", "6", "7", "8"], "_databits_combo", 3),
+            (tr("校验"),   ["None", "Even", "Odd", "Mark", "Space"], "_parity_combo", 0),
+            (tr("停止位"), ["1", "1.5", "2"], "_stopbits_combo", 0),
         ]:
             lbl = CaptionLabel(lbl_text)
             if first:
@@ -2135,20 +2172,20 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         # ---- flow row ----
         self._flow_w = self._make_row()
         fl = self._flow_w.layout()
-        self._flow_label = BodyLabel("流控"); self._flow_label.setFixedWidth(LW)
+        self._flow_label = BodyLabel(tr("流控制")); self._flow_label.setFixedWidth(LW)
         self._flow_combo = ComboBox()
-        self._flow_combo.addItems(["无", "RTS/CTS", "XON/XOFF", "DTR/DSR"])
+        add_value_items(self._flow_combo, self._FLOWS)
         fl.addWidget(self._flow_label); fl.addWidget(self._flow_combo, 1)
         self._root.addWidget(self._flow_w)
 
         self._parser_w = self._make_row()
-        self._parser_w.layout().addWidget(BodyLabel("解析模式"))
+        self._parser_w.layout().addWidget(BodyLabel(tr("解析模式")))
         self._parser_combo = ComboBox()
-        self._parser_combo.addItems(["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"])
+        add_value_items(self._parser_combo, CARD_PARSERS)
         self._parser_w.layout().addWidget(self._parser_combo, 1)
         self._root.addWidget(self._parser_w)
 
-        # ---- the 连接 / 断开 button, at the end of the last row shown ----
+        # ---- the connect / disconnect button, at the end of the last row shown ----
         self._connect_btn = self._toggle_button()
         self._connect_btn.clicked.connect(self._on_toggle)
 
@@ -2159,18 +2196,18 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         sl.setSpacing(6)
 
         H = 33
-        self._sl_port = ComboBox(); self._sl_port.setPlaceholderText("串口")
+        self._sl_port = ComboBox(); self._sl_port.setPlaceholderText(tr("串口"))
         self._sl_port.setMinimumWidth(90); self._sl_port.setFixedHeight(H)
         self._sl_baud = ComboBox(); self._sl_baud.addItems(self._BAUDS)
         self._sl_baud.setCurrentIndex(4)
         self._sl_baud.setFixedWidth(90); self._sl_baud.setFixedHeight(H)
-        self._sl_search = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
+        self._sl_search = fluent_tooltip(ToolButton(FIF.SEARCH), tr("搜索串口"))
         self._sl_search.clicked.connect(self.refresh_ports)
         self._sl_search.setFixedSize(H, H)
         self._sl_conn = self._toggle_button()
         self._sl_conn.setFixedHeight(H)
         self._sl_conn.clicked.connect(self._on_toggle)
-        self._sl_status = fluent_tooltip(CaptionLabel("未连接"))
+        self._sl_status = fluent_tooltip(CaptionLabel(tr("未连接")))
         self._sl_status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         # Left: a status that has to shrink (the poller's, see _show_connected) keeps its start.
         self._sl_status.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -2199,27 +2236,28 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
 
     @staticmethod
     def _toggle_button():
-        """连接 / 断开 in one button, as wide as the widest of 连接 / 断开 / 取消, so its row stays put."""
-        button = PrimaryPushButton("连接")
+        """Connect / disconnect in one button, as wide as the widest of connect / disconnect / cancel, so its
+        row stays put."""
+        button = PrimaryPushButton(tr("连接"))
         width = 0
-        for text in ("连接", "断开", "取消"):
+        for text in (tr("连接"), tr("断开"), tr("取消")):
             button.setText(text)
             width = max(width, button.sizeHint().width())
-        button.setText("连接")
+        button.setText(tr("连接"))
         button.setFixedWidth(width)
         return button
 
     def _shown_rows(self):
-        if self._display_mode == "单行":
+        if self._display_mode == ONE_LINE_MODE:
             return [self._sl_w]
         rows = [self._title_w, self._port_w, self._baud_w]
-        if self._display_mode == "完整":
+        if self._display_mode == FULL_MODE:
             rows += [self._params_w, self._flow_w, self._parser_w]
         return rows
 
     def _place_button(self):
-        """The button goes at the right end of the last field row shown (单行 has its own)."""
-        if self._display_mode != "单行":
+        """The button goes at the right end of the last field row shown (the one-line row has its own)."""
+        if self._display_mode != ONE_LINE_MODE:
             row = self._shown_rows()[-1]
             button = self._connect_btn
             if button.parentWidget() is not row:
@@ -2259,7 +2297,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         return max(h, 30)
 
     def paintEvent(self, event):
-        if self._display_mode == "完整":
+        if self._display_mode == FULL_MODE:
             super().paintEvent(event)
             return
         ch = self._content_height()
@@ -2278,16 +2316,16 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
 
     def set_display_mode(self, mode: str):
         self._display_mode = mode
-        is_sl = mode == "单行"
-        compact = mode != "完整"
+        is_sl = mode == ONE_LINE_MODE
+        compact = mode != FULL_MODE
         self.setAttribute(Qt.WA_TranslucentBackground, compact)
         self.setAutoFillBackground(not compact)
         self._title_w.setVisible(not is_sl)
         self._port_w.setVisible(not is_sl)
         self._baud_w.setVisible(not is_sl)
-        self._params_w.setVisible(mode == "完整")
-        self._flow_w.setVisible(mode == "完整")
-        self._parser_w.setVisible(mode == "完整")
+        self._params_w.setVisible(mode == FULL_MODE)
+        self._flow_w.setVisible(mode == FULL_MODE)
+        self._parser_w.setVisible(mode == FULL_MODE)
         self._sl_w.setVisible(is_sl)
         if is_sl:
             self._root.setContentsMargins(8, 6, 8, 6)
@@ -2334,25 +2372,24 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         if not port or self._handler is None:  # no link off a hub (the designer canvas)
             return
 
-        flow_map = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}
         parity_map = {"None": "N", "Even": "E", "Odd": "O", "Mark": "M", "Space": "S"}
 
         for btn in (self._connect_btn, self._sl_conn):
             btn.setEnabled(False)
-        self._set_status("连接中...", "#FF9800")
+        self._set_status(tr("连接中..."), "#FF9800")
 
         ok = self._handler.connect(
             port, baud,
             databits=int(self._databits_combo.currentText()),
             parity=parity_map.get(self._parity_combo.currentText(), "N"),
             stopbits=float(self._stopbits_combo.currentText()),
-            flowcontrol=flow_map.get(self._flow_combo.currentText(), "none"),
+            flowcontrol=self._FLOWS.get(self._flow_combo.currentData(), "none"),
             parser_type=self.parser_type, parser_config=self.parser_config, slave=self.slave_device,
         )
         if not ok:
             for btn in (self._connect_btn, self._sl_conn):
                 btn.setEnabled(True)
-            self._set_status("连接失败", "#F44336")
+            self._set_status(tr("连接失败"), "#F44336")
 
     def _on_disconnect(self):
         if self._handler is not None:
@@ -2365,7 +2402,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         self.set_connected(False)
 
     def _on_serial_error(self, msg: str):
-        self._set_status("错误", "#F44336")
+        self._set_status(tr("错误"), "#F44336")
         self._status.setToolTip(msg)
         self._sl_status.setToolTip(msg)
         self._poll_tip = False
@@ -2392,14 +2429,14 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
             for p in ports:
                 combo.addItem(f"{p['port']}  {p['description']}")
             if combo.count() == 0:
-                combo.addItem("无可用串口")
+                combo.addItem(tr("无可用串口"))
 
     def set_connected(self, connected: bool):
         self._connected = connected
         editable = not connected
         for btn in (self._connect_btn, self._sl_conn):
             btn.setEnabled(True)
-            btn.setText("断开" if connected else "连接")
+            btn.setText(tr("断开") if connected else tr("连接"))
         for w in (self._port_combo, self._sl_port, self._baud_combo, self._sl_baud,
                   self._search_btn, self._sl_search,
                   self._databits_combo, self._parity_combo,
@@ -2408,14 +2445,14 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         if connected:
             self._show_connected()
         else:
-            self._set_status("未连接", "#888")
+            self._set_status(tr("未连接"), "#888")
             self._show_poll_tip(None)
 
     def _show_connected(self):
         """The connection, and the Modbus poller's status while the link parses Modbus, on the status
-        line and in the 单行 row alike. The row has little room: there the poller's part may shrink
+        line and in the one-line row alike. The row has little room: there the poller's part may shrink
         away, cut at its end, but never the connection, so the button stays in sight."""
-        connection = "● 已连接"
+        connection = "● " + tr("已连接")
         text, tip = self._with_poll_status(connection)
         self._set_status(text, "#4CAF50")
         if tip is not None:
@@ -2432,7 +2469,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     # ---- property setters ----
 
     def set_default_parser(self, value):
-        self._parser_combo.setCurrentText(value)
+        select_value(self._parser_combo, value)
 
     def set_parser_config(self, value):
         self._parser_config = dict(value) if isinstance(value, dict) else {}
@@ -2440,8 +2477,8 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     @property
     def parser_type(self):
         """None selects the project's parser settings."""
-        text = self._parser_combo.currentText()
-        return None if text == "项目设置" else text
+        mode = self._parser_combo.currentData()
+        return None if mode == CARD_PARSERS[0] else mode
 
     @property
     def parser_config(self):
@@ -2471,20 +2508,19 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         if idx >= 0: self._stopbits_combo.setCurrentIndex(idx)
 
     def set_default_flow(self, v: str):
-        idx = self._flow_combo.findText(v)
-        if idx >= 0: self._flow_combo.setCurrentIndex(idx)
+        select_value(self._flow_combo, v)
 
     @property
     def port(self):
-        c = self._sl_port if self._display_mode == "单行" else self._port_combo
+        c = self._sl_port if self._display_mode == ONE_LINE_MODE else self._port_combo
         text = c.currentText()
-        if not text or text == "无可用串口":
+        if not text or text == tr("无可用串口"):
             return ""
         return text.split()[0]
 
     @property
     def baudrate(self):
-        c = self._sl_baud if self._display_mode == "单行" else self._baud_combo
+        c = self._sl_baud if self._display_mode == ONE_LINE_MODE else self._baud_combo
         return int(c.currentText())
 
 
@@ -2497,19 +2533,19 @@ class DataRecvCard(CardWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         root = QVBoxLayout(self); root.setContentsMargins(12,10,12,10); root.setSpacing(6)
         hdr = QHBoxLayout()
-        self._title_lbl = StrongBodyLabel("数据接收"); hdr.addWidget(self._title_lbl)
+        self._title_lbl = StrongBodyLabel(tr("数据接收")); hdr.addWidget(self._title_lbl)
         hdr.addStretch()
-        self._counter = CaptionLabel("0 条")
+        self._counter = CaptionLabel(tr("%1 条", 0))
         self._counter.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         hdr.addWidget(self._counter)
         root.addLayout(hdr)
         opt = QHBoxLayout(); opt.setSpacing(8)
-        self._hex_cb = CheckBox("HEX显示"); opt.addWidget(self._hex_cb)
-        self._scroll_cb = CheckBox("自动滚动"); self._scroll_cb.setChecked(True); opt.addWidget(self._scroll_cb)
+        self._hex_cb = CheckBox(tr("HEX显示")); opt.addWidget(self._hex_cb)
+        self._scroll_cb = CheckBox(tr("自动滚动")); self._scroll_cb.setChecked(True); opt.addWidget(self._scroll_cb)
         for check in (self._hex_cb, self._scroll_cb):  # macOS would lay them out by a smaller rect
             check.setAttribute(Qt.WA_LayoutUsesWidgetRect)
         opt.addStretch()
-        self._clear_btn = PushButton("清空"); self._clear_btn.setFixedWidth(60)
+        self._clear_btn = PushButton(tr("清空")); self._clear_btn.setFixedWidth(60)
         self._clear_btn.clicked.connect(self._clear); opt.addWidget(self._clear_btn)
         root.addLayout(opt)
         self._text = TextEdit(); self._text.setReadOnly(True)
@@ -2533,8 +2569,8 @@ class DataRecvCard(CardWidget):
             self._serial_connections.connect(h.dataSent, self._on_sent)
             self._serial_connections.connect(h.connected, self._on_connected)
             self._serial_connections.connect(h.disconnected, self._on_disconnected)
-    def _on_connected(self, port): self._sys(f"已连接: {port}")
-    def _on_disconnected(self): self._sys("已断开")
+    def _on_connected(self, port): self._sys(tr("已连接: %1", port))
+    def _on_disconnected(self): self._sys(tr("已断开"))
     def _on_raw(self, data):
         ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
         if self._hex_cb.isChecked():
@@ -2545,7 +2581,7 @@ class DataRecvCard(CardWidget):
             if not txt: return
         self._text.append(f'<span style="color:#9399b2">[{ts}]</span> '
                           f'<span style="color:#a6e3a1">&lt;&lt; {_log_html(txt)}</span>')
-        self._count += 1; self._counter.setText(f"{self._count} 条")
+        self._count += 1; self._counter.setText(tr("%1 条", self._count))
         self._trim(); self._do_scroll()
     def _on_sent(self, data):
         ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
@@ -2565,7 +2601,7 @@ class DataRecvCard(CardWidget):
         if self._scroll_cb.isChecked():
             sb = self._text.verticalScrollBar(); sb.setValue(sb.maximum())
     def _clear(self):
-        self._text.clear(); self._count = 0; self._counter.setText("0 条")
+        self._text.clear(); self._count = 0; self._counter.setText(tr("%1 条", 0))
     def _trim(self):
         doc = self._text.document()
         while doc.blockCount() > self._max_lines:
@@ -2598,7 +2634,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
 
-        self.addSubInterface(scroll, FIF.HOME, "主界面")
+        self.addSubInterface(scroll, FIF.HOME, tr("主界面"))
         self.apply_theme()
         self._external_connections = SignalConnections(self)
         self._external_connections.connect(
@@ -2752,7 +2788,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send_text(cmd + suffix)
 
     def _command_error(self, error):
-        InfoBar.error(title="提示", content=str(error), duration=2000, parent=self)
+        InfoBar.error(title=tr("提示"), content=str(error), duration=2000, parent=self)
 
     def _send_hex_command(self, cmd, header="", tail=""):
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
@@ -2763,7 +2799,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
                 return
             self._comm_hub.send(frame)
 
-    def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):
+    def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):  # i18n: value
         # A write goes into the data table of every link card in the 从站 role, connected or not; then one
         # request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
         devices = slave_devices(self.widgets.values())

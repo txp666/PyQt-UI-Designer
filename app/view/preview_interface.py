@@ -20,6 +20,7 @@ from qfluentwidgets import (
 )
 
 from app.common.signal_bus import signalBus
+from app.core.i18n import tr
 from app.common.build_support import archive_build, build_environment, build_nuitka_command
 from app.widgets.basic import create_widget
 from app.core.project import ProjectData
@@ -140,20 +141,20 @@ class PreviewCanvas(QWidget):
             if isinstance(child, (QAbstractSpinBox, QLineEdit, QAbstractButton, QTabBar)):
                 child.setFocusPolicy(Qt.StrongFocus)
 
-    _NEWLINE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
+    _NEWLINE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}  # i18n: value
     @staticmethod
     def _command_error(error):
-        signalBus.showNotification.emit("提示", str(error), "错误", 2000)
+        signalBus.showNotification.emit(tr("提示"), str(error), "错误", 2000)  # i18n: value
 
     def _send_modbus_frame(self, props: dict, value: int = None):
         """Send a Modbus request from widget properties over every connected link, framed
         for each link: RTU, or MBAP / ASCII where the link parses Modbus TCP / ASCII.
         If value is provided, it overrides mbValue from props. A write is carried out on the
-        data table of every link card in the 从站 role too, connected or not."""
+        data table of every link card in the slave role too, connected or not."""
         from app.core.comm_manager import commHub
         fields = (
             props.get("mbSlave", 1),
-            MODBUS_FUNCTIONS.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
+            MODBUS_FUNCTIONS.get(props.get("mbFunc", "06 写单寄存器"), 0x06),  # i18n: value
             props.get("mbAddress", 0),
             value if value is not None else props.get("mbValue", 1),
             props.get("mbDataType", "uint16"),
@@ -168,7 +169,7 @@ class PreviewCanvas(QWidget):
                 return
         if not commHub.is_connected:
             if not wrote:
-                signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
+                signalBus.showNotification.emit(tr("提示"), tr("未连接，命令未发送"), "警告", 2000)  # i18n: value
             return
         try:
             send_modbus_command(commHub, *fields)
@@ -177,13 +178,13 @@ class PreviewCanvas(QWidget):
 
     def _wire_slave_writes(self, widget: QWidget, type_name: str, binding: dict):
         """A user's change of a switch, slider or spin box with a Modbus binding goes into the data table
-        of every link card in the 从站 role, when the command would go out (sendOnChange aside). A
+        of every link card in the slave role, when the command would go out (sendOnChange aside). A
         binding's own update is signal-blocked, so it never writes back; one with an expression is not
         written, since its value cannot be worked back."""
         if (type_name not in ("ToggleSwitch", "Slider", "SpinBox") or binding.get("parseMode") != "Modbus"
                 or binding.get("expression")):
             return
-        write = partial(self._slave_write, binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)),
+        write = partial(self._slave_write, binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)),  # i18n: value
                         binding.get("mbDataType", "uint16"), binding.get("mbRegOrder", MODBUS_ORDERS[0]))
         if type_name == "ToggleSwitch":
             switch = widget.findChild(SwitchButton)
@@ -201,14 +202,14 @@ class PreviewCanvas(QWidget):
     def _send_serial_bytes(raw: bytes):
         from app.core.comm_manager import commHub
         if not commHub.is_connected:
-            signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
+            signalBus.showNotification.emit(tr("提示"), tr("未连接，命令未发送"), "警告", 2000)  # i18n: value
             return
         commHub.send(raw)
 
     def _send_command(self, cmd: str, mode: str, newline: str, props: dict):
         from app.core.comm_manager import commHub
         if not commHub.is_connected:
-            signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
+            signalBus.showNotification.emit(tr("提示"), tr("未连接，命令未发送"), "警告", 2000)  # i18n: value
             return
 
         if mode == "Modbus":
@@ -243,11 +244,11 @@ class PreviewCanvas(QWidget):
             self._send_modbus_frame(props, value)
             return
         if mode == "HEX":
-            dt = props.get("dataType", "HEX字符串")
+            dt = props.get("dataType", "HEX字符串")  # i18n: value
             fmt_info = PreviewCanvas._STRUCT_FMT.get(dt)
             if fmt_info:
                 fmt_char, cast = fmt_info
-                bo = ">" if props.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"
+                bo = ">" if props.get("byteOrder", "大端(BE)") == "大端(BE)" else "<"  # i18n: value
                 try:
                     frame = command_packed_frame(
                         value, bo + fmt_char, cast, tpl,
@@ -263,14 +264,14 @@ class PreviewCanvas(QWidget):
 
     def _wire_commands(self, widget: QWidget, type_name: str, props: dict):
         """Connect command properties to sending over the communication hub."""
-        mode = props.get("commandMode", "文本")
+        mode = props.get("commandMode", "文本")  # i18n: value
         newline = props.get("commandNewline", "\\r\\n")
         tpl = props.get("commandTemplate", "{value}")
 
         if type_name == "PushButton":
             cmd = props.get("command", "").strip()
             if mode == "Modbus":
-                settings = {"mbFunc": "03 读保持寄存器", **props}
+                settings = {"mbFunc": "03 读保持寄存器", **props}  # i18n: value
                 widget.clicked.connect(
                     lambda _, p=settings: self._send_modbus_frame(p))
             elif cmd:
@@ -289,7 +290,7 @@ class PreviewCanvas(QWidget):
                         if _m == "Modbus":
                             val = 0xFF00 if checked else 0x0000
                             self._send_modbus_frame(
-                                {**_p, "mbFunc": "05 写单线圈"}, val)
+                                {**_p, "mbFunc": "05 写单线圈"}, val)  # i18n: value
                         else:
                             c = _on if checked else _off
                             if c:
@@ -326,9 +327,9 @@ class PreviewCanvas(QWidget):
 
     @staticmethod
     def _wire_notification(widget: QWidget, type_name: str, props: dict):
-        title = props.get("notifyTitle", "提示")
+        title = props.get("notifyTitle", "提示")  # i18n: value
         content = props.get("notifyContent", "")
-        ntype = props.get("notifyType", "信息")
+        ntype = props.get("notifyType", "信息")  # i18n: value
         duration = int(props.get("notifyDuration", 3000))
         emit = partial(signalBus.showNotification.emit,
                        title, content, ntype, duration)
@@ -358,10 +359,10 @@ class PreviewCanvas(QWidget):
 class NuitkaPackDialog(MessageBoxBase):
     """Dialog that runs Nuitka packaging with real-time terminal output.
 
-    It is a Fluent message box over ``parent``, the main window. 开始打包 starts the build, 取消 stops
+    It is a Fluent message box over ``parent``, the main window. Its start button starts the build, cancel stops
     a running one and otherwise closes the dialog; closing it in any way stops the build too."""
 
-    def __init__(self, project_dir: str, app_name: str = "上位机", parent=None):
+    def __init__(self, project_dir: str, app_name: str = "上位机", parent=None):  # i18n: value
         super().__init__(parent)
         self._project_dir = project_dir
         self._app_name = app_name
@@ -372,8 +373,8 @@ class NuitkaPackDialog(MessageBoxBase):
     def _init_ui(self):
         self.widget.setMinimumSize(640, 400)
         hdr = QHBoxLayout()
-        self._title = StrongBodyLabel("Nuitka 打包", self.widget)
-        self._status = CaptionLabel("就绪", self.widget)
+        self._title = StrongBodyLabel(tr("Nuitka 打包"), self.widget)
+        self._status = CaptionLabel(tr("就绪"), self.widget)
         self._status.setStyleSheet("color:#888;")
         hdr.addWidget(self._title)
         hdr.addStretch()
@@ -396,14 +397,14 @@ class NuitkaPackDialog(MessageBoxBase):
 
         # The base class accepts on yes and rejects on cancel; these buttons do their own work.
         self._start_btn = self.yesButton
-        self._start_btn.setText("开始打包")
+        self._start_btn.setText(tr("开始打包"))
         self._start_btn.clicked.disconnect()
         self._start_btn.clicked.connect(self._start_pack)
         self._cancel_btn = self.cancelButton
-        self._cancel_btn.setText("取消")
+        self._cancel_btn.setText(tr("取消"))
         self._cancel_btn.clicked.disconnect()
         self._cancel_btn.clicked.connect(self._on_cancel)
-        self._open_dir_btn = PushButton("打开输出目录", self.buttonGroup)
+        self._open_dir_btn = PushButton(tr("打开输出目录"), self.buttonGroup)
         self._open_dir_btn.clicked.connect(self._open_output_dir)
         self._open_dir_btn.setEnabled(False)
         self.buttonLayout.addWidget(self._open_dir_btn, 1, Qt.AlignVCenter)
@@ -512,27 +513,26 @@ class NuitkaPackDialog(MessageBoxBase):
 
         main_py = Path(self._project_dir) / "main.py"
         if not main_py.exists():
-            self._append_text("错误: 找不到 main.py，请先导出代码\n", "#f44")
+            self._append_text(tr("错误: 找不到 main.py，请先导出代码") + "\n", "#f44")
             return
 
         self._start_btn.setEnabled(False)
         self._open_dir_btn.setEnabled(False)
         self._progress.show()
         self._terminal.clear()
-        self._status.setText("正在查找 Python 环境...")
+        self._status.setText(tr("正在查找 Python 环境..."))
         self._status.setStyleSheet("color:#0078d4;")
 
         py_cmd, has_nuitka = self._find_python(self._project_dir)
 
         if not py_cmd:
             self._append_text(
-                "错误: 未找到 Python 3.10 或更新版本\n\n"
-                "请安装 Python 3.10+ 并确保已加入系统 PATH。\n",
+                tr("错误: 未找到 Python 3.10 或更新版本\n\n请安装 Python 3.10+ 并确保已加入系统 PATH。") + "\n",
                 "#f44",
             )
             self._start_btn.setEnabled(True)
             self._progress.hide()
-            self._status.setText("未找到 Python")
+            self._status.setText(tr("未找到 Python"))
             self._status.setStyleSheet("color:#f44;")
             return
 
@@ -541,10 +541,9 @@ class NuitkaPackDialog(MessageBoxBase):
 
         if not has_nuitka:
             self._append_text(
-                f"检测到 Python: {py_display}\n"
-                f"打包依赖不完整，正在安装...\n\n", "#dcdcaa"
+                tr("检测到 Python: %1\n打包依赖不完整，正在安装...", py_display) + "\n\n", "#dcdcaa"
             )
-            self._status.setText("正在安装打包依赖...")
+            self._status.setText(tr("正在安装打包依赖..."))
             self._prepare_build_environment(py_cmd)
             return
 
@@ -557,7 +556,7 @@ class NuitkaPackDialog(MessageBoxBase):
         venv = Path(self._project_dir).resolve() / ".build-venv"
         self._build_python = venv / ("Scripts/python.exe" if sys.platform == "win32"
                                      else "bin/python")
-        self._append_text(f"创建打包虚拟环境: {venv}\n", "#569cd6")
+        self._append_text(tr("创建打包虚拟环境: %1", venv) + "\n", "#569cd6")
         self._pip_process = QProcess(self)
         self._pip_process.setProcessEnvironment(self._to_qenv(build_environment()))
         self._pip_process.setProcessChannelMode(QProcess.MergedChannels)
@@ -575,8 +574,8 @@ class NuitkaPackDialog(MessageBoxBase):
         if exit_code != 0 or status != QProcess.NormalExit:
             self._progress.hide()
             self._start_btn.setEnabled(True)
-            self._status.setText("虚拟环境创建失败")
-            self._append_text("请检查 Python venv 支持和输出目录写入权限。\n", "#f44")
+            self._status.setText(tr("虚拟环境创建失败"))
+            self._append_text(tr("请检查 Python venv 支持和输出目录写入权限。") + "\n", "#f44")
             return
         self._python_cmd = [str(self._build_python)]
         self._install_nuitka_then_pack(self._python_cmd)
@@ -614,20 +613,20 @@ class NuitkaPackDialog(MessageBoxBase):
     def _on_pip_finished(self, exit_code, status):
         if exit_code != 0 or status != QProcess.NormalExit:
             self._append_text(
-                f"\nNuitka 安装失败 (exit code: {exit_code})\n"
-                "请检查网络和日志中的依赖安装错误。\n", "#f44"
+                "\n" + tr("Nuitka 安装失败 (exit code: %1)\n请检查网络和日志中的依赖安装错误。", exit_code) + "\n",
+                "#f44"
             )
             self._start_btn.setEnabled(True)
             self._progress.hide()
-            self._status.setText("Nuitka 安装失败")
+            self._status.setText(tr("Nuitka 安装失败"))
             self._status.setStyleSheet("color:#f44;")
             return
 
-        self._append_text("\n✓ Nuitka 安装成功，开始打包...\n\n", "#4ec9b0")
+        self._append_text("\n✓ " + tr("Nuitka 安装成功，开始打包...") + "\n\n", "#4ec9b0")
         self._do_pack()
 
     def _do_pack(self):
-        self._status.setText("打包中...")
+        self._status.setText(tr("打包中..."))
         self._status.setStyleSheet("color:#0078d4;")
 
         args = self._build_nuitka_args()
@@ -666,24 +665,24 @@ class NuitkaPackDialog(MessageBoxBase):
         self._progress.hide()
         self._start_btn.setEnabled(True)
         if exit_code == 0 and status == QProcess.NormalExit:
-            self._append_text("\n✓ Nuitka 编译成功!\n", "#2ecc71")
+            self._append_text("\n✓ " + tr("Nuitka 编译成功!") + "\n", "#2ecc71")
             self._post_build_cleanup()
         else:
-            self._status.setText(f"打包失败 (exit {exit_code})")
+            self._status.setText(tr("打包失败 (exit %1)", exit_code))
             self._status.setStyleSheet("color:#e74c3c;")
-            self._append_text(f"\n✗ 打包失败, exit code: {exit_code}\n", "#e74c3c")
+            self._append_text("\n✗ " + tr("打包失败, exit code: %1", exit_code) + "\n", "#e74c3c")
 
     def _post_build_cleanup(self):
         try:
             bundle, archive = archive_build(self._project_dir, self._app_name)
         except Exception as error:
-            self._append_text(f"产物整理失败: {error}\n", "#e74c3c")
-            self._status.setText("打包失败")
+            self._append_text(tr("产物整理失败: %1", error) + "\n", "#e74c3c")
+            self._status.setText(tr("打包失败"))
             self._status.setStyleSheet("color:#e74c3c;")
             return
         size_mb = archive.stat().st_size / (1024 * 1024)
         self._append_text(f"✓ {bundle.name}\n✓ {archive.name} ({size_mb:.1f} MB)\n", "#2ecc71")
-        self._status.setText("打包完成")
+        self._status.setText(tr("打包完成"))
         self._status.setStyleSheet("color:#2ecc71;")
         self._open_dir_btn.setEnabled(True)
 
@@ -691,8 +690,8 @@ class NuitkaPackDialog(MessageBoxBase):
         if error == QProcess.FailedToStart:
             self._progress.hide()
             self._start_btn.setEnabled(True)
-            self._status.setText("进程启动失败")
-            self._append_text("无法启动 Python，请检查解释器路径和执行权限。\n", "#f44")
+            self._status.setText(tr("进程启动失败"))
+            self._append_text(tr("无法启动 Python，请检查解释器路径和执行权限。") + "\n", "#f44")
 
     def _stop_processes(self) -> bool:
         """Stop the running build, if any; whether one was running."""
@@ -706,8 +705,8 @@ class NuitkaPackDialog(MessageBoxBase):
 
     def _on_cancel(self):
         if self._stop_processes():
-            self._append_text("\n用户取消打包\n", "#f39c12")
-            self._status.setText("已取消")
+            self._append_text("\n" + tr("用户取消打包") + "\n", "#f39c12")
+            self._status.setText(tr("已取消"))
             self._status.setStyleSheet("color:#f39c12;")
         else:
             self.reject()
@@ -716,9 +715,9 @@ class NuitkaPackDialog(MessageBoxBase):
         from pathlib import Path
         build_dir = Path(self._project_dir).resolve() / "build"
         if not build_dir.exists():
-            self._append_text("输出目录不存在\n", "#f44")
+            self._append_text(tr("输出目录不存在") + "\n", "#f44")
         elif not QDesktopServices.openUrl(QUrl.fromLocalFile(str(build_dir))):
-            self._append_text("无法打开输出目录\n", "#f44")
+            self._append_text(tr("无法打开输出目录") + "\n", "#f44")
 
     def done(self, code):
         # Esc, reject() and accept() all end here.
@@ -736,7 +735,7 @@ class PreviewInterface(QWidget):
     projectDataRequested = pyqtSignal()
 
     _NOTIFY_TYPE_MAP = {
-        "成功": "success", "信息": "info", "警告": "warning", "错误": "error",
+        "成功": "success", "信息": "info", "警告": "warning", "错误": "error",  # i18n: value
     }
 
     def __init__(self, parent=None):
@@ -757,15 +756,15 @@ class PreviewInterface(QWidget):
 
         # controls
         ctrl_layout = QHBoxLayout()
-        self._run_btn = PrimaryPushButton(FIF.PLAY, "运行预览")
-        self._stop_btn = PushButton(FIF.CLOSE, "停止")
+        self._run_btn = PrimaryPushButton(FIF.PLAY, tr("运行预览"))
+        self._stop_btn = PushButton(FIF.CLOSE, tr("停止"))
         self._stop_btn.setEnabled(False)
-        self._status_label = BodyLabel("未运行")
+        self._status_label = BodyLabel(tr("未运行"))
 
         self._run_btn.clicked.connect(self._start_preview)
         self._stop_btn.clicked.connect(self._stop_preview)
 
-        self._pack_btn = PushButton(FIF.ZIP_FOLDER, "一键打包")
+        self._pack_btn = PushButton(FIF.ZIP_FOLDER, tr("一键打包"))
         self._pack_btn.clicked.connect(self._on_pack)
 
         ctrl_layout.addWidget(self._run_btn)
@@ -785,7 +784,7 @@ class PreviewInterface(QWidget):
         scroll.setWidget(self._preview_canvas)
         layout.addWidget(scroll, 1)
 
-        self._placeholder = BodyLabel("在设计器中设计界面后，点击「运行预览」查看效果")
+        self._placeholder = BodyLabel(tr("在设计器中设计界面后，点击「运行预览」查看效果"))
         self._placeholder.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._placeholder)
         self.on_theme_changed()
@@ -799,15 +798,16 @@ class PreviewInterface(QWidget):
             or self._project_data.file_path != data.file_path
         ):
             self._stop_preview()
-            self._status_label.setText("设计已更改，请重新运行预览")
+            self._status_label.setText(tr("设计已更改，请重新运行预览"))
         self._project_data = deepcopy(data)
 
-    def invalidate_project(self, message="已停止", disconnect=False):
-        """Retire a running design before its commands can target another project."""
+    def invalidate_project(self, message=None, disconnect=False):
+        """Retire a running design before its commands can target another project; the status
+        shows ``message``, by default that the preview stopped."""
         if self._running or disconnect:
             self._stop_preview()
         self._project_data = None
-        self._status_label.setText(message)
+        self._status_label.setText(message if message is not None else tr("已停止"))
 
     def _show_notification(self, title: str, content: str,
                            ntype: str, duration: int):
@@ -829,7 +829,7 @@ class PreviewInterface(QWidget):
         self.projectDataRequested.emit()
         if not self._project_data or not self._project_data.widgets:
             InfoBar.warning(
-                "提示", "当前没有可预览的控件，请先在设计器中添加控件",
+                tr("提示"), tr("当前没有可预览的控件，请先在设计器中添加控件"),
                 parent=self, position=InfoBarPosition.TOP, duration=3000,
             )
             return
@@ -848,7 +848,7 @@ class PreviewInterface(QWidget):
         self._running = True
         self._run_btn.setEnabled(False)
         self._stop_btn.setEnabled(True)
-        self._status_label.setText("● 运行中")
+        self._status_label.setText("● " + tr("运行中"))
         signalBus.previewStarted.emit()
 
     def _stop_preview(self):
@@ -863,19 +863,19 @@ class PreviewInterface(QWidget):
         self._running = False
         self._run_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
-        self._status_label.setText("已停止")
+        self._status_label.setText(tr("已停止"))
         signalBus.previewStopped.emit()
 
     def _on_pack(self):
         self.projectDataRequested.emit()
         if not self._project_data or not self._project_data.widgets:
             InfoBar.warning(
-                "提示", "当前没有可打包的控件，请先在设计器中添加控件",
+                tr("提示"), tr("当前没有可打包的控件，请先在设计器中添加控件"),
                 parent=self, position=InfoBarPosition.TOP, duration=3000,
             )
             return
 
-        directory = QFileDialog.getExistingDirectory(self, "选择打包输出目录")
+        directory = QFileDialog.getExistingDirectory(self, tr("选择打包输出目录"))
         if not directory:
             return
 
@@ -884,12 +884,12 @@ class PreviewInterface(QWidget):
             generate_project(self._project_data, directory)
         except Exception as e:
             InfoBar.error(
-                "导出失败", str(e),
+                tr("导出失败"), str(e),
                 parent=self, position=InfoBarPosition.TOP, duration=5000,
             )
             return
 
-        app_name = self._project_data.app_name if self._project_data else "上位机"
+        app_name = self._project_data.app_name if self._project_data else tr("上位机")
         dlg = NuitkaPackDialog(directory, app_name, self.window())
         dlg.exec_()
 

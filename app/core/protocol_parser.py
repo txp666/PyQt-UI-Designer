@@ -5,6 +5,8 @@ import re
 import struct
 from typing import Optional, Dict, Any, List
 
+from .i18n import tr
+
 
 class BaseParser:
     """Reading a byte stream takes two steps: ``frames`` cuts the bytes a link read into raw
@@ -103,14 +105,14 @@ class LineParser(BaseParser):
                  kv_separator: str = "=", encoding: str = "utf-8"):
         # The checks run in a fixed order, so FluentHMI Studio names the same problem first.
         if not isinstance(separator, str) or not separator:
-            raise ValueError("行分隔符不能为空")
+            raise ValueError(tr("行分隔符不能为空"))
         if not isinstance(terminator, str) or not terminator:
-            raise ValueError("行结束符不能为空")
+            raise ValueError(tr("行结束符不能为空"))
         if not isinstance(kv_separator, str) or kv_separator not in LINE_KV_SEPARATORS:
-            raise ValueError("键值分隔符只能是 = 或 :")
+            raise ValueError(tr("键值分隔符只能是 = 或 :"))
         encoding = encoding.lower() if isinstance(encoding, str) else None
         if encoding not in LINE_ENCODINGS:
-            raise ValueError("编码只能是 utf-8、gbk 或 ascii")
+            raise ValueError(tr("编码只能是 utf-8、gbk 或 ascii"))
         self._buf = b""
         self._sep = separator
         self._kv = kv_separator
@@ -263,11 +265,11 @@ def _reject_constant(name):
     raise ValueError(name)
 
 
-HEX_ENDIANS = ("大端(BE)", "小端(LE)")
+HEX_ENDIANS = ("大端(BE)", "小端(LE)")  # i18n: value
 # What a hex frame's length field counts: the data only, everything after the field, or the whole frame.
-HEX_LENGTH_COVERS = ("数据", "长度字段之后", "整帧")
+HEX_LENGTH_COVERS = ("数据", "长度字段之后", "整帧")  # i18n: value
 # Checksum algorithms and the bytes each puts on the wire, just before the footer.
-HEX_CHECKSUMS = {"无": 0, "和校验": 1, "异或": 1, "CRC8": 1, "CRC16-Modbus": 2, "CRC16-CCITT": 2}
+HEX_CHECKSUMS = {"无": 0, "和校验": 1, "异或": 1, "CRC8": 1, "CRC16-Modbus": 2, "CRC16-CCITT": 2}  # i18n: value
 # Field types and their sizes; 0 takes any length (ASCII text up to a NUL, HEX text of the bytes).
 HEX_FIELD_TYPES = {"uint8": 1, "int8": 1, "uint16": 2, "int16": 2, "uint32": 4, "int32": 4,
                    "float32": 4, "float64": 8, "ASCII": 0, "HEX": 0}
@@ -297,7 +299,7 @@ def _whole(value):
 
 
 def hex_field(item):
-    """A field-table entry [名字, 偏移, 长度, 类型(, 字节序)] as a 5-tuple; ValueError names a bad one."""
+    """A field-table entry [name, offset, length, type(, byte order)] as a 5-tuple; ValueError names a bad one."""
     entry = isinstance(item, (list, tuple))
     name = item[0] if entry and item and isinstance(item[0], str) else ""
     if entry and len(item) in (4, 5):
@@ -307,14 +309,14 @@ def hex_field(item):
         if (offset is not None and offset >= 0 and length is not None and length > 0
                 and size is not None and size in (0, length) and endian in HEX_ENDIANS):
             return name, offset, length, dtype, endian
-    raise ValueError(f"无效 HEX 字段: {name}")
+    raise ValueError(tr("无效 HEX 字段: %1", name))
 
 
 def hex_checksum(algorithm: str, data: bytes) -> int:
     """The check value of ``data``; for b"123456789" these give DD 31 F4 4B37 29B1."""
-    if algorithm == "和校验":
+    if algorithm == "和校验":  # i18n: value
         return sum(data) & 0xFF
-    if algorithm == "异或":
+    if algorithm == "异或":  # i18n: value
         value = 0
         for byte in data:
             value ^= byte
@@ -341,7 +343,7 @@ def hex_checksum(algorithm: str, data: bytes) -> int:
 class HexFrameParser(BaseParser):
     """Cut binary frames out of a byte stream and read their fields.
 
-    A frame is ``[帧头] [长度字段 …] [数据] [校验] [帧尾]``, every part but the data optional.
+    A frame is ``[header] [length field …] [data] [checksum] [footer]``, every part but the data optional.
     Its end is found by the first rule configured: a fixed length, a length field, the
     footer. With none of them the frame is whatever came after the header before the line
     went quiet, returned by ``flush``. A candidate whose footer or checksum is wrong is not a
@@ -354,32 +356,32 @@ class HexFrameParser(BaseParser):
     def __init__(self, header: Optional[bytes] = b"\xAA\x55", footer: Optional[bytes] = b"\x55\xAA",
                  fields: list = None, max_buffer: int = HEX_MAX_FRAME,
                  length_offset=-1, length_size=1, length_endian=HEX_ENDIANS[0],
-                 length_covers=HEX_LENGTH_COVERS[0], fixed_length=0, checksum="无",
+                 length_covers=HEX_LENGTH_COVERS[0], fixed_length=0, checksum="无",  # i18n: value
                  checksum_start=0, checksum_endian=HEX_ENDIANS[0], idle_timeout=0):
         # None stands for a setting that is not a number or not hex text (from_config). The checks
         # run in a fixed order, so FluentHMI Studio names the same problem in a config with several.
         if (footer == b"" and length_offset is not None and length_offset < 0
                 and fixed_length == 0 and idle_timeout == 0):
-            raise ValueError("HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧")
+            raise ValueError(tr("HEX 帧需要帧尾、长度字段、固定帧长或空闲超时之一来分帧"))
         if header is None or footer is None:
-            raise ValueError("HEX 帧头或帧尾不是十六进制")
+            raise ValueError(tr("HEX 帧头或帧尾不是十六进制"))
         if (fixed_length is not None and fixed_length > 0
                 and length_offset is not None and length_offset >= 0):
-            raise ValueError("固定帧长和长度字段只能选一个")
+            raise ValueError(tr("固定帧长和长度字段只能选一个"))
         if (length_offset is None or length_offset < -1 or length_size not in (1, 2)
                 or length_endian not in HEX_ENDIANS or length_covers not in HEX_LENGTH_COVERS):
-            raise ValueError("HEX 长度字段设置无效")
+            raise ValueError(tr("HEX 长度字段设置无效"))
         if fixed_length is None or not 0 <= fixed_length <= HEX_MAX_FRAME:
-            raise ValueError("HEX 固定帧长无效")
+            raise ValueError(tr("HEX 固定帧长无效"))
         if (not isinstance(checksum, str) or checksum not in HEX_CHECKSUMS
                 or checksum_start is None or checksum_start < 0 or checksum_endian not in HEX_ENDIANS):
-            raise ValueError("HEX 校验设置无效")
+            raise ValueError(tr("HEX 校验设置无效"))
         if idle_timeout is None or not 0 <= idle_timeout <= HEX_MAX_IDLE:
-            raise ValueError("HEX 空闲超时无效")
+            raise ValueError(tr("HEX 空闲超时无效"))
         if fields is None:
             fields = []
         if not isinstance(fields, (list, tuple)):
-            raise ValueError("无效 HEX 字段: ")
+            raise ValueError(tr("无效 HEX 字段: %1", ""))
         self._fields = [hex_field(item) for item in fields]
         self._buf = b""
         self._header, self._footer = header, footer
@@ -403,7 +405,7 @@ class HexFrameParser(BaseParser):
             length_offset=_whole(get("lengthOffset", -1)), length_size=_whole(get("lengthSize", 1)),
             length_endian=get("lengthEndian", HEX_ENDIANS[0]),
             length_covers=get("lengthCovers", HEX_LENGTH_COVERS[0]),
-            fixed_length=_whole(get("fixedLength", 0)), checksum=get("checksum", "无"),
+            fixed_length=_whole(get("fixedLength", 0)), checksum=get("checksum", "无"),  # i18n: value
             checksum_start=_whole(get("checksumStart", 0)),
             checksum_endian=get("checksumEndian", HEX_ENDIANS[0]),
             idle_timeout=_whole(get("idleTimeout", 0)))
@@ -465,9 +467,9 @@ class HexFrameParser(BaseParser):
                 return None
             value = int.from_bytes(buf[self._length_offset:end], self._length_order)
             tail = self._checksum_size + len(self._footer)
-            if self._length_covers == "整帧":
+            if self._length_covers == "整帧":  # i18n: value
                 size = value
-            elif self._length_covers == "长度字段之后":
+            elif self._length_covers == "长度字段之后":  # i18n: value
                 size = end + value
             else:  # 数据: the checksum and footer follow the counted bytes
                 size = end + value + tail
@@ -928,4 +930,4 @@ def create_parser(parser_type: str, config: dict = None, requests: ModbusRequest
         return ModbusTCPParser(fields=config.get("fields", []), requests=requests)
     elif parser_type == "modbus_ascii":
         return ModbusASCIIParser(fields=config.get("fields", []), requests=requests)
-    raise ValueError(f"未知解析模式: {parser_type}")
+    raise ValueError(tr("未知解析模式: %1", parser_type))

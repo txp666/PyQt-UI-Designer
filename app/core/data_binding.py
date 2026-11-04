@@ -2,9 +2,9 @@
 """Data binding engine — connects serial data to widget properties.
 
 Supports four parse modes:
-  - 键值匹配: match key from parsed dict (serialDataReceived)
-  - JSON路径: traverse nested parsed dict via dot-path (serialDataReceived)
-  - HEX字节提取: extract bytes from raw serial data (serialRawReceived)
+  - key match: match key from parsed dict (serialDataReceived)
+  - JSON path: traverse nested parsed dict via dot-path (serialDataReceived)
+  - HEX byte extraction: extract bytes from raw serial data (serialRawReceived)
   - Modbus: the register or coil at an address of a register table, from the Modbus parsers'
     output (serialDataReceived)
 """
@@ -45,19 +45,19 @@ class BindingEntry:
     """A single binding: data source -> widget property."""
 
     def __init__(self, widget_id: str, prop_name: str,
-                 type_name: str = "", display_format: str = "自动",
-                 parse_mode: str = "键值匹配",
+                 type_name: str = "", display_format: str = "自动",  # i18n: value
+                 parse_mode: str = "键值匹配",  # i18n: value
                  key: str = "", json_path: str = "",
                  byte_offset: int = 0, data_type: str = "uint16",
-                 byte_order: str = "大端(BE)",
+                 byte_order: str = "大端(BE)",  # i18n: value
                  expression: Optional[str] = None,
                  frame_header: str = "", frame_tail: str = "",
                  mb_reg_index: int = 0, mb_slave_filter: int = -1,
-                 mb_data_type: str = "uint16", mb_reg_order: str = "大端(AB CD)",
-                 mb_fc_filter: int = -1, mb_area: str = "保持寄存器",
+                 mb_data_type: str = "uint16", mb_reg_order: str = "大端(AB CD)",  # i18n: value
+                 mb_fc_filter: int = -1, mb_area: str = "保持寄存器",  # i18n: value
                  mb_period: int = 0,
                  led_on_value: str = "1", led_off_value: str = "0",
-                 decimals: str = "自动"):
+                 decimals: str = "自动"):  # i18n: value
         self.widget_id = widget_id
         self.prop_name = prop_name
         self.type_name = type_name
@@ -98,11 +98,11 @@ class BindingEntry:
     # -- extraction ----------------------------------------------------------
 
     def extract_from_parsed(self, data: dict) -> Any:
-        """Extract value from parsed dict (键值匹配 / JSON路径 / Modbus)."""
-        if self.parse_mode == "键值匹配":
+        """Extract value from parsed dict (key match / JSON path / Modbus)."""
+        if self.parse_mode == "键值匹配":  # i18n: value
             return data.get(self.key)
 
-        if self.parse_mode == "JSON路径":
+        if self.parse_mode == "JSON路径":  # i18n: value
             return self._resolve_path(data, self.json_path)
 
         if self.parse_mode == "Modbus":
@@ -133,8 +133,8 @@ class BindingEntry:
         return data
 
     def extract_from_raw(self, raw: bytes) -> Any:
-        """Extract value from raw bytes (HEX字节提取)."""
-        if self.parse_mode != "HEX字节提取":
+        """Extract value from raw bytes (HEX byte extraction)."""
+        if self.parse_mode != "HEX字节提取":  # i18n: value
             return None
 
         payload = self._strip_frame(raw)
@@ -156,7 +156,7 @@ class BindingEntry:
         fmt_char, size = fmt_info
         if self.byte_offset + size > len(payload):
             return None
-        bo = ">" if self.byte_order == "大端(BE)" else "<"
+        bo = ">" if self.byte_order == "大端(BE)" else "<"  # i18n: value
         try:
             return struct.unpack(bo + fmt_char,
                                  payload[self.byte_offset:self.byte_offset + size])[0]
@@ -199,17 +199,17 @@ class BindingEntry:
     def format_value(self, value) -> Any:
         if self.prop_name not in ("text", "value"):
             return value
-        if self.display_format == "自动":
+        if self.display_format == "自动":  # i18n: value
             return binding_decimals(value, self.decimals)
         try:
             num = int(float(value)) if not isinstance(value, int) else value
         except (ValueError, TypeError, OverflowError):
             return value
-        if self.display_format == "十六进制(HEX)":
+        if self.display_format == "十六进制(HEX)":  # i18n: value
             return f"0x{num:02X}" if num >= 0 else f"-0x{abs(num):02X}"
-        if self.display_format == "二进制(BIN)":
+        if self.display_format == "二进制(BIN)":  # i18n: value
             return f"0b{num:08b}" if num >= 0 else f"-0b{abs(num):08b}"
-        if self.display_format == "十进制":
+        if self.display_format == "十进制":  # i18n: value
             return str(num)
         return value
 
@@ -272,11 +272,11 @@ class DataBindingEngine(QObject):
                 self._walk_bindings(wd.get("children", []))
                 continue
 
-            pm = binding.get("parseMode", "键值匹配")
+            pm = binding.get("parseMode", "键值匹配")  # i18n: value
             has_config = (
-                (pm == "键值匹配" and binding.get("key"))
-                or (pm == "JSON路径" and binding.get("jsonPath"))
-                or (pm == "HEX字节提取")
+                (pm == "键值匹配" and binding.get("key"))  # i18n: value
+                or (pm == "JSON路径" and binding.get("jsonPath"))  # i18n: value
+                or (pm == "HEX字节提取")  # i18n: value
                 or (pm == "Modbus")
             )
             if not has_config:
@@ -288,26 +288,26 @@ class DataBindingEngine(QObject):
                 widget_id=wd["id"],
                 prop_name=self._default_bind_prop(wd["type"]),
                 type_name=wd["type"],
-                display_format=props.get("displayFormat", "自动"),
+                display_format=props.get("displayFormat", "自动"),  # i18n: value
                 parse_mode=pm,
                 key=binding.get("key", ""),
                 json_path=binding.get("jsonPath", ""),
                 byte_offset=int(binding.get("byteOffset", 0)),
                 data_type=binding.get("dataType", "uint16"),
-                byte_order=binding.get("byteOrder", "大端(BE)"),
+                byte_order=binding.get("byteOrder", "大端(BE)"),  # i18n: value
                 expression=binding.get("expression"),
                 frame_header=binding.get("frameHeader", ""),
                 frame_tail=binding.get("frameTail", ""),
                 mb_reg_index=int(binding.get("mbRegIndex", 0)),
                 mb_slave_filter=int(binding.get("mbSlaveFilter", -1)),
                 mb_data_type=binding.get("mbDataType", "uint16"),
-                mb_reg_order=binding.get("mbRegOrder", "大端(AB CD)"),
+                mb_reg_order=binding.get("mbRegOrder", "大端(AB CD)"),  # i18n: value
                 mb_fc_filter=int(binding.get("mbFcFilter", -1)),
-                mb_area=binding.get("mbArea", "保持寄存器"),
+                mb_area=binding.get("mbArea", "保持寄存器"),  # i18n: value
                 mb_period=int(binding.get("mbPeriod", 0)),
                 led_on_value=str(props.get("onValue", "1")),
                 led_off_value=str(props.get("offValue", "0")),
-                decimals=str(props.get("decimals", "自动")),
+                decimals=str(props.get("decimals", "自动")),  # i18n: value
             )
             self._bindings.append(entry)
             self._walk_bindings(wd.get("children", []))
@@ -337,12 +337,12 @@ class DataBindingEngine(QObject):
     # -- data handlers -------------------------------------------------------
 
     def _on_data(self, data: dict):
-        """Handle parsed data — 键值匹配, JSON路径, Modbus modes."""
+        """Handle parsed data — key match, JSON path, Modbus modes."""
         if not self._active:
             return
         self._latest_data.update(data)
         for b in self._bindings:
-            if b.parse_mode not in ("键值匹配", "JSON路径", "Modbus"):
+            if b.parse_mode not in ("键值匹配", "JSON路径", "Modbus"):  # i18n: value
                 continue
             try:
                 value = b.extract_from_parsed(data)
@@ -353,11 +353,11 @@ class DataBindingEngine(QObject):
                 continue
 
     def _on_raw(self, raw: bytes):
-        """Handle raw bytes — HEX字节提取 mode."""
+        """Handle raw bytes — HEX byte extraction mode."""
         if not self._active:
             return
         for b in self._bindings:
-            if b.parse_mode != "HEX字节提取":
+            if b.parse_mode != "HEX字节提取":  # i18n: value
                 continue
             for value in b.extract_all_from_raw(raw):
                 try:

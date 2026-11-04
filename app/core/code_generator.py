@@ -1,5 +1,6 @@
 # coding: utf-8
 """Code generator — export project as standalone runnable Python project."""
+import ast
 import copy
 import hashlib
 import json
@@ -9,14 +10,24 @@ from typing import Dict, List, Any
 
 from app.core.project import LINK_CARD_TYPES, ProjectData
 from app.common.runtime_sources import runtime_source
+from app.core.i18n import tr
 
 
-def generate_project(project: ProjectData, output_dir: str, theme_mode=None, theme_color=None):
+def _runtime(name):
+    """A runtime source as an export embeds it: it imports its translations from the export's i18n.py."""
+    return runtime_source(name).replace("from .i18n import ", "from i18n import ")
+
+
+def generate_project(project: ProjectData, output_dir: str, theme_mode=None, theme_color=None, language=None):
     """Generate a complete standalone Python project from project data.
 
-    The application starts with the given theme mode and colour, by default the designer's current ones."""
+    The application starts with the given theme mode and colour, by default the designer's current ones,
+    and in the given language setting ("Auto", "zh_CN" or "en_US"), by default the designer's."""
     from PyQt5.QtGui import QColor
     from qfluentwidgets import Theme, qconfig
+    from app.common.config import english_table, language_setting
+    if language is None:
+        language = language_setting()
     if theme_mode is None:
         theme_mode = qconfig.get(qconfig.themeMode)
     theme_mode = Theme(theme_mode).value
@@ -24,7 +35,7 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None, the
         theme_color = qconfig.get(qconfig.themeColor)
     color = QColor(theme_color)
     if not color.isValid():
-        raise ValueError(f"无效的主题色: {theme_color}")
+        raise ValueError(tr("无效的主题色: %1", theme_color))
     theme_color = color.name()
     widgets, assets = _prepare_export_widgets(project)
     icons = _project_icons(project)
@@ -44,9 +55,9 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None, the
             "PyQt-Fluent-Widgets>=1.5.5\npyserial>=3.5\npaho-mqtt>=1.6\ntruststore>=0.10\n"
             "pyqtgraph>=0.13.3\n"
         ),
-        "main.py": _gen_main(theme_mode, theme_color),
-        "theme_support.py": (runtime_source("signal_lifetime.py") + "\n"
-                             + runtime_source("theme_runtime.py").replace(
+        "main.py": _gen_main(theme_mode, theme_color, language),
+        "theme_support.py": (_runtime("signal_lifetime.py") + "\n"
+                             + _runtime("theme_runtime.py").replace(
                                  "from .signal_lifetime import SignalConnections", "")),
         "ui.py": _gen_ui(widgets, project.canvas_width, project.canvas_height,
                         project.app_name),
@@ -56,6 +67,7 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None, the
         "comm_hub.py": _gen_comm_hub(),
         "data_binding.py": _gen_data_binding(bindings, widget_types, _link_card_ids(widgets)),
     }
+    files["i18n.py"] = _gen_i18n(files, {} if language == "zh_CN" else english_table())
     for name, source in files.items():
         if name.endswith(".py"):
             compile(source, name, "exec")
@@ -106,7 +118,7 @@ def _project_icons(project):
     except OSError:
         content = None
     if content is None or image.isNull():
-        raise ValueError(f"图标不存在或不可读: {path}")
+        raise ValueError(tr("图标不存在或不可读: %1", path))
 
     def encoded(kind):
         picture = image
@@ -122,7 +134,7 @@ def _project_icons(project):
         buffer = QBuffer(data)
         buffer.open(QIODevice.WriteOnly)
         if not picture.save(buffer, kind):
-            raise ValueError(f"无法把图标转换为 {kind}: {path}")
+            raise ValueError(tr("无法把图标转换为 %1: %2", kind, path))
         return bytes(data)
 
     suffix = Path(path).suffix.lower()
@@ -150,7 +162,7 @@ def _prepare_export_widgets(project):
                     content = source.read_bytes()
                 except (OSError, TypeError, ValueError) as exc:
                     raise ValueError(
-                        f"无法导出图片（控件 {widget['id']}）: {image_path}；{exc}"
+                        tr("无法导出图片（控件 %1）: %2；%3", widget["id"], image_path, exc)
                     ) from exc
                 # Content names avoid collisions between equally named files.
                 name = hashlib.sha256(content).hexdigest() + source.suffix.lower()
@@ -163,7 +175,21 @@ def _prepare_export_widgets(project):
     return widgets, assets
 
 
-def _gen_main(theme_mode="Auto", theme_color="#009faa") -> str:
+def _gen_i18n(files, table):
+    """The export's i18n.py: the runtime's translation module and the English texts of ``table`` whose
+    Chinese source appears as a string in the generated modules."""
+    used = set()
+    for name, source in files.items():
+        if name.endswith(".py"):
+            used.update(node.value for node in ast.walk(ast.parse(source))
+                        if isinstance(node, ast.Constant) and isinstance(node.value, str))
+    entries = {key: table[key] for key in sorted(used) if key in table}
+    return (runtime_source("i18n.py")
+            + "\n\n# The English texts of this application, by their Chinese source text.\n"
+            + f"TABLE = {json.dumps(entries, ensure_ascii=False, indent=4)}\n")
+
+
+def _gen_main(theme_mode="Auto", theme_color="#009faa", language="Auto") -> str:
     return '''\
 # coding: utf-8
 """Auto-generated by PyQt UI Designer."""
@@ -191,6 +217,15 @@ setThemeColor(_THEME_COLOR_)
 from theme_support import ThemeController
 theme_controller = ThemeController(app, _THEME_MODE_)
 
+# The interface language, set before the interface exists: "Auto" follows the system.
+from i18n import TABLE, language, set_language
+set_language(_LANGUAGE_, TABLE)
+if language() == "zh_CN":  # the Fluent widgets' own texts are English in their source
+    from PyQt5.QtCore import QLocale
+    from qfluentwidgets import FluentTranslator
+    translator = FluentTranslator(QLocale(QLocale.Chinese, QLocale.China))
+    app.installTranslator(translator)
+
 from ui import MainUI
 from comm_hub import CommHub
 from data_binding import DataBinding
@@ -215,10 +250,11 @@ comm_hub.deleteLater()
 theme_controller.deleteLater()
 app.sendPostedEvents(None, QEvent.DeferredDelete)
 sys.exit(exit_code)
-'''.replace("_THEME_MODE_", repr(theme_mode)).replace("_THEME_COLOR_", repr(theme_color))
+'''.replace("_THEME_MODE_", repr(theme_mode)).replace("_THEME_COLOR_", repr(theme_color)).replace(
+        "_LANGUAGE_", repr(language))
 
 
-def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "上位机") -> str:
+def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "上位机") -> str:  # i18n: value
     lines = [
         '# coding: utf-8',
         '"""Auto-generated UI module."""',
@@ -248,6 +284,7 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         '    qconfig, setCustomStyleSheet, themeColor,',
         ')',
         '',
+        'from i18n import tr, N_',
         'from serial_handler import _list_all_ports',
         '',
         'try:',
@@ -266,9 +303,9 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         '',
     ]
 
-    lines.append(runtime_source("signal_lifetime.py"))
-    lines.append(runtime_source("qt_window_lifetime.py"))
-    lines.append(runtime_source("command_runtime.py").replace(
+    lines.append(_runtime("signal_lifetime.py"))
+    lines.append(_runtime("qt_window_lifetime.py"))
+    lines.append(_runtime("command_runtime.py").replace(
         "from .modbus_master import (", "from serial_handler import (").replace(
         "from .modbus_slave import AREA_TABLES", "from serial_handler import AREA_TABLES"))
 
@@ -282,9 +319,9 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
     widget_types = _collect_types(widgets)
 
     if "TabWidget" in widget_types:
-        lines.append(runtime_source("tab_geometry.py"))
+        lines.append(_runtime("tab_geometry.py"))
     if "Slider" in widget_types:
-        lines.append(runtime_source("slider_release.py"))
+        lines.append(_runtime("slider_release.py"))
     if "LEDIndicator" in widget_types:
         lines.append(_led_class())
     if "NumericDisplay" in widget_types:
@@ -345,7 +382,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
 
-        self.addSubInterface(scroll, FIF.HOME, "主界面")
+        self.addSubInterface(scroll, FIF.HOME, tr("主界面"))
         self.apply_theme()
         self._external_connections = SignalConnections(self)
         self._external_connections.connect(
@@ -413,7 +450,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send_text(cmd + suffix)
 
     def _command_error(self, error):
-        InfoBar.error(title="提示", content=str(error), duration=2000, parent=self)
+        InfoBar.error(title=tr("提示"), content=str(error), duration=2000, parent=self)
 
     def _send_hex_command(self, cmd, header="", tail=""):
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
@@ -424,7 +461,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
                 return
             self._comm_hub.send(frame)
 
-    def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):
+    def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):  # i18n: value
         # A write goes into the data table of every link card in the 从站 role, connected or not; then one
         # request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
         devices = slave_devices(self.widgets.values())
@@ -452,7 +489,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
 
     if _has_slave_writes(widgets):
         lines.append('''
-    def _slave_write(self, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+    def _slave_write(self, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):  # i18n: value
         # A user's change of a control with a Modbus binding, into every 从站 card's data table.
         slave_control_write(slave_devices(self.widgets.values()), area, address, value, data_type, reg_order)
 ''')
@@ -480,7 +517,7 @@ def _gen_slave_write_connection(wid, wtype, binding):
     if binding is None:
         return []
     from app.core.command_runtime import MODBUS_ORDERS
-    args = (binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)))
+    args = (binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)))  # i18n: value
     typed = (binding.get("mbDataType", "uint16"), binding.get("mbRegOrder", MODBUS_ORDERS[0]))
     head, tail = f"{args[0]!r}, {args[1]}", f", {typed[0]!r}, {typed[1]!r}"
     w_ref = f"self.widgets[{wid!r}]"
@@ -527,7 +564,7 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=
                 from collections import defaultdict
                 from app.widgets.layout import tab_names, clamp_tab_index
                 tabs = defaultdict(list)
-                page_count = len(tab_names(props.get("tabNames", "标签1\n标签2")))
+                page_count = len(tab_names(props.get("tabNames", "标签1\n标签2")))  # i18n: value
                 for c in children:
                     tabs[clamp_tab_index(c.get("tabIndex", 0), page_count)].append(c)
                 for ti, tab_children in sorted(tabs.items()):
@@ -539,21 +576,21 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=
                 _gen_widgets_recursive(children, lines, child_parent)
 
 
-_NEWLINE_CODE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}
-_NOTIFY_TYPE_MAP = {"成功": "success", "信息": "info", "警告": "warning", "错误": "error"}
+_NEWLINE_CODE_MAP = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}  # i18n: value
+_NOTIFY_TYPE_MAP = {"成功": "success", "信息": "info", "警告": "warning", "错误": "error"}  # i18n: value
 
 
 def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
     """Generate command connection lines for a widget (sent over the communication hub)."""
-    mode = props.get("commandMode", "文本")
+    mode = props.get("commandMode", "文本")  # i18n: value
     newline = props.get("commandNewline", "\\r\\n")
     suffix = _NEWLINE_CODE_MAP.get(newline, "\r\n")
     tpl = props.get("commandTemplate", "{value}")
     tpl_repr = repr(tpl)
     fh = props.get("frameHeader", "").strip()
     ft = props.get("frameTail", "").strip()
-    dtype = props.get("dataType", "HEX字符串")
-    border = props.get("byteOrder", "大端(BE)")
+    dtype = props.get("dataType", "HEX字符串")  # i18n: value
+    border = props.get("byteOrder", "大端(BE)")  # i18n: value
     w_ref = f"self.widgets[{wid!r}]"
     result = []
 
@@ -566,7 +603,7 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
         """Generate a template-aware send expression."""
         if mode == "HEX" and is_struct:
             fmt = _FMT_MAP[dtype]
-            bo = ">" if border == "大端(BE)" else "<"
+            bo = ">" if border == "大端(BE)" else "<"  # i18n: value
             cast = "float" if dtype == "float32" else "int"
             return (f"self._send_packed_value({val_expr}, "
                     f"{repr(bo + fmt)}, {cast}, {tpl_repr}, {repr(fh)}, {repr(ft)})")
@@ -578,7 +615,7 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
             return f"self._send_hex_command({raw_expr}, {repr(fh)}, {repr(ft)})"
         return f"self._send_text_command({raw_expr}, {repr(suffix)})"
 
-    def _modbus_send(val_expr: str, default_func="06 写单寄存器") -> str:
+    def _modbus_send(val_expr: str, default_func="06 写单寄存器") -> str:  # i18n: value
         from app.core.command_runtime import MODBUS_FUNCTIONS, MODBUS_ORDERS
         slave = int(props.get("mbSlave", 1))
         fc = MODBUS_FUNCTIONS.get(props.get("mbFunc", default_func), MODBUS_FUNCTIONS[default_func])
@@ -590,7 +627,7 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
     if wtype == "PushButton":
         cmd = props.get("command", "").strip()
         if mode == "Modbus":
-            send = _modbus_send(int(props.get("mbValue", 1)), "03 读保持寄存器")
+            send = _modbus_send(int(props.get("mbValue", 1)), "03 读保持寄存器")  # i18n: value
             result.append(f"        {w_ref}.clicked.connect(lambda: {send})")
         elif cmd:
             result.append(
@@ -646,9 +683,9 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
 
 def _gen_notify_connection(wid: str, wtype: str, props: dict) -> list:
     """Generate notification connection lines for a widget."""
-    title = repr(props.get("notifyTitle", "提示"))
+    title = repr(props.get("notifyTitle", "提示"))  # i18n: value
     content = repr(props.get("notifyContent", ""))
-    ntype = _NOTIFY_TYPE_MAP.get(props.get("notifyType", "信息"), "info")
+    ntype = _NOTIFY_TYPE_MAP.get(props.get("notifyType", "信息"), "info")  # i18n: value
     duration = int(props.get("notifyDuration", 3000))
     w_ref = f"self.widgets[{wid!r}]"
     cb = (f"lambda: InfoBar.{ntype}(title={title}, content={content}, "
@@ -669,15 +706,18 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
     p = lambda k, d="": repr(props.get(k, d))
     pv = parent_var
 
+    # A property missing from the file gets its default, the same in every language.
     if wtype == "PushButton":
-        return (f"self.widgets[{wid!r}] = PushButton({p('text', '按钮')}, {pv}); "
+        text = p("text", "按钮")  # i18n: value
+        return (f"self.widgets[{wid!r}] = PushButton({text}, {pv}); "
                 f"self.widgets[{wid!r}].setEnabled({p('enabled', True)})")
     if wtype == "Label":
         alignment = {"Left": "Qt.AlignLeft | Qt.AlignVCenter",
                      "Center": "Qt.AlignCenter",
                      "Right": "Qt.AlignRight | Qt.AlignVCenter"}.get(
                          props.get("alignment", "Left"), "Qt.AlignLeft | Qt.AlignVCenter")
-        return (f"self.widgets[{wid!r}] = BodyLabel({p('text', '标签')}, {pv}); "
+        text = p("text", "标签")  # i18n: value
+        return (f"self.widgets[{wid!r}] = BodyLabel({text}, {pv}); "
                 f"_font = self.widgets[{wid!r}].font(); "
                 f"_font.setPointSize({int(props.get('fontSize', 14))}); "
                 f"_font.setBold({bool(props.get('bold', False))!r}); "
@@ -697,7 +737,7 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
             code += f"; self.widgets[{wid!r}].setCurrentIndex({index})"
         return code
     if wtype == "ToggleSwitch":
-        lbl = props.get("label", "开关")
+        lbl = props.get("label", "开关")  # i18n: value
         return (f"_tw = QWidget({pv}); _tl = QHBoxLayout(_tw); _tl.setContentsMargins(0,0,0,0); "
                 f"_sw = SwitchButton(); _sw.setChecked({props.get('checked', False)}); "
                 f"_tl.addWidget(BodyLabel({repr(lbl)})); _tl.addStretch(); _tl.addWidget(_sw); "
@@ -714,13 +754,15 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
             code += f"; self.widgets[{wid!r}].setSuffix({(' ' + props['suffix'])!r})"
         return code
     if wtype == "LEDIndicator":
+        label = p("label", "状态")  # i18n: value
         return (f"self.widgets[{wid!r}] = LEDIndicator({pv}); "
                 f"self.widgets[{wid!r}].set_color({repr(props.get('color', 'green'))}); "
-                f"self.widgets[{wid!r}].set_label({repr(props.get('label', '状态'))}); "
+                f"self.widgets[{wid!r}].set_label({label}); "
                 f"self.widgets[{wid!r}].set_on({bool(props.get('on', True))!r})")
     if wtype == "NumericDisplay":
+        title = p("title", "温度")  # i18n: value
         return (f"self.widgets[{wid!r}] = NumericDisplay({pv}); "
-                f"self.widgets[{wid!r}].set_title({repr(props.get('title', '温度'))}); "
+                f"self.widgets[{wid!r}].set_title({title}); "
                 f"self.widgets[{wid!r}].set_unit({repr(props.get('unit', ''))}); "
                 f"self.widgets[{wid!r}].set_value({repr(props.get('value', '0.00'))}); "
                 f"self.widgets[{wid!r}].set_font_size({int(props.get('fontSize', 28))})")
@@ -732,39 +774,43 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
         from app.widgets.chart import build_cfgs_from_props
         disp_pts = int(props.get("displayPoints", 200))
         cfgs = build_cfgs_from_props(props)
+        title = p("title", "实时曲线")  # i18n: value
         return (f"self.widgets[{wid!r}] = RealtimeLineChart({pv}); "
                 f"self.widgets[{wid!r}].configure({json.dumps(cfgs, ensure_ascii=False)!r}, {disp_pts}); "
-                f"self.widgets[{wid!r}].set_title({p('title', '实时曲线')})")
+                f"self.widgets[{wid!r}].set_title({title})")
     if wtype == "GaugeMeter":
+        title = p("title", "仪表")  # i18n: value
         return (f"self.widgets[{wid!r}] = GaugeMeter({pv}); "
                 f"self.widgets[{wid!r}].set_range({props.get('minimum', 0)}, {props.get('maximum', 100)}); "
-                f"self.widgets[{wid!r}].set_title({p('title', '仪表')}); "
+                f"self.widgets[{wid!r}].set_title({title}); "
                 f"self.widgets[{wid!r}].set_unit({p('unit', '')}); "
                 f"self.widgets[{wid!r}].set_value({props.get('value', 0)})")
     if wtype == "SerialTerminal":
         return f"self.widgets[{wid!r}] = SerialTerminal({pv})"
     if wtype == "DataTable":
-        columns = [name.strip() for name in props.get("columns", "字段\n值").split("\n")
+        columns = [name.strip() for name in props.get("columns", "字段\n值").split("\n")  # i18n: value
                    if name.strip()]
+        record_mode = p("recordMode", "最新值")  # i18n: value
         return (f"self.widgets[{wid!r}] = DataTableWidget({pv}); "
                 f"self.widgets[{wid!r}].set_columns({columns!r}); "
-                f"self.widgets[{wid!r}].set_record_mode({p('recordMode', '最新值')}); "
+                f"self.widgets[{wid!r}].set_record_mode({record_mode}); "
                 f"self.widgets[{wid!r}].set_max_rows({p('maxRows', 500)})")
 
     # Layout containers
     if wtype in ("HBoxLayout", "VBoxLayout", "FlexLayout"):
-        title = {"HBoxLayout": "水平布局", "VBoxLayout": "垂直布局", "FlexLayout": "弹性布局"}[wtype]
+        title = {"HBoxLayout": "水平布局", "VBoxLayout": "垂直布局", "FlexLayout": "弹性布局"}[wtype]  # i18n: value
         return (f"self.widgets[{wid!r}] = TitledLayoutContainer({pv}); "
                 f"self.widgets[{wid!r}].set_title({p('title', title)}); "
                 f"self.widgets[{wid!r}].setObjectName('layoutContainer'); "
                 f"self._theme_containers.append((self.widgets[{wid!r}], 'layout'))")
     if wtype == "GroupBox":
-        return (f"self.widgets[{wid!r}] = QGroupBox({p('title', '分组')}, {pv}); "
+        title = p("title", "分组")  # i18n: value
+        return (f"self.widgets[{wid!r}] = QGroupBox({title}, {pv}); "
                 f"self.widgets[{wid!r}].setObjectName('groupContainer'); "
                 f"self._theme_containers.append((self.widgets[{wid!r}], 'group'))")
     if wtype == "TabWidget":
         from app.widgets.layout import tab_names, clamp_tab_index
-        names = tab_names(props.get("tabNames", "标签1\n标签2"))
+        names = tab_names(props.get("tabNames", "标签1\n标签2"))  # i18n: value
         parts = [f"self.widgets[{wid!r}] = QTabWidget({pv})",
                  f"self.widgets[{wid!r}].setObjectName('tabContainer')",
                  f"self._theme_containers.append((self.widgets[{wid!r}], 'tabs'))"]
@@ -796,8 +842,9 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                      f"str(Path(__file__).resolve().parent / {img!r}))")
         return line
     if wtype == "ProgressRingDisplay":
+        label = p("label", "进度")  # i18n: value
         return (f"self.widgets[{wid!r}] = ProgressRingDisplay({pv}); "
-                f"self.widgets[{wid!r}].set_label({p('label', '进度')}); "
+                f"self.widgets[{wid!r}].set_label({label}); "
                 f"self.widgets[{wid!r}].set_maximum({props.get('maximum', 100)}); "
                 f"self.widgets[{wid!r}].set_value({props.get('value', 0)})")
     if wtype in ("LogBox", "LogDisplayBox"):
@@ -814,35 +861,40 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
         return "; ".join(code)
     if wtype == "DataSendCard":
+        title = p("title", "数据发送")  # i18n: value
+        placeholder = p("placeholder", "输入要发送的数据...")  # i18n: value
         return (f"self.widgets[{wid!r}] = DataSendCard({pv}); "
-                f"self.widgets[{wid!r}].set_title({p('title', '数据发送')}); "
-                f"self.widgets[{wid!r}].set_placeholder({p('placeholder', '输入要发送的数据...')})")
+                f"self.widgets[{wid!r}].set_title({title}); "
+                f"self.widgets[{wid!r}].set_placeholder({placeholder})")
     if wtype == "DataRecvCard":
+        title = p("title", "数据接收")  # i18n: value
         return (f"self.widgets[{wid!r}] = DataRecvCard({pv}); "
-                f"self.widgets[{wid!r}].set_title({p('title', '数据接收')}); "
+                f"self.widgets[{wid!r}].set_title({title}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 1000)})")
     if wtype == "ModbusSlaveTable":
+        area = p("mbArea", "保持寄存器")  # i18n: value
+        display_format = p("displayFormat", "无符号")  # i18n: value
         return (f"self.widgets[{wid!r}] = ModbusSlaveTable({pv}); "
-                f"self.widgets[{wid!r}].set_area({p('mbArea', '保持寄存器')}); "
-                f"self.widgets[{wid!r}].set_display_format({p('displayFormat', '无符号')})")
+                f"self.widgets[{wid!r}].set_area({area}); "
+                f"self.widgets[{wid!r}].set_display_format({display_format})")
 
-    return f"self.widgets[{wid!r}] = QLabel('未知控件: {wtype}', {pv})"
+    return f"self.widgets[{wid!r}] = QLabel(tr('未知控件: %1', {wtype!r}), {pv})"
 
 
 def _gen_serial_handler(serial_config: dict) -> str:
     # The parsers, the Modbus master every link owns, the Modbus slave a serial or TCP link may answer
     # with, then the serial link.
-    master = runtime_source("modbus_master.py").replace(
+    master = _runtime("modbus_master.py").replace(
         "from .protocol_parser import build_modbus_ascii_frame, build_modbus_frame, build_modbus_tcp_frame", "")
-    slave = runtime_source("modbus_slave.py").replace(
+    slave = _runtime("modbus_slave.py").replace(
         "from .protocol_parser import BaseParser, modbus_crc", "")
-    slave_link = runtime_source("slave_runtime.py").replace(
+    slave_link = _runtime("slave_runtime.py").replace(
         "from .modbus_slave import DEFAULT_AREA, TABLES, ModbusSlave, SlaveStore, request_framer", "")
-    runtime = runtime_source("serial_runtime.py").replace(
+    runtime = _runtime("serial_runtime.py").replace(
         "from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding", "").replace(
         "from .modbus_master import ModbusMaster", "").replace(
         "from .modbus_slave import SLAVE_PARSERS", "")
-    return (runtime_source("protocol_parser.py") + "\n" + master + "\n" + slave + "\n" + slave_link + "\n"
+    return (_runtime("protocol_parser.py") + "\n" + master + "\n" + slave + "\n" + slave_link + "\n"
             + runtime + f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
 
 
@@ -853,7 +905,7 @@ def _link_config(serial_config: dict) -> dict:
 
 
 def _gen_tcp_handler(serial_config: dict) -> str:
-    runtime = runtime_source("tcp_runtime.py").replace(
+    runtime = _runtime("tcp_runtime.py").replace(
         "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
         "from serial_handler import ModbusRequests, create_parser, text_encoding").replace(
         "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster").replace(
@@ -862,17 +914,17 @@ def _gen_tcp_handler(serial_config: dict) -> str:
 
 
 def _gen_mqtt_handler(serial_config: dict) -> str:
-    runtime = runtime_source("mqtt_runtime.py").replace(
+    runtime = _runtime("mqtt_runtime.py").replace(
         "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
         "from serial_handler import ModbusRequests, create_parser, text_encoding",
     ).replace("from .tls_runtime import system_ssl_context", "").replace(
         "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster")
-    return (runtime_source("tls_runtime.py") + "\n" + runtime
+    return (_runtime("tls_runtime.py") + "\n" + runtime
             + f"\nMqttHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n")
 
 
 def _gen_comm_hub() -> str:
-    return runtime_source("comm_runtime.py")
+    return _runtime("comm_runtime.py")
 
 
 def _link_card_ids(widgets: list) -> list:
@@ -895,11 +947,11 @@ def _extract_bindings(widgets: list) -> list:
         for w in items:
             b = w.get("binding")
             if b:
-                pm = b.get("parseMode", "键值匹配")
+                pm = b.get("parseMode", "键值匹配")  # i18n: value
                 has_config = (
-                    (pm == "键值匹配" and b.get("key"))
-                    or (pm == "JSON路径" and b.get("jsonPath"))
-                    or (pm == "HEX字节提取")
+                    (pm == "键值匹配" and b.get("key"))  # i18n: value
+                    or (pm == "JSON路径" and b.get("jsonPath"))  # i18n: value
+                    or (pm == "HEX字节提取")  # i18n: value
                     or (pm == "Modbus")
                 )
                 if has_config:
@@ -912,18 +964,18 @@ def _extract_bindings(widgets: list) -> list:
                         "jsonPath": b.get("jsonPath", ""),
                         "byteOffset": int(b.get("byteOffset", 0)),
                         "dataType": b.get("dataType", "uint16"),
-                        "byteOrder": b.get("byteOrder", "大端(BE)"),
+                        "byteOrder": b.get("byteOrder", "大端(BE)"),  # i18n: value
                         "expression": b.get("expression"),
-                        "displayFormat": props.get("displayFormat", "自动"),
-                        "decimals": str(props.get("decimals", "自动")),
+                        "displayFormat": props.get("displayFormat", "自动"),  # i18n: value
+                        "decimals": str(props.get("decimals", "自动")),  # i18n: value
                         "frameHeader": b.get("frameHeader", ""),
                         "frameTail": b.get("frameTail", ""),
                         "mbRegIndex": int(b.get("mbRegIndex", 0)),
                         "mbDataType": b.get("mbDataType", "uint16"),
-                        "mbRegOrder": b.get("mbRegOrder", "大端(AB CD)"),
+                        "mbRegOrder": b.get("mbRegOrder", "大端(AB CD)"),  # i18n: value
                         "mbFcFilter": int(b.get("mbFcFilter", -1)),
                         "mbSlaveFilter": int(b.get("mbSlaveFilter", -1)),
-                        "mbArea": b.get("mbArea", "保持寄存器"),
+                        "mbArea": b.get("mbArea", "保持寄存器"),  # i18n: value
                         "mbPeriod": int(b.get("mbPeriod", 0)),
                     }
                     if w["type"] == "LEDIndicator":
@@ -936,8 +988,8 @@ def _extract_bindings(widgets: list) -> list:
 
 
 def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list = ()) -> str:
-    has_parsed = any(b["parseMode"] in ("键值匹配", "JSON路径", "Modbus") for b in bindings)
-    has_hex = any(b["parseMode"] == "HEX字节提取" for b in bindings)
+    has_parsed = any(b["parseMode"] in ("键值匹配", "JSON路径", "Modbus") for b in bindings)  # i18n: value
+    has_hex = any(b["parseMode"] == "HEX字节提取" for b in bindings)  # i18n: value
     has_chart = widget_types and "RealtimeChart" in widget_types
 
     lines = [
@@ -951,24 +1003,24 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
     if has_hex:
         lines.append('from serial_handler import RawFrameBuffer')
     lines.append('')
-    lines.append(runtime_source("binding_values.py"))
-    lines.append(runtime_source("signal_lifetime.py"))
-    lines.append(runtime_source("modbus_poller.py").replace(
+    lines.append(_runtime("binding_values.py"))
+    lines.append(_runtime("signal_lifetime.py"))
+    lines.append(_runtime("modbus_poller.py").replace(
         "from .modbus_master import", "from serial_handler import").replace(
         "from .signal_lifetime import SignalConnections", ""))
 
     lines += [
         '',
         'def _format_display(value, fmt):',
-        '    if fmt == "自动": return value',
+        '    if fmt == "' + "自动" + '": return value',  # i18n: value
         '    try:',
         '        num = int(float(value)) if not isinstance(value, int) else value',
         '    except (ValueError, TypeError, OverflowError): return value',
-        '    if fmt == "十六进制(HEX)":',
+        '    if fmt == "' + "十六进制(HEX)" + '":',  # i18n: value
         '        return f"0x{num:02X}" if num >= 0 else f"-0x{abs(num):02X}"',
-        '    if fmt == "二进制(BIN)":',
+        '    if fmt == "' + "二进制(BIN)" + '":',  # i18n: value
         '        return f"0b{num:08b}" if num >= 0 else f"-0b{abs(num):08b}"',
-        '    if fmt == "十进制": return str(num)',
+        '    if fmt == "' + "十进制" + '": return str(num)',  # i18n: value
         '    return value',
         '',
         '',
@@ -1026,7 +1078,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         from app.core.data_binding import BindingEntry
         lines.append('        self._raw_frames = {}')
         for binding in bindings:
-            if binding["parseMode"] == "HEX字节提取":
+            if binding["parseMode"] == "HEX字节提取":  # i18n: value
                 header = BindingEntry._hex_to_bytes(binding.get("frameHeader", ""))
                 footer = BindingEntry._hex_to_bytes(binding.get("frameTail", ""))
                 lines.append(f'        self._raw_frames[{binding["widget_id"]!r}] = '
@@ -1039,7 +1091,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
     lines.append('        self.modbus_poller.start()  # reads once a link that parses Modbus can send')
     if widget_types and widget_types & {"SerialConfigCard", "TcpConfigCard", "ModbusSlaveTable"}:
         lines += [
-            '        # The slaves of the link cards in the 从站 role: a register table shows the first one\'s, and',
+            '        # The slaves of the link cards in the slave role: a register table shows the first one\'s, and',
             '        # each publishes its whole data table now that the bindings are up.',
             '        slaves = [w.slave_device for w in ui.widgets.values() if getattr(w, "slave_device", None)]',
             '        for w in ui.widgets.values():',
@@ -1053,7 +1105,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
     # -- _on_data for 键值匹配 / JSON路径 --
     if has_parsed:
         lines.append('    def _on_data(self, data: dict):')
-        parsed_bindings = [b for b in bindings if b["parseMode"] in ("键值匹配", "JSON路径", "Modbus")]
+        parsed_bindings = [b for b in bindings if b["parseMode"] in ("键值匹配", "JSON路径", "Modbus")]  # i18n: value
         for b in parsed_bindings:
             fragment = []
             _gen_binding_apply(fragment, b, source="parsed")
@@ -1073,7 +1125,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
             '',
         ]
         lines.append('    def _on_raw(self, raw: bytes):')
-        hex_bindings = [b for b in bindings if b["parseMode"] == "HEX字节提取"]
+        hex_bindings = [b for b in bindings if b["parseMode"] == "HEX字节提取"]  # i18n: value
         for index, b in enumerate(hex_bindings):
             lines.append(f'        for frame in self._raw_frames[{b["widget_id"]!r}].feed(raw):')
             lines.append('            try:')
@@ -1124,28 +1176,28 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     wid = b["widget_id"]
     wtype = b["type"]
     expr = b.get("expression")
-    dfmt = b.get("displayFormat", "自动")
+    dfmt = b.get("displayFormat", "自动")  # i18n: value
     pm = b["parseMode"]
 
     if source == "parsed":
-        if pm == "键值匹配":
+        if pm == "键值匹配":  # i18n: value
             key = b["key"]
             lines.append(f"        if {key!r} in data and data[{key!r}] is not None:")
             lines.append(f"            value = data[{key!r}]")
-        elif pm == "JSON路径":
+        elif pm == "JSON路径":  # i18n: value
             jp = b["jsonPath"]
             lines.append(f"        value = _resolve_path(data, {repr(jp)})")
             lines.append(f"        if value is not None:")
         elif pm == "Modbus":
             args = (b.get("mbRegIndex", 0), b.get("mbDataType", "uint16"),
-                    b.get("mbRegOrder", "大端(AB CD)"), b.get("mbFcFilter", -1),
-                    b.get("mbSlaveFilter", -1), b.get("mbArea", "保持寄存器"))
+                    b.get("mbRegOrder", "大端(AB CD)"), b.get("mbFcFilter", -1),  # i18n: value
+                    b.get("mbSlaveFilter", -1), b.get("mbArea", "保持寄存器"))  # i18n: value
             lines.append(f"        value = modbus_value(data, {', '.join(map(repr, args))})")
             lines.append(f"        if value is not None:")
     elif source == "raw":
         off = b["byteOffset"]
         dt = b["dataType"]
-        bo_str = b.get("byteOrder", "大端(BE)")
+        bo_str = b.get("byteOrder", "大端(BE)")  # i18n: value
         from app.core.data_binding import BindingEntry
         fh = BindingEntry._hex_to_bytes(b.get("frameHeader", ""))
         ft = BindingEntry._hex_to_bytes(b.get("frameTail", ""))
@@ -1170,7 +1222,7 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
             fmt_info = {"uint8": ("B", 1), "int8": ("b", 1), "uint16": ("H", 2),
                         "int16": ("h", 2), "uint32": ("I", 4), "int32": ("i", 4),
                         "float32": ("f", 4)}.get(dt, ("H", 2))
-            bo = ">" if bo_str == "大端(BE)" else "<"
+            bo = ">" if bo_str == "大端(BE)" else "<"  # i18n: value
             lines.append(f"        if len({raw_var}) >= {off + fmt_info[1]}:")
             lines.append(f"            value = struct.unpack('{bo}{fmt_info[0]}', {raw_var}[{off}:{off + fmt_info[1]}])[0]")
 
@@ -1181,11 +1233,11 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
         lines.append(f"{indent}    value = eval({repr(expr)}, {{'__builtins__': {{}}}}, {{'value': value}})")
         lines.append(f"{indent}except Exception: pass")
 
-    need_format = dfmt != "自动" and wtype in ("Label", "LineEdit", "NumericDisplay")
+    need_format = dfmt != "自动" and wtype in ("Label", "LineEdit", "NumericDisplay")  # i18n: value
     if need_format:
         lines.append(f"{indent}value = _format_display(value, {repr(dfmt)})")
-    places = b.get("decimals", "自动")
-    if not need_format and places != "自动" and wtype in ("Label", "NumericDisplay"):
+    places = b.get("decimals", "自动")  # i18n: value
+    if not need_format and places != "自动" and wtype in ("Label", "NumericDisplay"):  # i18n: value
         lines.append(f"{indent}value = binding_decimals(value, {places!r})")
 
     lines.append(f"{indent}w = self.ui.widgets.get({wid!r})")
@@ -1269,7 +1321,7 @@ class NumericDisplay(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8,4,8,4); layout.setSpacing(0)
-        self._title = CaptionLabel("标题")
+        self._title = CaptionLabel(tr("标题"))
         self._value = BodyLabel("0.00")
         self._unit = CaptionLabel("")
         for label in (self._title, self._unit):
@@ -1300,19 +1352,19 @@ class NumericDisplay(QWidget):
 
 
 def _realtime_chart_class() -> str:
-    runtime = runtime_source("chart_runtime.py").replace(
+    runtime = _runtime("chart_runtime.py").replace(
         "from .chart_history import ChartHistory", "").replace(
         "from .binding_values import modbus_need, modbus_value", "").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
         "from .protocol_parser import RawFrameBuffer",
         "from serial_handler import RawFrameBuffer")
-    return (runtime_source("signal_lifetime.py") + "\n"
-            + runtime_source("binding_values.py") + "\n"
-            + runtime_source("chart_history.py") + "\n" + runtime)
+    return (_runtime("signal_lifetime.py") + "\n"
+            + _runtime("binding_values.py") + "\n"
+            + _runtime("chart_history.py") + "\n" + runtime)
 
 
 def _gauge_class() -> str:
-    return runtime_source("gauge_runtime.py").replace(
+    return _runtime("gauge_runtime.py").replace(
         "from .signal_lifetime import SignalConnections", "")
 
 
@@ -1329,8 +1381,8 @@ class SerialTerminal(QWidget):
         setCustomStyleSheet(self._output, terminal_style, terminal_style)
         layout.addWidget(self._output, 1)
         row = QHBoxLayout()
-        self._input = _FLineEdit(); self._input.setPlaceholderText("输入命令...")
-        self._send_btn = _FPushButton("发送")
+        self._input = _FLineEdit(); self._input.setPlaceholderText(tr("输入命令..."))
+        self._send_btn = _FPushButton(tr("发送"))
         row.addWidget(self._input, 1); row.addWidget(self._send_btn)
         layout.addLayout(row)
     def append_received(self, text): self._output.append(f"<< {text}")
@@ -1379,7 +1431,7 @@ class TitledCardContainer(CardWidget):
 
 
 def _data_table_class() -> str:
-    return runtime_source("table_runtime.py").replace(
+    return _runtime("table_runtime.py").replace(
         "from .signal_lifetime import SignalConnections", "")
 
 
@@ -1396,7 +1448,7 @@ class ImageDisplay(QWidget):
         self._path = ""
         self._image = QImage()
         self._label = ImageLabel(self); self._label.hide()
-        self._placeholder = CaptionLabel("未选择图片", self)
+        self._placeholder = CaptionLabel(tr("未选择图片"), self)
         self._placeholder.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
         self._placeholder.setAlignment(Qt.AlignCenter)
         lo = QVBoxLayout(self); lo.setContentsMargins(0,0,0,0)
@@ -1409,7 +1461,7 @@ class ImageDisplay(QWidget):
         self._image = QImage(path) if path else QImage()
         if self._image.isNull():
             self._label.hide()
-            self._placeholder.setText("无法加载图片" if path else "未选择图片")
+            self._placeholder.setText(tr("无法加载图片") if path else tr("未选择图片"))
             self._placeholder.show()
         else:
             self._placeholder.hide()
@@ -1447,7 +1499,7 @@ class ProgressRingDisplay(QWidget):
         self._ring = ProgressRing(); self._ring.setRange(0,100); self._ring.setValue(0)
         self._ring.setFixedSize(80,80)
         self._ring.setTextVisible(True)
-        self._lbl = CaptionLabel("进度"); self._lbl.setAlignment(Qt.AlignCenter)
+        self._lbl = CaptionLabel(tr("进度")); self._lbl.setAlignment(Qt.AlignCenter)
         lo.addWidget(self._ring, 0, Qt.AlignCenter)
         lo.addWidget(self._lbl)
     def set_label(self, t): self._lbl.setText(t)
@@ -1457,45 +1509,48 @@ class ProgressRingDisplay(QWidget):
 
 
 def _log_display_class() -> str:
-    return runtime_source("log_runtime.py").replace(
+    return _runtime("log_runtime.py").replace(
         "from .signal_lifetime import SignalConnections", "")
 
 
 def _serial_config_card_class() -> str:
-    return runtime_source("serial_card.py").replace(
+    return _runtime("serial_card.py").replace(
         "from .serial_runtime import SerialHandler, _list_all_ports",
         "from serial_handler import SerialHandler, _list_all_ports"
     ).replace("from .signal_lifetime import SignalConnections", "").replace(
-        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, fluent_tooltip, status_label", "")
+        "from .link_polling import (CARD_PARSERS, FULL_MODE, ONE_LINE_MODE, SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings,\n"
+        "                           add_value_items, fluent_tooltip, select_value, status_label)", "")
 
 
 def _link_polling_source() -> str:
-    return runtime_source("link_polling.py").replace(
+    return _runtime("link_polling.py").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
         "from .slave_runtime import ModbusSlaveDevice", "from serial_handler import ModbusSlaveDevice").replace(
-        "from .modbus_slave import SLAVE_ROLE", "from serial_handler import SLAVE_ROLE")
+        "from .modbus_slave import MASTER_ROLE, SLAVE_ROLE", "from serial_handler import MASTER_ROLE, SLAVE_ROLE")
 
 
 def _slave_table_class() -> str:
-    return runtime_source("slave_table.py").replace(
+    return _runtime("slave_table.py").replace(
         "from .modbus_slave import AREA_TABLES", "from serial_handler import AREA_TABLES")
 
 
 def _link_card_class() -> str:
-    return runtime_source("link_card.py").replace(
+    return _runtime("link_card.py").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
-        "from .link_polling import ModbusLinkSettings, status_label", "")
+        "from .link_polling import CARD_PARSERS, FULL_MODE, ModbusLinkSettings, add_value_items, select_value, status_label",
+        "")
 
 
 def _tcp_config_card_class() -> str:
-    return runtime_source("tcp_card.py").replace(
+    return _runtime("tcp_card.py").replace(
         "from .link_card import LinkConfigCard", "").replace(
-        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings", "").replace(
-        "from .tcp_runtime import TcpHandler", "from tcp_handler import TcpHandler")
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, add_value_items, select_value",
+        "").replace("from .tcp_runtime import CLIENT, SERVER, TcpHandler",
+                    "from tcp_handler import CLIENT, SERVER, TcpHandler")
 
 
 def _mqtt_config_card_class() -> str:
-    return runtime_source("mqtt_card.py").replace(
+    return _runtime("mqtt_card.py").replace(
         "from .link_card import LinkConfigCard", "").replace(
         "from .mqtt_runtime import MqttHandler", "from mqtt_handler import MqttHandler")
 
@@ -1504,25 +1559,26 @@ def _data_send_card_class() -> str:
     return '''
 class DataSendCard(CardWidget):
     """Data send card for generated code."""
+    _NEWLINES = {"无": "", "\\\\r\\\\n": "\\r\\n", "\\\\n": "\\n", "\\\\r": "\\r"}  # i18n: value
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         root = QVBoxLayout(self); root.setContentsMargins(16,12,16,12); root.setSpacing(8)
-        self._title = StrongBodyLabel("数据发送"); root.addWidget(self._title)
+        self._title = StrongBodyLabel(tr("数据发送")); root.addWidget(self._title)
         row = QHBoxLayout()
-        self._input = LineEdit(); self._input.setPlaceholderText("输入要发送的数据...")
-        self._send_btn = PrimaryPushButton(FIF.SEND, "发送")
+        self._input = LineEdit(); self._input.setPlaceholderText(tr("输入要发送的数据..."))
+        self._send_btn = PrimaryPushButton(FIF.SEND, tr("发送"))
         self._send_btn.clicked.connect(self._do_send)
         self._input.returnPressed.connect(self._do_send)
         row.addWidget(self._input, 1); row.addWidget(self._send_btn)
         root.addLayout(row)
         options = QHBoxLayout(); options.setSpacing(8)
-        self._hex_cb = CheckBox("HEX模式")
+        self._hex_cb = CheckBox(tr("HEX模式"))
         self._newline_combo = ComboBox()
-        self._newline_combo.addItems(["无", "\\\\r\\\\n", "\\\\n", "\\\\r"])
+        for newline in self._NEWLINES: self._newline_combo.addItem(tr(newline), userData=newline)
         self._newline_combo.setCurrentIndex(1); self._newline_combo.setFixedWidth(80)
         options.addWidget(self._hex_cb); options.addStretch()
-        options.addWidget(BodyLabel("换行符")); options.addWidget(self._newline_combo)
+        options.addWidget(BodyLabel(tr("换行符"))); options.addWidget(self._newline_combo)
         root.addLayout(options)
         self._handler = None
     def set_serial_handler(self, h): self._handler = h
@@ -1538,8 +1594,7 @@ class DataSendCard(CardWidget):
             try: self._handler.send(bytes.fromhex(hx))
             except ValueError: pass
         else:
-            suffix = {"无": "", "\\\\r\\\\n": "\\r\\n", "\\\\n": "\\n", "\\\\r": "\\r"}
-            self._handler.send_text(text + suffix[self._newline_combo.currentText()])
+            self._handler.send_text(text + self._NEWLINES[self._newline_combo.currentData()])
         self._input.selectAll()
 '''
 
@@ -1555,19 +1610,19 @@ class DataRecvCard(CardWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         root = QVBoxLayout(self); root.setContentsMargins(12,10,12,10); root.setSpacing(6)
         hdr = QHBoxLayout()
-        self._title_lbl = StrongBodyLabel("数据接收"); hdr.addWidget(self._title_lbl)
+        self._title_lbl = StrongBodyLabel(tr("数据接收")); hdr.addWidget(self._title_lbl)
         hdr.addStretch()
-        self._counter = CaptionLabel("0 条")
+        self._counter = CaptionLabel(tr("%1 条", 0))
         self._counter.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         hdr.addWidget(self._counter)
         root.addLayout(hdr)
         opt = QHBoxLayout(); opt.setSpacing(8)
-        self._hex_cb = CheckBox("HEX显示"); opt.addWidget(self._hex_cb)
-        self._scroll_cb = CheckBox("自动滚动"); self._scroll_cb.setChecked(True); opt.addWidget(self._scroll_cb)
+        self._hex_cb = CheckBox(tr("HEX显示")); opt.addWidget(self._hex_cb)
+        self._scroll_cb = CheckBox(tr("自动滚动")); self._scroll_cb.setChecked(True); opt.addWidget(self._scroll_cb)
         for check in (self._hex_cb, self._scroll_cb):  # macOS would lay them out by a smaller rect
             check.setAttribute(Qt.WA_LayoutUsesWidgetRect)
         opt.addStretch()
-        self._clear_btn = PushButton("清空"); self._clear_btn.setFixedWidth(60)
+        self._clear_btn = PushButton(tr("清空")); self._clear_btn.setFixedWidth(60)
         self._clear_btn.clicked.connect(self._clear); opt.addWidget(self._clear_btn)
         root.addLayout(opt)
         self._text = TextEdit(); self._text.setReadOnly(True)
@@ -1591,8 +1646,8 @@ class DataRecvCard(CardWidget):
             self._serial_connections.connect(h.dataSent, self._on_sent)
             self._serial_connections.connect(h.connected, self._on_connected)
             self._serial_connections.connect(h.disconnected, self._on_disconnected)
-    def _on_connected(self, port): self._sys(f"已连接: {port}")
-    def _on_disconnected(self): self._sys("已断开")
+    def _on_connected(self, port): self._sys(tr("已连接: %1", port))
+    def _on_disconnected(self): self._sys(tr("已断开"))
     def _on_raw(self, data):
         ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
         if self._hex_cb.isChecked():
@@ -1603,7 +1658,7 @@ class DataRecvCard(CardWidget):
             if not txt: return
         self._text.append(f\'<span style="color:#9399b2">[{ts}]</span> \'
                           f\'<span style="color:#a6e3a1">&lt;&lt; {_log_html(txt)}</span>\')
-        self._count += 1; self._counter.setText(f"{self._count} 条")
+        self._count += 1; self._counter.setText(tr("%1 条", self._count))
         self._trim(); self._do_scroll()
     def _on_sent(self, data):
         ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
@@ -1623,7 +1678,7 @@ class DataRecvCard(CardWidget):
         if self._scroll_cb.isChecked():
             sb = self._text.verticalScrollBar(); sb.setValue(sb.maximum())
     def _clear(self):
-        self._text.clear(); self._count = 0; self._counter.setText("0 条")
+        self._text.clear(); self._count = 0; self._counter.setText(tr("%1 条", 0))
     def _trim(self):
         doc = self._text.document()
         while doc.blockCount() > self._max_lines:

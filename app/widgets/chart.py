@@ -2,6 +2,7 @@
 """Design-time chart registration and preview signal wiring."""
 from PyQt5.QtWidgets import QWidget
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
+from app.core.i18n import N_
 from app.core.widget_registry import registry
 from app.core.binding_values import MODBUS_AREAS
 from app.core.chart_runtime import (
@@ -33,69 +34,69 @@ class RealtimeLineChart(RuntimeChart):
 # Metadata
 # ---------------------------------------------------------------------------
 
-_PARSE_MODES = ["键值匹配", "JSON路径", "HEX字节提取", "Modbus"]
+_PARSE_MODES = ["键值匹配", "JSON路径", "HEX字节提取", "Modbus"]  # i18n: value
 _HEX_DTYPES = ["uint8", "int8", "uint16", "int16", "uint32", "int32", "float32"]
-_HEX_BORDER = ["大端(BE)", "小端(LE)"]
+_HEX_BORDER = ["大端(BE)", "小端(LE)"]  # i18n: value
 _MB_DTYPES = ["uint16", "int16", "uint32", "int32", "float32"]
-_MB_REGORD = ["大端(AB CD)", "小端(CD AB)"]
+_MB_REGORD = ["大端(AB CD)", "小端(CD AB)"]  # i18n: value
 
 REALTIME_CHART_META = WidgetMeta(
     type_name="RealtimeChart",
-    display_name="实时曲线",
+    display_name=N_("实时曲线"),
     category=WidgetCategory.CHART,
     icon="MARKET",
     default_width=400, default_height=280,
     min_width=200, min_height=150,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "实时曲线"),
-        PropDef("displayPoints", "显示点数", PropType.INT, 200,
+        PropDef("title", N_("标题"), PropType.STRING, N_("实时曲线")),
+        PropDef("displayPoints", N_("显示点数"), PropType.INT, 200,
                 min_val=10, max_val=10000),
-        PropDef("curveCount", "曲线数量", PropType.INT, 1,
+        PropDef("curveCount", N_("曲线数量"), PropType.INT, 1,
                 min_val=1, max_val=8),
-        PropDef("currentCurve", "当前编辑曲线", PropType.INT, 0,
+        PropDef("currentCurve", N_("当前编辑曲线"), PropType.INT, 0,
                 min_val=0, max_val=7),
         # ---- per-curve virtual (stored as _curve_{i}_{field}) ----
-        PropDef("curveName", "曲线名称", PropType.STRING, "曲线1"),
-        PropDef("curveParseMode", "解析模式", PropType.ENUM, "键值匹配",
+        PropDef("curveName", N_("曲线名称"), PropType.STRING, N_("曲线1")),
+        PropDef("curveParseMode", N_("解析模式"), PropType.ENUM, "键值匹配",  # i18n: value
                 options=_PARSE_MODES),
-        PropDef("curveKey", "匹配键", PropType.STRING, ""),
-        PropDef("curveJsonPath", "JSON路径", PropType.STRING, ""),
-        PropDef("curveByteOffset", "字节偏移", PropType.INT, 0,
+        PropDef("curveKey", N_("匹配键"), PropType.STRING, ""),
+        PropDef("curveJsonPath", N_("JSON路径"), PropType.STRING, ""),
+        PropDef("curveByteOffset", N_("字节偏移"), PropType.INT, 0,
                 min_val=0, max_val=9999),
-        PropDef("curveDataType", "数据类型(HEX)", PropType.ENUM, "float32",
+        PropDef("curveDataType", N_("数据类型(HEX)"), PropType.ENUM, "float32",
                 options=_HEX_DTYPES),
-        PropDef("curveByteOrder", "字节序(HEX)", PropType.ENUM, "大端(BE)",
+        PropDef("curveByteOrder", N_("字节序(HEX)"), PropType.ENUM, "大端(BE)",  # i18n: value
                 options=_HEX_BORDER),
-        PropDef("curveFrameHeader", "帧头(HEX)", PropType.STRING, ""),
-        PropDef("curveFrameTail", "帧尾(HEX)", PropType.STRING, ""),
-        PropDef("curveMbArea", "寄存器区", PropType.ENUM, "保持寄存器",
+        PropDef("curveFrameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
+        PropDef("curveFrameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
+        PropDef("curveMbArea", N_("寄存器区"), PropType.ENUM, "保持寄存器",  # i18n: value
                 options=list(MODBUS_AREAS)),
-        PropDef("curveRegIndex", "寄存器地址", PropType.INT, 0,
+        PropDef("curveRegIndex", N_("寄存器地址"), PropType.INT, 0,
                 min_val=0, max_val=65535),
-        PropDef("curveMbDataType", "数据类型(MB)", PropType.ENUM, "uint16",
+        PropDef("curveMbDataType", N_("数据类型(MB)"), PropType.ENUM, "uint16",
                 options=_MB_DTYPES),
-        PropDef("curveMbRegOrder", "寄存器序(MB)", PropType.ENUM, "大端(AB CD)",
+        PropDef("curveMbRegOrder", N_("寄存器序(MB)"), PropType.ENUM, "大端(AB CD)",  # i18n: value
                 options=_MB_REGORD),
-        PropDef("curveMbFcFilter", "功能码过滤", PropType.INT, -1,
+        PropDef("curveMbFcFilter", N_("功能码过滤"), PropType.INT, -1,
                 min_val=-1, max_val=255),
-        PropDef("curveMbSlaveFilter", "从站过滤", PropType.INT, -1,
+        PropDef("curveMbSlaveFilter", N_("从站过滤"), PropType.INT, -1,
                 min_val=-1, max_val=255),
     ],
 )
 
 GAUGE_META = WidgetMeta(
     type_name="GaugeMeter",
-    display_name="仪表盘",
+    display_name=N_("仪表盘"),
     category=WidgetCategory.CHART,
     icon="SPEED_HIGH",
     default_width=180, default_height=180,
     min_width=80, min_height=80,
     properties=[
-        PropDef("title", "标题", PropType.STRING, "仪表"),
-        PropDef("unit", "单位", PropType.STRING, ""),
-        PropDef("value", "当前值", PropType.FLOAT, 0.0, min_val=-99999, max_val=99999),
-        PropDef("minimum", "最小值", PropType.FLOAT, 0.0, min_val=-99999, max_val=99999),
-        PropDef("maximum", "最大值", PropType.FLOAT, 100.0, min_val=-99999, max_val=99999),
+        PropDef("title", N_("标题"), PropType.STRING, N_("仪表")),
+        PropDef("unit", N_("单位"), PropType.STRING, ""),
+        PropDef("value", N_("当前值"), PropType.FLOAT, 0.0, min_val=-99999, max_val=99999),
+        PropDef("minimum", N_("最小值"), PropType.FLOAT, 0.0, min_val=-99999, max_val=99999),
+        PropDef("maximum", N_("最大值"), PropType.FLOAT, 100.0, min_val=-99999, max_val=99999),
     ],
 )
 
@@ -110,14 +111,14 @@ def register_chart_widgets():
 def create_chart_widget(type_name: str, props: dict, parent=None) -> QWidget:
     if type_name == "RealtimeChart":
         w = RealtimeLineChart(parent)
-        w.set_title(props.get("title", "实时曲线"))
+        w.set_title(props.get("title", "实时曲线"))  # i18n: value
         w.set_display_points(props.get("displayPoints", 200))
         w.load_from_props(props)
         return w
 
     if type_name == "GaugeMeter":
         w = GaugeMeter(parent)
-        w.set_title(props.get("title", "仪表"))
+        w.set_title(props.get("title", "仪表"))  # i18n: value
         w.set_unit(props.get("unit", ""))
         w.set_range(props.get("minimum", 0), props.get("maximum", 100))
         w.set_value(props.get("value", 0))

@@ -7,6 +7,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QObject
 from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding
 from .modbus_master import ModbusMaster
 from .modbus_slave import SLAVE_PARSERS
+from .i18n import tr
 
 try:
     import serial
@@ -106,7 +107,7 @@ class SerialReaderThread(QThread):
     def stop(self):
         self._running = False
         if not self.wait(2000):
-            raise RuntimeError("串口读取线程未能停止")
+            raise RuntimeError(tr("串口读取线程未能停止"))
 
 
 class SerialHandler(QObject):
@@ -165,13 +166,13 @@ class SerialHandler(QObject):
     def connect(self, port, baudrate=None, databits=None, parity=None, stopbits=None,
                 flowcontrol=None, parser_type=None, parser_config=None, slave=None):
         if not HAS_SERIAL:
-            self.error.emit("pyserial 未安装，请运行 pip install pyserial")
+            self.error.emit(tr("pyserial 未安装，请运行 pip install pyserial"))
             return False
         cfg = self._config
         parity_map = {"None": "N", "Even": "E", "Odd": "O", "Mark": "M", "Space": "S"}
         parity = parity if parity is not None else cfg["parity"]
         flow = flowcontrol if flowcontrol is not None else cfg["flowControl"]
-        flow = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}.get(flow, flow)
+        flow = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}.get(flow, flow)  # i18n: value
         try:
             selected_parser = parser_type if parser_type is not None else cfg["parser"]
             selected_config = parser_config
@@ -191,7 +192,7 @@ class SerialHandler(QObject):
                 timeout=0.1, write_timeout=1,
                 rtscts=flow == "rtscts", xonxoff=flow == "xonxoff", dsrdtr=flow == "dsrdtr")
         except Exception as exc:
-            self.error.emit(f"串口打开失败: {exc}")
+            self.error.emit(tr("串口打开失败: %1", exc))
             return False
         self._port = port_obj
         self._parser = parser
@@ -239,9 +240,9 @@ class SerialHandler(QObject):
         try:
             written = self._port.write(data)
             if written != len(data):
-                raise OSError(f"串口仅写入 {written}/{len(data)} 字节")
+                raise OSError(tr("串口仅写入 %1/%2 字节", written, len(data)))
         except Exception as exc:
-            self.error.emit(f"发送失败: {exc}")
+            self.error.emit(tr("发送失败: %1", exc))
             return False
         self.dataSent.emit(data)
         return True
@@ -256,9 +257,9 @@ class SerialHandler(QObject):
         try:
             written = self._port.write(data)
             if written != len(data):
-                raise OSError(f"串口仅写入 {written}/{len(data)} 字节")
+                raise OSError(tr("串口仅写入 %1/%2 字节", written, len(data)))
         except Exception as exc:
-            self.error.emit(f"发送失败: {exc}")
+            self.error.emit(tr("发送失败: %1", exc))
             return False
         self.dataSent.emit(bytes(data))
         return True

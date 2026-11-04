@@ -17,7 +17,7 @@ PyQt UI Designer 的工程文件 `.uidp` 是一个 JSON 文件，和 C++ 版 Flu
 python tools/check_uidp.py motor.uidp
 ```
 
-然后用设计器打开工程看布局；切到「预览」，点链路卡片上的「连接」，接上设备看能不能收发。没问题就可以导出代码（Windows 上 `Ctrl+Shift+E`，Mac 上 `⌘⇧E`），或者在预览页点「一键打包」生成 exe / `.app`（需要本机有 C/C++ 编译器，见 README）。
+然后用设计器打开工程看布局；切到「预览」，点链路卡片上的「连接」，接上设备看能不能收发。没问题就可以导出代码（Windows 上 `Ctrl+Shift+E`，Mac 上 `⌘⇧E`），或者在预览页点「一键打包」生成 exe / `.app`（需要本机有 C/C++ 编译器，见 [README](../README_zh.md)）。
 
 同一个工程也能用 C++ 版 [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) 打开、预览和导出。
 
