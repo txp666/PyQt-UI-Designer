@@ -38,6 +38,7 @@
  "HEX模式": "HEX mode",
  "JSON 格式错误: %1": "Invalid JSON: %1",
  "JSON 格式错误: %1（第 %2 个字符）": "Invalid JSON: %1 (character %2)",
+ "JSON 模板无效: %1": "Invalid JSON template: %1",
  "JSON路径": "JSON path",
  "LED指示灯": "LED indicator",
  "MQTT 参数无效: %1": "Invalid MQTT settings: %1",

@@ -1,4 +1,5 @@
 """Command encoders shared by preview and standalone applications."""
+import json
 import math
 import struct
 
@@ -22,6 +23,97 @@ def _command_hex(text):
 
 def command_hex_frame(command, header="", tail=""):
     return _command_hex(header) + _command_hex(command) + _command_hex(tail)
+
+
+_JSON_NEWLINES = {"无": "", "\\r\\n": "\r\n", "\\n": "\n", "\\r": "\r"}  # i18n: value
+
+
+def _reject_constant(name):
+    raise ValueError(name)
+
+
+_JSON_MAX_DEPTH = 512
+
+
+def _json_depth_ok(text):
+    """No more than _JSON_MAX_DEPTH objects and arrays nested in each other (outside strings), as in
+    FluentHMI Studio; deeper text is not JSON, so json.loads never runs out of stack."""
+    depth, in_str, esc = 0, False, False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch in "[{":
+            depth += 1
+            if depth > _JSON_MAX_DEPTH:
+                return False
+        elif ch in "]}":
+            depth -= 1
+    return True
+
+
+def _is_json(text):
+    """Exactly one JSON value under RFC 8259 (NaN and Infinity are not JSON), surrounding whitespace allowed."""
+    if not _json_depth_ok(text):
+        return False
+    try:
+        json.loads(text, parse_constant=_reject_constant)
+    except ValueError:
+        return False
+    return True
+
+
+def _json_fill(text, value_json, placeholders=True):
+    """One pass over ``text``: drop JSON whitespace outside strings and, with ``placeholders``, replace each
+    {value} outside strings by ``value_json``; None when a {value} sits inside a string literal."""
+    out, i, in_str, esc = [], 0, False, False
+    while i < len(text):
+        ch = text[i]
+        if in_str:
+            if placeholders and text.startswith("{value}", i):
+                return None
+            out.append(ch)
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            i += 1
+        elif placeholders and text.startswith("{value}", i):
+            out.append(value_json)
+            i += len("{value}")
+        else:
+            if ch not in " \t\n\r":
+                out.append(ch)
+                if ch == '"':
+                    in_str = True
+            i += 1
+    return "".join(out)
+
+
+def json_command(props, value):
+    """The bytes a control in JSON mode sends: ``commandTemplate`` (blank = {value}) with each {value}
+    outside strings replaced by the value (used compacted when it is one JSON value, else as a JSON
+    string), whitespace outside strings removed, then the ``commandJsonNewline`` line ending.
+    A template that is not one JSON value with every {value} as null raises ValueError."""
+    template = props.get("commandTemplate", "{value}")
+    effective = template if template.strip() else "{value}"
+    shape = _json_fill(effective, "null")
+    if shape is None or not _is_json(shape):
+        raise ValueError(tr("JSON 模板无效: %1", template))
+    value = str(value)
+    value_json = (_json_fill(value, "", placeholders=False) if _is_json(value)
+                  else json.dumps(value, ensure_ascii=False))
+    document = _json_fill(effective, value_json)
+    newline = _JSON_NEWLINES.get(props.get("commandJsonNewline", "无"), "")  # i18n: value
+    return (document + newline).encode("utf-8")
 
 
 def command_packed_frame(value, fmt, cast=int, template="{value}", header="", tail=""):

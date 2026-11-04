@@ -71,10 +71,11 @@ _MODE_VISIBILITY = {
     "文本":   {"command", "onCommand", "offCommand", "commandNewline", "commandTemplate"},  # i18n: value
     "HEX":    {"command", "onCommand", "offCommand", "commandTemplate",
                "frameHeader", "frameTail", "dataType", "byteOrder"},
+    "JSON":   {"command", "onCommand", "offCommand", "commandTemplate", "commandJsonNewline"},
     "Modbus": {"mbSlave", "mbFunc", "mbAddress", "mbValue", "mbDataType", "mbRegOrder"},
 }
 _MODE_FIELDS = {
-    "command", "onCommand", "offCommand", "commandNewline", "commandTemplate",
+    "command", "onCommand", "offCommand", "commandNewline", "commandTemplate", "commandJsonNewline",
     "frameHeader", "frameTail", "dataType", "byteOrder",
     "mbSlave", "mbFunc", "mbAddress", "mbValue", "mbDataType", "mbRegOrder",
 }

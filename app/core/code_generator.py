@@ -480,6 +480,15 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             except ValueError as exc:
                 self._command_error(exc)
 
+    def _send_json_command(self, value, template="{value}", newline="无"):  # i18n: value
+        if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
+            try:
+                frame = json_command({"commandTemplate": template, "commandJsonNewline": newline}, value)
+            except ValueError as exc:
+                self._command_error(exc)
+                return
+            self._comm_hub.send(frame)
+
     def _send_packed_value(self, value, fmt, cast=int, tpl="{value}", header="", tail=""):
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
@@ -604,6 +613,9 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
 
     def _tpl_send(val_expr: str) -> str:
         """Generate a template-aware send expression."""
+        if mode == "JSON":
+            json_newline = props.get("commandJsonNewline", "无")  # i18n: value
+            return f"self._send_json_command(str({val_expr}), {tpl_repr}, {json_newline!r})"
         if mode == "HEX" and is_struct:
             fmt = _FMT_MAP[dtype]
             bo = ">" if border == "大端(BE)" else "<"  # i18n: value
