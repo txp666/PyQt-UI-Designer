@@ -15,8 +15,16 @@ def safe_app_name(name: str) -> str:
     return name
 
 
+def bundle_identifier(app_name: str) -> str:
+    """An ASCII reverse-DNS identifier of an exported application's own, from its name."""
+    digest = hashlib.sha1(app_name.encode("utf-8")).hexdigest()[:10]
+    return f"io.github.txp666.pyqtuidesigner.app{digest}"
+
+
 def build_nuitka_command(project_dir, python_cmd, app_name, version="1.0.0",
-                         platform=None):
+                         platform=None, bundle_id=None, description=None, company=None):
+    """An exported application is named after itself (app_name, bundle_identifier); the designer's
+    own build passes its identifier, description and company."""
     platform = platform or sys.platform
     project = Path(project_dir).resolve()
     args = list(python_cmd) + [
@@ -47,16 +55,19 @@ def build_nuitka_command(project_dir, python_cmd, app_name, version="1.0.0",
             "--windows-console-mode=disable",
             f"--windows-product-version={version}",
             f"--windows-file-version={version}",
-            "--windows-product-name=PyQt UI Designer",
-            "--windows-file-description=PyQt UI Designer - HMI Application Builder",
-            "--windows-company-name=PyQt-UI-Designer",
+            f"--windows-product-name={app_name}",
+            f"--windows-file-description={description or app_name}",
         ]
+        if company:
+            args.append(f"--windows-company-name={company}")
         if (project / "logo.ico").is_file():
             args.append(f"--windows-icon-from-ico={project / 'logo.ico'}")
     elif platform == "darwin":
         args += [
             "--macos-create-app-bundle",
             f"--macos-app-name={app_name}",
+            # Nuitka writes this as CFBundleIdentifier (and signs with it); without it the identifier is the name.
+            f"--macos-signed-app-name={bundle_id or bundle_identifier(app_name)}",
             f"--macos-app-version={version}",
         ]
         for name in ("logo.icns", "logo.png"):
@@ -112,6 +123,7 @@ def archive_build(project_dir, app_name, platform=None):
         f"{digest.hexdigest()}  {zip_path.name}\n", encoding="utf-8",
     )
 
-    for name in ("main.build", "main.onefile-build"):
+    # On macOS Nuitka also leaves an empty main.dist beside main.app.
+    for name in ("main.build", "main.onefile-build", "main.dist"):
         shutil.rmtree(build_dir / name, ignore_errors=True)
     return final_dir, zip_path
