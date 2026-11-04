@@ -98,9 +98,8 @@ with ExitStack() as stack:
     for name, color in (("absolute", "#0000ff"), ("relative", "#ff0000"),
                         ("duplicate", "#ff0000")):
         widget = window.widgets[name]
-        pixmap = widget._label.pixmap()
-        assert pixmap is not None and not pixmap.isNull(), name
-        assert pixmap.toImage().pixelColor(0, 0).name() == color, name
+        assert not widget._image.isNull(), name
+        assert widget._image.pixelColor(0, 0).name() == color, name
         assert Path(widget._path).is_relative_to(Path(sys.argv[1]).resolve())
     assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
     window.deleteLater()

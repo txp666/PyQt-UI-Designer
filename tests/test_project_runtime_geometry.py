@@ -203,9 +203,9 @@ class ProjectRuntimeGeometryTests(unittest.TestCase):
         manager.load_to_scene(self.scene, str(project_file))
         canvas_image = self.scene.top_level_canvas_items()[0]._container_children[0]
         self.assertEqual(canvas_image.properties["imagePath"], "images/sample.png")
-        self.assertEqual(canvas_image._inner_widget._label.pixmap().toImage().pixelColor(0, 0).name(), "#12ab34")
+        self.assertEqual(canvas_image._inner_widget._image.pixelColor(0, 0).name(), "#12ab34")
         canvas_image.set_property("imagePath", "./images/sample.png")
-        self.assertFalse(canvas_image._inner_widget._label.pixmap().isNull())
+        self.assertFalse(canvas_image._inner_widget._image.isNull())
         destination = self.folder / "saved-elsewhere"
         destination.mkdir()
         renamed = destination / "copy.uidp"
@@ -226,7 +226,7 @@ class ProjectRuntimeGeometryTests(unittest.TestCase):
         self.assertEqual(editor._editors["imagePath"].findChild(LineEdit).text(), reference)
         self.assertFalse(Path(reference).is_absolute())
         self.assertEqual((destination / reference).resolve(), (source / "images" / "sample.png").resolve())
-        self.assertFalse(canvas_image._inner_widget._label.pixmap().isNull())
+        self.assertFalse(canvas_image._inner_widget._image.isNull())
         manager.load_to_scene(self.scene, str(renamed))
         image_data = manager.current.widgets[0]["children"][0]
         self.assertEqual(image_data["properties"]["imagePath"], reference)
@@ -235,13 +235,12 @@ class ProjectRuntimeGeometryTests(unittest.TestCase):
             item("pasted_image", "ImageDisplay", {"imagePath": reference}),
         ]))
         self.scene.add_canvas_item(pasted)
-        self.assertFalse(pasted._container_children[0]._inner_widget._label.pixmap().isNull())
+        self.assertFalse(pasted._container_children[0]._inner_widget._image.isNull())
         self.run_both(manager.current, r'''
             from pathlib import Path
             image = widgets["image"]
-            pixmap = image._label.pixmap()
-            assert pixmap is not None and not pixmap.isNull()
-            assert pixmap.toImage().pixelColor(0, 0).name() == "#12ab34"
+            assert not image._image.isNull()
+            assert image._image.pixelColor(0, 0).name() == "#12ab34"
             assert Path(image._path).is_absolute()
             if os.environ["APPLICATION_MODE"] == "export":
                 assert Path(image._path).parent.name == "assets"

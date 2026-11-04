@@ -1,17 +1,16 @@
 # coding: utf-8
 """Display widgets: LED indicator, numeric display, progress bar, progress ring, image display."""
 from pathlib import Path
-from PyQt5.QtCore import Qt, QRectF, QSize
-from PyQt5.QtGui import QPainter, QColor, QFont, QImage, QPen
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLayout
-from qfluentwidgets import (
-    ProgressBar, ProgressRing, BodyLabel, CaptionLabel, ImageLabel, isDarkTheme, qconfig, themeColor,
-)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPainter, QColor, QFont
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from qfluentwidgets import ProgressBar, ProgressRing, BodyLabel, CaptionLabel, isDarkTheme, qconfig, themeColor
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.i18n import tr, N_
 from app.core.widget_registry import registry
 from app.core.signal_lifetime import SignalConnections
+from app.core.image_runtime import ImageDisplay, SCALE_FIT, SCALE_MODES  # shared with exports
 
 
 def resolved_image_properties(properties, base_dir=None):
@@ -170,67 +169,6 @@ class ProgressRingDisplay(QWidget):
     def set_ring_size(self, s): self._ring.setFixedSize(s, s)
 
 
-class ImageDisplay(QWidget):
-    """Static image display widget: the picture aspect-fit and centred, or a placeholder."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._path = ""
-        self._image = QImage()
-        self._label = ImageLabel(self)
-        self._label.hide()
-        self._placeholder = CaptionLabel(tr("未选择图片"), self)
-        self._placeholder.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
-        self._placeholder.setAlignment(Qt.AlignCenter)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        # The picture's fixed size must never become the widget's minimum.
-        layout.setSizeConstraint(QLayout.SetNoConstraint)
-        layout.addWidget(self._label, 0, Qt.AlignCenter)
-        layout.addWidget(self._placeholder, 0, Qt.AlignCenter)
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
-
-    def set_image_path(self, path: str):
-        self._path = path
-        self._image = QImage(path) if path else QImage()
-        if self._image.isNull():
-            self._label.hide()
-            self._placeholder.setText(tr("无法加载图片") if path else tr("未选择图片"))
-            self._placeholder.show()
-        else:
-            self._placeholder.hide()
-            self._label.setImage(self._image)
-            self._fit_image()
-            self._label.show()
-        self.update()
-
-    def _fit_image(self):
-        if not self._image.isNull():
-            self._label.setScaledSize(self._image.size().scaled(self.size(), Qt.KeepAspectRatio))
-
-    def sizeHint(self):
-        return QSize(200, 150)
-
-    def minimumSizeHint(self):
-        return QSize(1, 1)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._fit_image()
-
-    def paintEvent(self, event):
-        if not self._image.isNull():
-            return
-        dark = isDarkTheme()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        pen = QPen(QColor("#606060" if dark else "#c8c8c8"), 1, Qt.DashLine)
-        painter.setPen(pen)
-        painter.setBrush(QColor("#292929" if dark else "#f5f5f5"))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
-
-
 # ---------------------------------------------------------------------------
 # Widget metadata
 # ---------------------------------------------------------------------------
@@ -304,6 +242,14 @@ IMAGE_DISPLAY_META = WidgetMeta(
     default_width=200, default_height=150,
     properties=[
         PropDef("imagePath", N_("图片路径"), PropType.STRING, ""),
+        PropDef("scaleMode", N_("缩放方式"), PropType.ENUM, SCALE_FIT, options=list(SCALE_MODES),
+                description="适应：保持比例放到最大；拉伸：铺满控件框；原始大小：按图片的像素大小，放不下时缩小"),  # i18n: ignore
+        PropDef("rotation", N_("旋转(°)"), PropType.INT, 0, min_val=0, max_val=359,
+                description="顺时针，绕中心转；控件框不动，整张图片缩小到放得进框里"),  # i18n: ignore
+        PropDef("mirrorH", N_("水平镜像"), PropType.BOOL, False,
+                description="左右翻转，在旋转之前"),  # i18n: ignore
+        PropDef("mirrorV", N_("垂直镜像"), PropType.BOOL, False,
+                description="上下翻转，在旋转之前"),  # i18n: ignore
     ],
 )
 
@@ -351,7 +297,8 @@ def create_display_widget(type_name: str, props: dict, parent=None) -> QWidget:
 
     if type_name == "ImageDisplay":
         w = ImageDisplay(parent)
-        w.set_image_path(props.get("imagePath", ""))
+        for prop, method, default in w.PROPERTY_SETTERS:
+            getattr(w, method)(props.get(prop, default))
         return w
 
     return None
@@ -391,5 +338,6 @@ def apply_display_property(widget, type_name: str, prop_name: str, value):
             widget.set_maximum(value)
 
     elif type_name == "ImageDisplay":
-        if prop_name == "imagePath":
-            widget.set_image_path(value)
+        for prop, method, _default in widget.PROPERTY_SETTERS:
+            if prop == prop_name:
+                getattr(widget, method)(value)

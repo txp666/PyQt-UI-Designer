@@ -34,9 +34,11 @@ PUSH_BUTTON_META = WidgetMeta(
         PropDef("text", N_("文本"), PropType.STRING, N_("按钮")),
         PropDef("enabled", N_("启用"), PropType.BOOL, True),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
         PropDef("command", N_("发送内容"), PropType.COMMAND, ""),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
         PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
         PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
         PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
@@ -97,8 +99,10 @@ LINE_EDIT_META = WidgetMeta(
         PropDef("readOnly", N_("只读"), PropType.BOOL, False),
         PropDef("sendOnEnter", N_("回车发送"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
         PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
         PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
         PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
@@ -131,8 +135,10 @@ COMBO_BOX_META = WidgetMeta(
         PropDef("sendOnSelect", N_("选中发送"), PropType.BOOL, False),
         PropDef("commands", N_("发送命令表"), PropType.TEXT, "",),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
         PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
         PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
         PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
@@ -165,10 +171,12 @@ SWITCH_META = WidgetMeta(
         PropDef("label", N_("标签"), PropType.STRING, N_("开关")),
         PropDef("checked", N_("默认开启"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
         PropDef("onCommand", N_("开启命令"), PropType.COMMAND, ""),
         PropDef("offCommand", N_("关闭命令"), PropType.COMMAND, ""),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
         PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
         PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
         PropDef("dataType", N_("数据类型"), PropType.ENUM, "HEX字符串",  # i18n: value
@@ -202,8 +210,10 @@ SLIDER_META = WidgetMeta(
         PropDef("value", N_("默认值"), PropType.INT, 50, min_val=-99999, max_val=99999),
         PropDef("sendOnChange", N_("变化发送"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
         PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
         PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
         PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
@@ -237,8 +247,10 @@ SPIN_BOX_META = WidgetMeta(
         PropDef("suffix", N_("后缀"), PropType.STRING, ""),
         PropDef("sendOnChange", N_("变化发送"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
+        PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
+                options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
         PropDef("frameHeader", N_("帧头(HEX)"), PropType.STRING, ""),
         PropDef("frameTail", N_("帧尾(HEX)"), PropType.STRING, ""),
         PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",

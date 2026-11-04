@@ -29,7 +29,7 @@ from app.core.modbus_poller import ModbusPoller
 from app.core.signal_lifetime import SignalConnections
 from app.core.slider_release import SendOnRelease
 from app.core.command_runtime import (
-    MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, modbus_request,
+    MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, json_command, modbus_request,
     send_modbus_command, slave_command_write, slave_control_write, slave_devices,
 )
 
@@ -238,10 +238,18 @@ class PreviewCanvas(QWidget):
         """Apply template and send via the appropriate mode.
 
         For HEX mode with a struct data type, packs the value as binary first,
-        then applies the template to the hex representation.
+        then applies the template to the hex representation. JSON mode sends json_command's bytes.
         """
         if mode == "Modbus":
             self._send_modbus_frame(props, value)
+            return
+        if mode == "JSON":
+            try:
+                frame = json_command(props, value)
+            except ValueError as exc:
+                PreviewCanvas._command_error(exc)
+                return
+            PreviewCanvas._send_serial_bytes(frame)
             return
         if mode == "HEX":
             dt = props.get("dataType", "HEX字符串")  # i18n: value

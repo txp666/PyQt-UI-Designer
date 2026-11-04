@@ -199,7 +199,7 @@ The full illustrated guide is on the [website](https://modusignal.cn/pyqt-ui-des
 
 1. **Design the UI**: drag widgets from the widget panel on the left onto the canvas, and set their properties in the property editor on the right.
 2. **Bind data**: select a display widget (numeric display, LED, progress bar and so on) and set its binding key (绑定键, the field name in the device's data) and parse mode (解析模式: key-value matching, JSON path, HEX byte extraction or Modbus).
-3. **Configure commands**: select an interactive widget (button, switch, slider and so on) and set the send mode (text, HEX or Modbus), the command, and optionally a `{value}` command template.
+3. **Configure commands**: select an interactive widget (button, switch, slider and so on) and set the send mode (text, HEX, JSON or Modbus), the command, and optionally a `{value}` command template.
 4. **Preview**: switch to the Preview page (预览运行) and click Run preview (运行预览), then connect to the device with a serial, TCP, UDP or MQTT config card to test it live.
 5. **Export and package**: the shortcut for exporting code is `Ctrl+Shift+E` on Windows and `⌘⇧E` on a Mac, or click Export code (导出代码) in the navigation bar. On the Preview page, click Package (一键打包) and choose a folder; it exports, compiles with Nuitka and zips the result automatically. Packaging needs a C/C++ compiler on the machine: the Xcode Command Line Tools on macOS, and on Windows a compiler that Nuitka supports (MSVC for Python 3.13+).
 

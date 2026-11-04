@@ -1,0 +1,788 @@
+{
+ "cases": [
+  {
+   "name": "switch on",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}"
+   },
+   "value": "1",
+   "out": "{\"led\":1}"
+  },
+  {
+   "name": "switch off",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}"
+   },
+   "value": "0",
+   "out": "{\"led\":0}"
+  },
+  {
+   "name": "switch bool",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}"
+   },
+   "value": "true",
+   "out": "{\"led\":true}"
+  },
+  {
+   "name": "switch bare word is a string",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}"
+   },
+   "value": "on",
+   "out": "{\"led\":\"on\"}"
+  },
+  {
+   "name": "switch quoted string",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}"
+   },
+   "value": "\"on\"",
+   "out": "{\"led\":\"on\"}"
+  },
+  {
+   "name": "slider nested",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"cfg\":{\"speed\":{value}}}"
+   },
+   "value": "42",
+   "out": "{\"cfg\":{\"speed\":42}}"
+  },
+  {
+   "name": "slider fixed fields",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"cmd\":\"setSpeed\",\"value\":{value}}"
+   },
+   "value": "75",
+   "out": "{\"cmd\":\"setSpeed\",\"value\":75}"
+  },
+  {
+   "name": "spinbox negative",
+   "widget": "SpinBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"t\":{value}}"
+   },
+   "value": "-5",
+   "out": "{\"t\":-5}"
+  },
+  {
+   "name": "lineedit string escaped",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"name\":{value}}"
+   },
+   "value": "say \"hi\"",
+   "out": "{\"name\":\"say \\\"hi\\\"\"}"
+  },
+  {
+   "name": "two placeholders in an array",
+   "widget": "SpinBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "[{value},{value}]"
+   },
+   "value": "3",
+   "out": "[3,3]"
+  },
+  {
+   "name": "two placeholders in an object",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"a\":{value},\"b\":{value}}"
+   },
+   "value": "x",
+   "out": "{\"a\":\"x\",\"b\":\"x\"}"
+  },
+  {
+   "name": "no placeholder ignores the value",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"cmd\":\"start\",\"speed\":50}"
+   },
+   "value": "ignored",
+   "out": "{\"cmd\":\"start\",\"speed\":50}"
+  },
+  {
+   "name": "template absent is {value}",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON"
+   },
+   "value": "START",
+   "out": "\"START\""
+  },
+  {
+   "name": "default template sends the bare value",
+   "widget": "SpinBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{value}"
+   },
+   "value": "7",
+   "out": "7"
+  },
+  {
+   "name": "empty template is {value}",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": ""
+   },
+   "value": "{\"cmd\": \"start\", \"speed\": 50}",
+   "out": "{\"cmd\":\"start\",\"speed\":50}"
+  },
+  {
+   "name": "blank template is {value}",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "  \t "
+   },
+   "value": "[1, 2, 3]",
+   "out": "[1,2,3]"
+  },
+  {
+   "name": "template whitespace and newlines minified",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\n  \"led\" : {value} ,\r\n\t\"src\": \"ui  panel\"\n}"
+   },
+   "value": "1",
+   "out": "{\"led\":1,\"src\":\"ui  panel\"}"
+  },
+  {
+   "name": "value text that looks like the placeholder",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "{value}",
+   "out": "{\"v\":\"{value}\"}"
+  },
+  {
+   "name": "value JSON string holding the placeholder text",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "\"{value}\"",
+   "out": "{\"v\":\"{value}\"}"
+  },
+  {
+   "name": "value object inside template",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"set\":{value}}"
+   },
+   "value": "{\"a\" : [1, 2]}",
+   "out": "{\"set\":{\"a\":[1,2]}}"
+  },
+  {
+   "name": "error: unbalanced",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"a\":{value}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {\"a\":{value}"
+  },
+  {
+   "name": "error: placeholder inside a string",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"m\":\"v={value}\"}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {\"m\":\"v={value}\"}"
+  },
+  {
+   "name": "error: placeholder after an escaped quote inside a string",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"m\":\"a\\\"{value}\"}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {\"m\":\"a\\\"{value}\"}"
+  },
+  {
+   "name": "error: placeholder as a whole string",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"k\":\"{value}\"}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {\"k\":\"{value}\"}"
+  },
+  {
+   "name": "error: two values",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{value}{value}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {value}{value}"
+  },
+  {
+   "name": "error: two values with a space",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{value} {value}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {value} {value}"
+  },
+  {
+   "name": "error: placeholder as a key",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{{value}:1}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {{value}:1}"
+  },
+  {
+   "name": "error: placeholder glued to a number",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"a\":1{value}}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {\"a\":1{value}}"
+  },
+  {
+   "name": "error: single quotes",
+   "widget": "Slider",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "'{value}'"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: '{value}'"
+  },
+  {
+   "name": "error: fixed template not JSON",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "LED_ON"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: LED_ON"
+  },
+  {
+   "name": "error: fixed template trailing comma",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"a\":1,}"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {\"a\":1,}"
+  },
+  {
+   "name": "value null",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "null",
+   "out": "{\"v\":null}"
+  },
+  {
+   "name": "value empty object",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "{}",
+   "out": "{\"v\":{}}"
+  },
+  {
+   "name": "value empty array",
+   "widget": "PushButton",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "[]",
+   "out": "{\"v\":[]}"
+  },
+  {
+   "name": "lineedit quotes and backslash escaped",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "say \"hi\" \\ bye",
+   "out": "{\"v\":\"say \\\"hi\\\" \\\\ bye\"}"
+  },
+  {
+   "name": "lineedit lone backslash",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "\\",
+   "out": "{\"v\":\"\\\\\"}"
+  },
+  {
+   "name": "lineedit decimal",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "3.14",
+   "out": "{\"v\":3.14}"
+  },
+  {
+   "name": "lineedit exponent kept as written",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "1e3",
+   "out": "{\"v\":1e3}"
+  },
+  {
+   "name": "lineedit exponent sign",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "2.5E-3",
+   "out": "{\"v\":2.5E-3}"
+  },
+  {
+   "name": "lineedit big integer kept as written",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "12345678901234567890",
+   "out": "{\"v\":12345678901234567890}"
+  },
+  {
+   "name": "lineedit huge exponent is still JSON",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "1e400",
+   "out": "{\"v\":1e400}"
+  },
+  {
+   "name": "lineedit minus zero",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "-0",
+   "out": "{\"v\":-0}"
+  },
+  {
+   "name": "lineedit leading zero is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "01",
+   "out": "{\"v\":\"01\"}"
+  },
+  {
+   "name": "lineedit trailing dot is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "1.",
+   "out": "{\"v\":\"1.\"}"
+  },
+  {
+   "name": "lineedit leading dot is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": ".5",
+   "out": "{\"v\":\".5\"}"
+  },
+  {
+   "name": "lineedit plus sign is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "+1",
+   "out": "{\"v\":\"+1\"}"
+  },
+  {
+   "name": "lineedit split minus is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "- 1",
+   "out": "{\"v\":\"- 1\"}"
+  },
+  {
+   "name": "lineedit NaN is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "NaN",
+   "out": "{\"v\":\"NaN\"}"
+  },
+  {
+   "name": "lineedit Infinity is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "Infinity",
+   "out": "{\"v\":\"Infinity\"}"
+  },
+  {
+   "name": "lineedit -Infinity is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "-Infinity",
+   "out": "{\"v\":\"-Infinity\"}"
+  },
+  {
+   "name": "lineedit True is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "True",
+   "out": "{\"v\":\"True\"}"
+  },
+  {
+   "name": "lineedit truncated literal is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "tru",
+   "out": "{\"v\":\"tru\"}"
+  },
+  {
+   "name": "lineedit quoted digits stay a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "\"123\"",
+   "out": "{\"v\":\"123\"}"
+  },
+  {
+   "name": "lineedit single quotes are a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "{'a': 1}",
+   "out": "{\"v\":\"{'a': 1}\"}"
+  },
+  {
+   "name": "lineedit trailing comma in array is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "[1,]",
+   "out": "{\"v\":\"[1,]\"}"
+  },
+  {
+   "name": "lineedit trailing comma in object is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "{\"a\":1,}",
+   "out": "{\"v\":\"{\\\"a\\\":1,}\"}"
+  },
+  {
+   "name": "lineedit text after JSON is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "{\"a\":1} x",
+   "out": "{\"v\":\"{\\\"a\\\":1} x\"}"
+  },
+  {
+   "name": "lineedit two documents are a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "{\"a\":1}{\"b\":2}",
+   "out": "{\"v\":\"{\\\"a\\\":1}{\\\"b\\\":2}\"}"
+  },
+  {
+   "name": "lineedit unterminated string is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "\"open",
+   "out": "{\"v\":\"\\\"open\"}"
+  },
+  {
+   "name": "lineedit raw tab inside a JSON string is a string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "\"a\tb\"",
+   "out": "{\"v\":\"\\\"a\\tb\\\"\"}"
+  },
+  {
+   "name": "lineedit tab escaped",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "a\tb",
+   "out": "{\"v\":\"a\\tb\"}"
+  },
+  {
+   "name": "lineedit control characters escaped",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "\u0001\b\f\u001f",
+   "out": "{\"v\":\"\\u0001\\b\\f\\u001f\"}"
+  },
+  {
+   "name": "lineedit empty value is an empty string",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "",
+   "out": "{\"v\":\"\"}"
+  },
+  {
+   "name": "lineedit surrounding whitespace dropped",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": " 1 ",
+   "out": "{\"v\":1}"
+  },
+  {
+   "name": "lineedit escapes inside JSON kept as written",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "\"caf\\u00e9 \\ud83d\\ude00 \\/\"",
+   "out": "{\"v\":\"caf\\u00e9 \\ud83d\\ude00 \\/\"}"
+  },
+  {
+   "name": "lineedit slash not escaped",
+   "widget": "LineEdit",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"v\":{value}}"
+   },
+   "value": "a/b",
+   "out": "{\"v\":\"a/b\"}"
+  },
+  {
+   "name": "combo Chinese text",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"mode\":{value}}"
+   },
+   "value": "自动",
+   "out": "{\"mode\":\"自动\"}"
+  },
+  {
+   "name": "combo Chinese key and value",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"状态\":{value}}"
+   },
+   "value": "开",
+   "out": "{\"状态\":\"开\"}"
+  },
+  {
+   "name": "combo emoji",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"pet\":{value}}"
+   },
+   "value": "🐱",
+   "out": "{\"pet\":\"🐱\"}"
+  },
+  {
+   "name": "combo spaces inside strings kept",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": ""
+   },
+   "value": "{\"msg\": \"a  b\"}",
+   "out": "{\"msg\":\"a  b\"}"
+  },
+  {
+   "name": "combo multi-line JSON compacted",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": ""
+   },
+   "value": "{\n  \"a\" : [ 1 , 2 ],\r\n\t\"b\": {\"c\": false}\n}",
+   "out": "{\"a\":[1,2],\"b\":{\"c\":false}}"
+  },
+  {
+   "name": "combo duplicate keys kept as written",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": ""
+   },
+   "value": "{\"a\":1,\"a\":2}",
+   "out": "{\"a\":1,\"a\":2}"
+  },
+  {
+   "name": "combo brackets inside strings",
+   "widget": "ComboBox",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": ""
+   },
+   "value": "{\"s\": \"} ]\\\" {\"}",
+   "out": "{\"s\":\"} ]\\\" {\"}"
+  },
+  {
+   "name": "newline none",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}",
+    "commandJsonNewline": "无"
+   },
+   "value": "1",
+   "out": "{\"led\":1}"
+  },
+  {
+   "name": "newline CRLF",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}",
+    "commandJsonNewline": "\\r\\n"
+   },
+   "value": "1",
+   "out": "{\"led\":1}\r\n"
+  },
+  {
+   "name": "newline LF",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}",
+    "commandJsonNewline": "\\n"
+   },
+   "value": "1",
+   "out": "{\"led\":1}\n"
+  },
+  {
+   "name": "newline CR",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}}",
+    "commandJsonNewline": "\\r"
+   },
+   "value": "1",
+   "out": "{\"led\":1}\r"
+  },
+  {
+   "name": "error has no line ending either",
+   "widget": "ToggleSwitch",
+   "props": {
+    "commandMode": "JSON",
+    "commandTemplate": "{\"led\":{value}",
+    "commandJsonNewline": "\\r\\n"
+   },
+   "value": "1",
+   "error": "JSON 模板无效: {\"led\":{value}"
+  }
+ ]
+}
