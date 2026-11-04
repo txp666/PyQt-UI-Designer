@@ -14,19 +14,19 @@ from qfluentwidgets import (
 )
 
 from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, status_label
-from .serial_runtime import _list_all_ports
+from .serial_runtime import SerialHandler, _list_all_ports
 from .signal_lifetime import SignalConnections
 
 class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
-    One button connects or disconnects the hub's serial link, at the end of the last row shown,
+    One button connects or disconnects the card's own serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
     height is what the rows of its display mode need. Like every link card it hands the Modbus
     poller its settings and shows the poller's status while its link parses Modbus; in the 从站 role
     it answers as a Modbus slave instead (link_polling.ModbusSlaveSettings)."""
 
-    LINK = "serial"  # name of this card's link on a CommHub
+    LINK_CLASS = SerialHandler
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
     PROPERTY_SETTERS = (
@@ -171,18 +171,12 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         self.refresh_ports()
         self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
-    def set_serial_handler(self, handler):
-        """Attach the serial link; a CommHub is resolved to its serial handler."""
-        handler = getattr(handler, self.LINK, handler)
-        if handler is self._handler:
-            return
-        self._serial_connections.clear()
-        self._handler = handler
-        if handler is not None:
-            self._serial_connections.connect(handler.connected, self._on_serial_connected)
-            self._serial_connections.connect(handler.disconnected, self._on_serial_disconnected)
-            self._serial_connections.connect(handler.error, self._on_serial_error)
-            self.set_connected(handler.is_connected)
+    def _attach_link(self, link):
+        """Follow the card's new link (link_polling.ModbusLinkSettings.set_serial_handler)."""
+        self._serial_connections.connect(link.connected, self._on_serial_connected)
+        self._serial_connections.connect(link.disconnected, self._on_serial_disconnected)
+        self._serial_connections.connect(link.error, self._on_serial_error)
+        self.set_connected(link.is_connected)
 
     @staticmethod
     def _toggle_button():
@@ -318,7 +312,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     def _on_connect(self):
         port = self.port
         baud = self.baudrate
-        if not port:
+        if not port or self._handler is None:  # no link off a hub (the designer canvas)
             return
 
         flow_map = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}
@@ -328,8 +322,6 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
             btn.setEnabled(False)
         self._set_status("连接中...", "#FF9800")
 
-        if self._handler is None:
-            return
         ok = self._handler.connect(
             port, baud,
             databits=int(self._databits_combo.currentText()),

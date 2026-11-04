@@ -136,6 +136,39 @@ class LinkCardTests(unittest.TestCase):
             check_payloads([b"READ\r\n"])
         ''')
 
+    def test_two_tcp_cards_have_links_of_their_own(self):
+        # Two cards of one kind once shared a link: the client card never connected out.
+        self.run_both([
+            control("server", "TcpConfigCard", {"defaultMode": "服务端", "defaultHost": "127.0.0.1"}),
+            control("client", "TcpConfigCard", {"defaultMode": "客户端", "defaultHost": "127.0.0.1"}, 1),
+        ], r"""
+            import time
+            from PyQt5.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
+            def wait_for(predicate, what):
+                deadline = time.monotonic() + 5
+                while not predicate() and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                assert predicate(), f"Timed out waiting for {what}"
+            server, client = widgets["server"], widgets["client"]
+            free = QTcpServer()
+            assert free.listen(QHostAddress(QHostAddress.LocalHost), 0)
+            server._port_spin.setValue(free.serverPort())
+            free.close()
+            device = QTcpServer()  # what the client card connects to
+            assert device.listen(QHostAddress(QHostAddress.LocalHost), 0)
+            client._port_spin.setValue(device.serverPort())
+            QTest.mouseClick(server._connect_btn, Qt.LeftButton)
+            QTest.mouseClick(client._connect_btn, Qt.LeftButton)
+            wait_for(lambda: device.hasPendingConnections(), "the client card's connection")
+            wait_for(lambda: client._status.text() == "● 已连接", "the client card")
+            assert server._status.text() == "● 监听中 · 0 客户端", server._status.text()
+            probe = QTcpSocket()
+            probe.connectToHost("127.0.0.1", server.port)
+            wait_for(lambda: server._status.text() == "● 监听中 · 1 客户端", "a client of the server card")
+            assert server.link is not client.link and server.link.is_connected and client.link.is_connected
+            probe.abort()
+        """)
+
     def test_tcp_card_shows_the_poller_status_and_modbus_commands_go_out_as_mbap(self):
         self.run_both([
             control("tcp", "TcpConfigCard", {"defaultParser": "modbus_tcp", "modbusPeriod": 60000}),

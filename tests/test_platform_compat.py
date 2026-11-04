@@ -16,7 +16,7 @@ from PyQt5.QtGui import QKeyEvent, QWheelEvent
 from PyQt5.QtWidgets import QApplication
 
 from app.common.build_support import archive_build, build_nuitka_command
-from app.core import serial_manager
+from app.core import serial_runtime
 from app.core.code_generator import _gen_serial_handler, generate_project
 from app.core.project import ProjectData
 
@@ -33,7 +33,7 @@ class SerialPortTests(unittest.TestCase):
                  patch("serial.tools.list_ports.comports", return_value=[
                      SimpleNamespace(device=device, description="USB UART")
                  ]):
-                self.assertEqual(serial_manager._list_all_ports()[0]["port"], expected)
+                self.assertEqual(serial_runtime._list_all_ports()[0]["port"], expected)
                 self.assertEqual(generated["_list_all_ports"]()[0]["port"], expected)
 
     def test_windows_keeps_com_normalization_and_numeric_order(self):
@@ -47,7 +47,7 @@ class SerialPortTests(unittest.TestCase):
                  SimpleNamespace(device="com10", description="ten"),
                  SimpleNamespace(device="com2", description="two"),
              ]):
-            self.assertEqual([p["port"] for p in serial_manager._list_all_ports()],
+            self.assertEqual([p["port"] for p in serial_runtime._list_all_ports()],
                              ["COM2", "COM10"])
             self.assertEqual([p["port"] for p in generated["_list_all_ports"]()],
                              ["COM2", "COM10"])

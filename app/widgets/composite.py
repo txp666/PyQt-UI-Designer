@@ -31,39 +31,13 @@ def _log_html(text):
 
 
 # ---------------------------------------------------------------------------
-# Serial Config Card
+# Link cards (serial, TCP, MQTT): the runtime cards themselves. Each owns its link once the
+# preview hands it the hub (preview_interface.PreviewCanvas); on the canvas a card has no link.
 # ---------------------------------------------------------------------------
 
-from app.core.serial_card import SerialConfigCard as RuntimeSerialCard
-
-
-class SerialConfigCard(RuntimeSerialCard):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        from app.core.comm_manager import commHub
-        self.set_serial_handler(commHub.serial)
-
-
-# ---------------------------------------------------------------------------
-# TCP / MQTT Config Cards
-# ---------------------------------------------------------------------------
-
-from app.core.tcp_card import TcpConfigCard as RuntimeTcpCard
-from app.core.mqtt_card import MqttConfigCard as RuntimeMqttCard
-
-
-class TcpConfigCard(RuntimeTcpCard):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        from app.core.comm_manager import commHub
-        self.set_serial_handler(commHub.tcp)
-
-
-class MqttConfigCard(RuntimeMqttCard):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        from app.core.comm_manager import commHub
-        self.set_serial_handler(commHub.mqtt)
+from app.core.serial_card import SerialConfigCard
+from app.core.tcp_card import TcpConfigCard
+from app.core.mqtt_card import MqttConfigCard
 
 
 # ---------------------------------------------------------------------------

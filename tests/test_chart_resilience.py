@@ -38,7 +38,9 @@ def exercise():
     app.processEvents()
     window = next(w for w in app.topLevelWidgets() if hasattr(w, "widgets"))
     chart = window.widgets["chart"]
-    serial = window._comm_hub.serial
+    from serial_handler import SerialHandler
+    serial = SerialHandler(window)  # a link on the hub, as a link card registers its own
+    window._comm_hub.add_link(serial)
 __CHECKS__
     assert not errors, errors
     assert not any(name == "app" or name.startswith("app.") for name in sys.modules)

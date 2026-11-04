@@ -196,7 +196,7 @@ from comm_hub import CommHub
 from data_binding import DataBinding
 
 window = MainUI()
-comm_hub = CommHub()  # serial, TCP and MQTT links behind one set of signals
+comm_hub = CommHub()  # every link card registers its own link here, behind one set of signals
 binding = DataBinding(window, comm_hub)
 
 if sys.platform == "win32":
@@ -872,13 +872,7 @@ def _gen_mqtt_handler(serial_config: dict) -> str:
 
 
 def _gen_comm_hub() -> str:
-    return runtime_source("comm_runtime.py").replace(
-        "from .serial_runtime import SerialHandler", "from serial_handler import SerialHandler",
-    ).replace(
-        "from .tcp_runtime import TcpHandler", "from tcp_handler import TcpHandler",
-    ).replace(
-        "from .mqtt_runtime import MqttHandler", "from mqtt_handler import MqttHandler",
-    )
+    return runtime_source("comm_runtime.py")
 
 
 def _link_card_ids(widgets: list) -> list:
@@ -998,18 +992,26 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         '',
         '',
         'class DataBinding:',
-        '    """Wire the hub (serial, TCP and MQTT links) to bound widgets and command senders."""',
+        '    """Wire the hub (the link cards\' links) to bound widgets and command senders."""',
         '    def __init__(self, ui, hub):',
         '        self.ui = ui',
         '        self.hub = hub',
         '        self._connections = SignalConnections(ui)',
         '        ui._comm_hub = hub',
         '        # Reads what the Modbus bindings and chart curves show; the link cards, in document',
-        '        # order, hand it their settings and show its status.',
+        '        # order, register their own links on the hub, hand it their settings and show its status.',
         '        self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)',
+    ]
+    if link_cards:
+        lines += [
+            f'        for widget_id in {list(link_cards)!r}:',
+            '            ui.widgets[widget_id].set_serial_handler(hub)',
+            '            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)',
+        ]
+    lines += [
         '        for w in ui.widgets.values():',
         '            if hasattr(w, "set_serial_handler"):',
-        '                w.set_serial_handler(hub)  # connection cards pick their own link',
+        '                w.set_serial_handler(hub)  # the receive card, log box and data table listen to it',
     ]
     if has_chart:
         lines += [
@@ -1018,11 +1020,6 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
             '                w._serial_connections.connect(hub.dataReceived, w.on_parsed)',
             '                w._serial_connections.connect(hub.rawReceived, w.on_raw)',
             '                w._serial_connections.connect(hub.disconnected, w.reset_stream)',
-        ]
-    if link_cards:
-        lines += [
-            f'        for widget_id in {list(link_cards)!r}:',
-            '            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)',
         ]
 
     if has_hex:
@@ -1443,7 +1440,8 @@ def _log_display_class() -> str:
 
 def _serial_config_card_class() -> str:
     return runtime_source("serial_card.py").replace(
-        "from .serial_runtime import _list_all_ports", "from serial_handler import _list_all_ports"
+        "from .serial_runtime import SerialHandler, _list_all_ports",
+        "from serial_handler import SerialHandler, _list_all_ports"
     ).replace("from .signal_lifetime import SignalConnections", "").replace(
         "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, status_label", "")
 
@@ -1469,12 +1467,14 @@ def _link_card_class() -> str:
 def _tcp_config_card_class() -> str:
     return runtime_source("tcp_card.py").replace(
         "from .link_card import LinkConfigCard", "").replace(
-        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings", "")
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings", "").replace(
+        "from .tcp_runtime import TcpHandler", "from tcp_handler import TcpHandler")
 
 
 def _mqtt_config_card_class() -> str:
     return runtime_source("mqtt_card.py").replace(
-        "from .link_card import LinkConfigCard", "")
+        "from .link_card import LinkConfigCard", "").replace(
+        "from .mqtt_runtime import MqttHandler", "from mqtt_handler import MqttHandler")
 
 
 def _data_send_card_class() -> str:

@@ -62,7 +62,7 @@ class PreviewCanvas(QWidget):
         self._asset_base_dir = (Path(project.file_path).expanduser().resolve().parent
                                 if project.file_path else Path.cwd())
         # Reads what the Modbus bindings and chart curves show; the link cards, created in document
-        # order, hand it their settings and show its status.
+        # order, register their own links on the hub, hand it their settings and show its status.
         self._modbus_poller = ModbusPoller(commHub, bindingEngine.modbus_needs, self)
 
         for wd in project.widgets:
@@ -115,7 +115,9 @@ class PreviewCanvas(QWidget):
 
             self._wire_commands(widget, type_name, props)
             self._wire_slave_writes(widget, type_name, wd.get("binding") or {})
-            if hasattr(widget, "set_modbus_poller"):  # a link card: its settings, the poller's status
+            if hasattr(widget, "set_modbus_poller"):  # a link card: its own link, its settings, the poller's status
+                from app.core.comm_manager import commHub
+                widget.set_serial_handler(commHub)  # registered in document order
                 widget.set_modbus_poller(self._modbus_poller)
 
             if type_name == "RealtimeChart" and hasattr(widget, "start_listening"):
@@ -347,6 +349,8 @@ class PreviewCanvas(QWidget):
         for w in self._widgets:
             if hasattr(w, "stop_listening"):
                 w.stop_listening()
+            if hasattr(w, "set_modbus_poller"):  # a link card: its link disconnects and leaves the hub now
+                w.set_serial_handler(None)
             w.deleteLater()
         self._widgets.clear()
 

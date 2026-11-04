@@ -51,7 +51,9 @@ def exercise_application():
     app.processEvents()
     window = next(w for w in app.topLevelWidgets() if hasattr(w, "widgets"))
     widgets = window.widgets
-    serial = window._comm_hub.serial
+    from serial_handler import SerialHandler
+    serial = SerialHandler(window)  # a link on the hub, as a link card registers its own
+    window._comm_hub.add_link(serial)
     port = MemoryPort()
     serial._port = port
     sent = []

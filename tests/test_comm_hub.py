@@ -1,4 +1,4 @@
-"""One hub fronts the serial, TCP and MQTT links in the designer and in exports."""
+"""One hub fronts the links the link cards own, in the designer and in exports."""
 import os
 import sys
 import time
@@ -42,6 +42,7 @@ class CommHubTests(unittest.TestCase):
         self.addCleanup(paho.stop)
 
     def runtimes(self):
+        """The hub and the three link classes, as the designer has them and as an export has them."""
         serial, tcp, mqtt, hub = {}, {}, {}, {}
         exec(_gen_serial_handler({}), serial)
         modules = {"serial_handler": SimpleNamespace(**serial)}
@@ -49,21 +50,31 @@ class CommHubTests(unittest.TestCase):
             exec(_gen_tcp_handler({}), tcp)
             exec(_gen_mqtt_handler({}), mqtt)
         mqtt["mqtt"] = FakePaho2
-        modules.update(tcp_handler=SimpleNamespace(**tcp), mqtt_handler=SimpleNamespace(**mqtt))
-        with patch.dict(sys.modules, modules):
-            exec(_gen_comm_hub(), hub)
-        return vars(comm_runtime), hub
+        exec(_gen_comm_hub(), hub)
+        host = {**vars(comm_runtime), "SerialHandler": serial_runtime.SerialHandler,
+                "TcpHandler": tcp_runtime.TcpHandler, "MqttHandler": mqtt_runtime.MqttHandler}
+        exported = {**hub, "SerialHandler": serial["SerialHandler"], "TcpHandler": tcp["TcpHandler"],
+                    "MqttHandler": mqtt["MqttHandler"]}
+        return host, exported
 
     def make(self, namespace, config=None):
         hub = namespace["CommHub"](config=config)
 
         def cleanup():
             hub.disconnect()
+            for link in hub.links:
+                link.deleteLater()
             hub.deleteLater()
             self.app.sendPostedEvents(None, QEvent.DeferredDelete)
 
         self.addCleanup(cleanup)
         return hub
+
+    def add(self, hub, namespace, kind):
+        """A link of the kind, registered on the hub as a link card registers its own."""
+        link = namespace[kind]()
+        hub.add_link(link)
+        return link
 
     def wait_for(self, predicate, what):
         deadline = time.monotonic() + 5
@@ -73,11 +84,17 @@ class CommHubTests(unittest.TestCase):
 
     def test_hub_forwards_every_link_and_sends_over_all_connected_links(self):
         for namespace in self.runtimes():
-            hub = self.make(namespace, {"baudRate": 9600, "parser": "line",
-                                        "parserConfig": {"separator": ";"}})
-            self.assertEqual(hub.tcp._config["parser"], "line")
-            self.assertEqual(hub.mqtt._config["parserConfig"], {"separator": ";"})
-            self.assertNotIn("baudRate", hub.tcp._config)
+            hub = self.make(namespace)
+            serial, tcp = self.add(hub, namespace, "SerialHandler"), self.add(hub, namespace, "TcpHandler")
+            # The project's settings count for the links registered so far and those registered later.
+            hub.configure({"baudRate": 9600, "parser": "line", "parserConfig": {"separator": ";"}})
+            mqtt = self.add(hub, namespace, "MqttHandler")
+            self.assertEqual(hub.links, [serial, tcp, mqtt])
+            self.assertEqual(serial._config["baudRate"], 9600)
+            self.assertEqual(tcp._config["parser"], "line")
+            self.assertEqual(mqtt._config["parserConfig"], {"separator": ";"})
+            self.assertNotIn("baudRate", tcp._config)
+            self.assertNotIn("baudRate", mqtt._config)
             events, states = [], []
             hub.connected.connect(lambda name: events.append(("connected", name)))
             hub.disconnected.connect(lambda: events.append(("disconnected",)))
@@ -92,24 +109,24 @@ class CommHubTests(unittest.TestCase):
             self.assertEqual(events, [])
 
             port = MemoryPort()
-            hub.serial._port = port
+            serial._port = port
             self.assertTrue(hub.is_connected)
-            self.assertEqual(hub.connected_links, [hub.serial])
-            self.assertTrue(hub.tcp.connect("127.0.0.1", 0, mode="服务端"))
+            self.assertEqual(hub.connected_links, [serial])
+            self.assertTrue(tcp.connect("127.0.0.1", 0, mode="服务端"))
             peer = tcp_runtime.TcpHandler()
             self.addCleanup(peer.deleteLater)
             self.addCleanup(peer.disconnect)
             received = []
             peer.rawReceived.connect(received.append)
-            self.assertTrue(peer.connect("127.0.0.1", hub.tcp.port))
-            self.wait_for(lambda: peer.is_connected and hub.tcp.peer_count == 1, "the TCP peer")
-            self.assertTrue(hub.mqtt.connect(subscribe="in", publish="out"))
+            self.assertTrue(peer.connect("127.0.0.1", tcp.port))
+            self.wait_for(lambda: peer.is_connected and tcp.peer_count == 1, "the TCP peer")
+            self.assertTrue(mqtt.connect(subscribe="in", publish="out"))
             client = FakeClient.instances[-1]
             client.fire("on_connect", {}, ReasonCode(0, "Success"), None)
-            self.wait_for(lambda: hub.mqtt.is_connected, "the broker")
-            self.assertEqual(hub.connected_links, [hub.serial, hub.tcp, hub.mqtt])
+            self.wait_for(lambda: mqtt.is_connected, "the broker")
+            self.assertEqual(hub.connected_links, [serial, tcp, mqtt])
             self.assertEqual([event for event in events if event[0] == "connected"],
-                             [("connected", f"TCP 服务端 127.0.0.1:{hub.tcp.port}"),
+                             [("connected", f"TCP 服务端 127.0.0.1:{tcp.port}"),
                               ("connected", "MQTT 127.0.0.1:1883")])
             self.assertEqual(states, [True, True])
 
@@ -125,7 +142,7 @@ class CommHubTests(unittest.TestCase):
             # The broker's queued message and the socket's round trip race each other.
             self.assertCountEqual([e[1] for e in events if e[0] == "data"], [{"a": 1, "b": 2}, {"c": 3}])
 
-            hub.tcp.disconnect()
+            tcp.disconnect()
             self.assertTrue(hub.is_connected)
             self.assertEqual(states, [True, True, True])
             hub.disconnect()
@@ -140,17 +157,18 @@ class CommHubTests(unittest.TestCase):
     def test_modbus_requests_are_framed_for_each_connected_link(self):
         for namespace in self.runtimes():
             hub = self.make(namespace, {"parser": "modbus"})
+            serial, tcp = self.add(hub, namespace, "SerialHandler"), self.add(hub, namespace, "TcpHandler")
             port = MemoryPort()
-            hub.serial._port = port
-            self.assertEqual(hub.serial.parser_type, "modbus")
-            self.assertTrue(hub.tcp.connect("127.0.0.1", 0, mode="服务端", parser_type="modbus_tcp"))
+            serial._port = port
+            self.assertEqual(serial.parser_type, "modbus")
+            self.assertTrue(tcp.connect("127.0.0.1", 0, mode="服务端", parser_type="modbus_tcp"))
             peer = tcp_runtime.TcpHandler()
             self.addCleanup(peer.deleteLater)
             self.addCleanup(peer.disconnect)
             received = []
             peer.rawReceived.connect(received.append)
-            self.assertTrue(peer.connect("127.0.0.1", hub.tcp.port))
-            self.wait_for(lambda: peer.is_connected and hub.tcp.peer_count == 1, "the TCP peer")
+            self.assertTrue(peer.connect("127.0.0.1", tcp.port))
+            self.wait_for(lambda: peer.is_connected and tcp.peer_count == 1, "the TCP peer")
             frames = send_modbus_command(hub, 1, 6, 10, 500)
             self.assertEqual(port.sent, [bytes.fromhex("0106000a01f4a9df")])
             self.wait_for(lambda: received, "the MBAP frame")
@@ -163,11 +181,9 @@ class CommHubTests(unittest.TestCase):
     def test_designer_hub_publishes_on_the_signal_bus(self):
         from app.common.signal_bus import signalBus
         from app.core.comm_manager import commHub
-        from app.core.serial_manager import serialManager
-        self.assertIs(serialManager, commHub.serial)
-        self.assertIsInstance(commHub.tcp, tcp_runtime.TcpHandler)
-        self.assertIsInstance(commHub.mqtt, mqtt_runtime.MqttHandler)
-        self.assertIsInstance(commHub.serial, serial_runtime.SerialHandler)
+        self.assertEqual(commHub.links, [])  # the hub has no link of its own
+        host, _exported = self.runtimes()
+        serial, tcp, mqtt = (self.add(commHub, host, kind) for kind in ("SerialHandler", "TcpHandler", "MqttHandler"))
         seen = []
         connections = [
             signalBus.serialConnected.connect(lambda name: seen.append(("connected", name))),
@@ -178,50 +194,65 @@ class CommHubTests(unittest.TestCase):
             signalBus.serialDisconnected.connect(lambda: seen.append(("disconnected",))),
         ]
         try:
-            commHub.tcp.connected.emit("TCP x")
-            commHub.mqtt.dataReceived.emit({"v": 1})
-            commHub.serial.rawReceived.emit(b"raw")
-            commHub.tcp.dataSent.emit(b"sent")
-            commHub.mqtt.error.emit("boom")
-            commHub.tcp.disconnected.emit()
+            tcp.connected.emit("TCP x")
+            mqtt.dataReceived.emit({"v": 1})
+            serial.rawReceived.emit(b"raw")
+            tcp.dataSent.emit(b"sent")
+            mqtt.error.emit("boom")
+            tcp.disconnected.emit()
             self.assertEqual(seen, [("connected", "TCP x"), ("data", {"v": 1}), ("raw", b"raw"),
                                     ("sent", b"sent"), ("error", "boom"), ("disconnected",)])
         finally:
             for connection in connections:
                 signalBus.disconnect(connection)
+            for link in (serial, tcp, mqtt):
+                commHub.remove_link(link)
+                link.deleteLater()
+            self.app.sendPostedEvents(None, QEvent.DeferredDelete)
+        self.assertEqual(commHub.links, [])
 
-    def test_cards_resolve_a_hub_to_their_own_link(self):
+    def test_each_card_owns_its_link_while_it_is_on_a_hub(self):
         from app.core.mqtt_card import MqttConfigCard
         from app.core.serial_card import SerialConfigCard
         from app.core.tcp_card import TcpConfigCard
         hub = self.make(vars(comm_runtime))
         cards = [SerialConfigCard(), TcpConfigCard(), MqttConfigCard()]
         try:
-            for card, link in zip(cards, hub.links):
+            for card, kind in zip(cards, (serial_runtime.SerialHandler, tcp_runtime.TcpHandler,
+                                          mqtt_runtime.MqttHandler)):
+                self.assertIsNone(card.link)  # on the designer canvas a card has no link
                 card.set_serial_handler(hub)
-                self.assertIs(card._handler, link)
-                card.set_serial_handler(link)
-                self.assertIs(card._handler, link)
-                self.assertEqual(getattr(hub, card.LINK), link)
+                link = card.link
+                self.assertIs(type(link), kind)
+                self.assertIs(link.parent(), card)
+                self.assertIs(hub.links[-1], link)
+                card.set_serial_handler(hub)
+                self.assertIs(card.link, link)
                 card.set_serial_handler(None)
-                self.assertIsNone(card._handler)
+                self.assertIsNone(card.link)
+                self.assertNotIn(link, hub.links)
+                card.set_serial_handler(hub)
+                self.assertIsNot(card.link, link)
+            self.assertEqual(hub.links, [card.link for card in cards])
+            # A card that goes away takes its link off the hub.
+            cards.pop(1).deleteLater()
+            self.app.sendPostedEvents(None, QEvent.DeferredDelete)
+            self.assertEqual(hub.links, [card.link for card in cards])
         finally:
             for card in cards:
                 card.deleteLater()
             self.app.sendPostedEvents(None, QEvent.DeferredDelete)
+        self.assertEqual(hub.links, [])
 
-    def test_exported_hub_uses_the_exported_link_modules(self):
+    def test_exported_hub_configures_the_exported_links(self):
         host, exported = self.runtimes()
         self.assertIsNot(exported["SerialHandler"], serial_runtime.SerialHandler)
+        self.assertIsNot(exported["CommHub"], comm_runtime.CommHub)
         hub = self.make(exported, {"parser": "modbus", "parserConfig": {"fields": ["t"]}})
-        self.assertIs(type(hub.serial), exported["SerialHandler"])
-        self.assertIs(type(hub.tcp), exported["TcpHandler"])
-        self.assertIs(type(hub.mqtt), exported["MqttHandler"])
-        self.assertEqual(hub.link("tcp"), hub.tcp)
-        with self.assertRaises(ValueError):
-            hub.link("udp")
-        self.assertEqual(hub.tcp._config["parserConfig"], {"fields": ["t"]})
-        self.assertEqual(protocol.create_parser(*(hub.tcp._config[k] for k in ("parser", "parserConfig"))).feed(
+        serial, tcp = self.add(hub, exported, "SerialHandler"), self.add(hub, exported, "TcpHandler")
+        self.assertEqual(serial.parser_type, "modbus")
+        self.assertEqual(tcp._config["parserConfig"], {"fields": ["t"]})
+        self.assertEqual(protocol.create_parser(*(tcp._config[k] for k in ("parser", "parserConfig"))).feed(
             bytes.fromhex("0103020009") + protocol.modbus_crc(bytes.fromhex("0103020009"))),
             [{"slave": 1, "fc": 3, "t": 9}])
 

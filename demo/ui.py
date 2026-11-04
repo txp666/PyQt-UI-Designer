@@ -1756,8 +1756,12 @@ class LogDisplayBox(QWidget):
             cursor.removeSelectedText()
             cursor.deleteChar()
 
-"""The Modbus polling settings and status every link card (serial, TCP, MQTT) has, shared by the
-designer preview and exported applications.
+"""The link every link card (serial, TCP, MQTT) owns, and its Modbus polling settings and status,
+shared by the designer preview and exported applications.
+
+A link card owns its link. Handed the running application's CommHub, it creates a link of its own and
+registers it there; any number of cards of one kind each have their own link. Handed None, or destroyed,
+the card disconnects its link and takes it off the hub.
 
 Every link card hands the running application's Modbus poller (modbus_poller.py) its 默认轮询(ms),
 响应超时(ms) and 默认从站 (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which count while the
@@ -1771,6 +1775,8 @@ A serial or TCP card also has a Modbus role (ModbusSlaveSettings). As 从站 it 
 modbus_tcp; while the link answers, the card shows ``<connection> · 从站 S · 应答 N`` in place of the
 poller's status.
 """
+from functools import partial
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QSizePolicy
 from qfluentwidgets import CaptionLabel
@@ -1808,23 +1814,65 @@ def _modbus_setting(index, value):
     return _whole(value, MODBUS_DEFAULTS[index], *MODBUS_RANGES[index])
 
 
+def _close_link(link, *_):
+    """A card being destroyed closes its link first: a serial link's reader thread stops before the link
+    goes with the card."""
+    try:
+        link.disconnect()
+    except RuntimeError:
+        pass  # already gone
+
+
 class ModbusLinkSettings:
-    """The Modbus polling settings of a link card, and the poller's status on its status line.
+    """The link of a link card, its Modbus polling settings, and the poller's status on its status line.
 
     The card calls ``_init_modbus()`` while it is built and ``_with_poll_status(text)`` for its
-    status while connected, and has ``_handler`` (its link), ``_connected`` and
-    ``_show_connected()``, which shows the connected status again."""
+    status while connected, and has ``LINK_CLASS`` (the class of its link), ``_handler`` (its link,
+    None while it is on no hub), ``_serial_connections`` (its subscriptions to the link),
+    ``_attach_link(link)``, which subscribes to a new link and shows its state, ``set_connected()``,
+    ``_connected`` and ``_show_connected()``, which shows the connected status again."""
+
+    LINK_CLASS = None  # SerialHandler, TcpHandler or MqttHandler
 
     def _init_modbus(self):
         self._modbus_settings = MODBUS_DEFAULTS
         self._modbus_poller = None
         self._poll_shown = False  # the status shows the poller's
         self._poller_connections = SignalConnections(self)
+        self._hub = None
+        self._close_on_destroy = None
 
     @property
     def link(self):
         """The card's link: whether it is connected and parses Modbus decides whose settings count."""
         return self._handler
+
+    def set_serial_handler(self, hub):
+        """Register a link of this card's own on ``hub``, the running application's CommHub, creating
+        it first; None disconnects the link, takes it off the hub and lets it go."""
+        if hub is self._hub:
+            return
+        self._release_link()
+        if hub is None:
+            return
+        link = self.LINK_CLASS(self)
+        self._hub, self._handler = hub, link
+        # Connected after the card's own subscriptions, so on destruction they are released first.
+        self._close_on_destroy = self.destroyed.connect(partial(_close_link, link))
+        hub.add_link(link)
+        self._attach_link(link)
+
+    def _release_link(self):
+        link, hub = self._handler, self._hub
+        if link is None:
+            return
+        self._serial_connections.clear()
+        self.destroyed.disconnect(self._close_on_destroy)
+        self._handler = self._hub = self._close_on_destroy = None
+        link.disconnect()  # while on the hub, so its listeners hear it
+        hub.remove_link(link)
+        link.deleteLater()
+        self.set_connected(False)
 
     @property
     def modbus_settings(self):
@@ -1976,19 +2024,19 @@ from qfluentwidgets import (
 )
 
 
-from serial_handler import _list_all_ports
+from serial_handler import SerialHandler, _list_all_ports
 
 
 class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
-    One button connects or disconnects the hub's serial link, at the end of the last row shown,
+    One button connects or disconnects the card's own serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
     height is what the rows of its display mode need. Like every link card it hands the Modbus
     poller its settings and shows the poller's status while its link parses Modbus; in the 从站 role
     it answers as a Modbus slave instead (link_polling.ModbusSlaveSettings)."""
 
-    LINK = "serial"  # name of this card's link on a CommHub
+    LINK_CLASS = SerialHandler
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
     PROPERTY_SETTERS = (
@@ -2133,18 +2181,12 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         self.refresh_ports()
         self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
-    def set_serial_handler(self, handler):
-        """Attach the serial link; a CommHub is resolved to its serial handler."""
-        handler = getattr(handler, self.LINK, handler)
-        if handler is self._handler:
-            return
-        self._serial_connections.clear()
-        self._handler = handler
-        if handler is not None:
-            self._serial_connections.connect(handler.connected, self._on_serial_connected)
-            self._serial_connections.connect(handler.disconnected, self._on_serial_disconnected)
-            self._serial_connections.connect(handler.error, self._on_serial_error)
-            self.set_connected(handler.is_connected)
+    def _attach_link(self, link):
+        """Follow the card's new link (link_polling.ModbusLinkSettings.set_serial_handler)."""
+        self._serial_connections.connect(link.connected, self._on_serial_connected)
+        self._serial_connections.connect(link.disconnected, self._on_serial_disconnected)
+        self._serial_connections.connect(link.error, self._on_serial_error)
+        self.set_connected(link.is_connected)
 
     @staticmethod
     def _toggle_button():
@@ -2280,7 +2322,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     def _on_connect(self):
         port = self.port
         baud = self.baudrate
-        if not port:
+        if not port or self._handler is None:  # no link off a hub (the designer canvas)
             return
 
         flow_map = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}
@@ -2290,8 +2332,6 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
             btn.setEnabled(False)
         self._set_status("连接中...", "#FF9800")
 
-        if self._handler is None:
-            return
         ok = self._handler.connect(
             port, baud,
             databits=int(self._databits_combo.currentText()),

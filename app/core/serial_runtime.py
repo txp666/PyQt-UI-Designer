@@ -114,6 +114,7 @@ class SerialHandler(QObject):
     modbus or modbus_tcp, it answers the requests it reads instead of parsing replies."""
     text_encoding = "utf-8"  # of the text this link receives, for the receive log
     slave_data = False  # True while dataReceived carries a slave message (publish_slave_data)
+    uses_port_settings = True  # the hub hands it the project's whole serial settings, not only the frame format
     dataReceived = pyqtSignal(dict)
     rawReceived = pyqtSignal(bytes)
     dataSent = pyqtSignal(bytes)

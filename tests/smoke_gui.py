@@ -16,7 +16,7 @@ from qfluentwidgets import Theme, qconfig, setTheme
 from app.core.code_generator import generate_project
 from app.core.data_binding import bindingEngine
 from app.core.project import ProjectData
-from app.core.serial_manager import serialManager
+from app.core.serial_card import SerialConfigCard
 from app.core.theme_runtime import ThemeController
 from app.core.widget_registry import registry
 from app.view.main_window import MainWindow
@@ -100,19 +100,20 @@ with tempfile.TemporaryDirectory() as fixture_folder:
     original_widgets = tuple(preview._preview_canvas._widgets)
     # Observe lifecycle changes without requiring a physical serial device.
     port = SmokePort()
-    serialManager._port = port
-    serialManager.connected.emit("NATIVE_SMOKE")
+    serial = next(w for w in original_widgets if isinstance(w, SerialConfigCard)).link
+    serial._port = port
+    serial.connected.emit("NATIVE_SMOKE")
     (ROOT / "build").mkdir(exist_ok=True)
     for theme in (Theme.DARK, Theme.LIGHT):
         setTheme(theme, save=False)
         app.processEvents()
         assert not window.grab().isNull()
-        assert preview._running and serialManager.is_connected
+        assert preview._running and serial.is_connected
         assert tuple(preview._preview_canvas._widgets) == original_widgets
     window._project_mgr.save_from_scene(
         window.designer_interface.scene, str(project_path), window.designer_interface.app_name)
     window._sync_preview()
-    assert preview._running and serialManager.is_connected and port.is_open
+    assert preview._running and serial.is_connected and port.is_open
     assert tuple(preview._preview_canvas._widgets) == original_widgets
     assert port.sent == []
     window.grab().save(str(ROOT / "build" / "macos-smoke.png"))
@@ -120,7 +121,7 @@ with tempfile.TemporaryDirectory() as fixture_folder:
     project = window._project_mgr.export_scene_data(
         window.designer_interface.scene, window.designer_interface.app_name)
     preview._stop_preview()
-    assert not serialManager.is_connected and not port.is_open
+    assert not serial.is_connected and not port.is_open
 
 with tempfile.TemporaryDirectory() as folder:
     generate_project(project, folder)

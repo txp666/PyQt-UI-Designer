@@ -18,9 +18,10 @@ from unittest.mock import patch
 from PyQt5.QtCore import QEvent
 from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
 from qfluentwidgets import InfoBar
+from app.core.comm_manager import commHub
 from app.core.data_binding import bindingEngine
 from app.core.project import ProjectData
-from app.core.serial_manager import serialManager
+from app.core.serial_runtime import SerialHandler
 from app.view.main_window import MainWindow
 
 errors = []
@@ -47,6 +48,8 @@ with ExitStack() as stack, tempfile.TemporaryDirectory() as folder:
     for name in ("success", "error", "warning"):
         stack.enter_context(patch.object(InfoBar, name))
     window = MainWindow()
+    serial = SerialHandler(window)  # a link on the designer's hub, as a link card registers its own
+    commHub.add_link(serial)
     root = Path(folder)
     for name, command in (("A", "OLD_WRITE"), ("B", "NEW_READ")):
         project = ProjectData()
@@ -64,7 +67,7 @@ with ExitStack() as stack, tempfile.TemporaryDirectory() as folder:
     preview = window.preview_interface
     preview._start_preview()
     port = MemoryPort()
-    serialManager._port = port
+    serial._port = port
     original = preview._preview_canvas._widgets[0]
     original.click()
     assert port.sent == [b"OLD_WRITE\r\n"]
@@ -101,7 +104,7 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
                               return_value=(str(root / "B.uidp"), "")):
                 window._open_project()
             assert not preview._running and not bindingEngine._active
-            assert not port.is_open and not serialManager.is_connected
+            assert not port.is_open and not serial.is_connected
             assert preview._run_btn.isEnabled() and not preview._stop_btn.isEnabled()
             assert preview._preview_canvas._widgets == []
             original.click()
@@ -113,9 +116,9 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
             current = preview._preview_canvas._widgets[0]
             assert current.text() == "B"
             new_port = MemoryPort()
-            serialManager._port = new_port
+            serial._port = new_port
             current.click()
-            serialManager.dataReceived.emit({"value": 42})
+            serial.dataReceived.emit({"value": 42})
             assert new_port.sent == [b"NEW_READ\\r\\n"]
             assert preview._preview_canvas._widgets[1].text() == "42"
         """)
@@ -125,7 +128,7 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
             window._new_project()
             assert window._project_mgr.current.widgets == []
             assert not preview._running and not bindingEngine._active
-            assert not port.is_open and not serialManager.is_connected
+            assert not port.is_open and not serial.is_connected
             assert preview._preview_canvas._widgets == []
             original.click()
             preview._start_preview()
@@ -139,7 +142,7 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
             editor._editors["command"].setText("UPDATED")
             assert window._project_mgr.is_dirty
             assert not preview._running and not bindingEngine._active
-            assert not port.is_open and not serialManager.is_connected
+            assert not port.is_open and not serial.is_connected
             assert preview._project_data is None
             original.click()
             assert port.sent == [b"OLD_WRITE\\r\\n"]
@@ -147,7 +150,7 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
             app.processEvents()
             preview._start_preview()
             new_port = MemoryPort()
-            serialManager._port = new_port
+            serial._port = new_port
             preview._preview_canvas._widgets[0].click()
             assert new_port.sent == [b"UPDATED\\r\\n"]
         """)
@@ -180,9 +183,9 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
                 window._open_project()
             assert window._project_mgr.current is document
             assert preview._running and bindingEngine._active
-            assert serialManager.is_connected and port.is_open
+            assert serial.is_connected and port.is_open
             assert preview._preview_canvas._widgets[0] is original
-            serialManager.dataReceived.emit({"value": 17})
+            serial.dataReceived.emit({"value": 17})
             assert preview._preview_canvas._widgets[1].text() == "17"
             original.click()
             assert port.sent == [b"OLD_WRITE\\r\\n", b"OLD_WRITE\\r\\n"]
@@ -193,14 +196,14 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
             window._sync_preview()
             assert window._save_project()
             window._sync_preview()
-            assert preview._running and serialManager.is_connected
+            assert preview._running and serial.is_connected
             assert preview._preview_canvas._widgets[0] is original
             document = window._project_mgr.current
             assert preview._project_data is not document
             document.widgets[0]["properties"]["command"] = "DIFFERENT"
             preview.set_project_data(document)
             assert not preview._running and not bindingEngine._active
-            assert not serialManager.is_connected and not port.is_open
+            assert not serial.is_connected and not port.is_open
             assert preview._project_data.widgets[0]["properties"]["command"] == "DIFFERENT"
         """)
 
@@ -216,6 +219,6 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
                 dialog.return_value.exec_.assert_called_once()
             source = (output / "ui.py").read_text(encoding="utf-8")
             assert "PACK_UPDATED" in source and "OLD_WRITE" not in source
-            assert not preview._running and not serialManager.is_connected
+            assert not preview._running and not serial.is_connected
             assert not port.is_open and port.sent == [b"OLD_WRITE\\r\\n"]
         """)

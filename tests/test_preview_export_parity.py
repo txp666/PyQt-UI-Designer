@@ -43,9 +43,15 @@ class MemoryPort:
     def close(self):
         self.is_open = False
 
-def exercise(window, widgets, serial):
+def exercise(window, widgets, hub, link_class):
     app = QApplication.instance()
     app.processEvents()
+    # The serial link: the serial card's own, or one registered on the hub as a card would.
+    serial = next((widget.link for widget in widgets.values()
+                   if type(widget).__name__ == "SerialConfigCard"), None)
+    if serial is None:
+        serial = link_class(window)
+        hub.add_link(serial)
     port = MemoryPort()
     serial._port = port
     sent = []
@@ -62,14 +68,15 @@ def exercise(window, widgets, serial):
     check_payloads([])
 __CHECKS__
     assert not errors, errors
-    serial.disconnect()
+    hub.disconnect()
     print("PREVIEW_EXPORT_PARITY_OK")
     return 0
 
 if os.environ["APPLICATION_MODE"] == "preview":
     sys.path.insert(0, os.environ["DESIGNER_ROOT"])
+    from app.core.comm_manager import commHub
     from app.core.project import ProjectData
-    from app.core.serial_manager import serialManager
+    from app.core.serial_runtime import SerialHandler
     from app.view.preview_interface import PreviewCanvas
     app = QApplication([])
     project = ProjectData()
@@ -79,14 +86,15 @@ if os.environ["APPLICATION_MODE"] == "preview":
     window.show()
     widgets = {item["id"]: widget for item, widget
                in zip(project.widgets, window._widgets)}
-    exercise(window, widgets, serialManager)
+    exercise(window, widgets, commHub, SerialHandler)
     window.deleteLater()
     app.sendPostedEvents(None, QEvent.DeferredDelete)
 else:
     def exercise_export():
         app = QApplication.instance()
         window = next(w for w in app.topLevelWidgets() if hasattr(w, "widgets"))
-        result = exercise(window, window.widgets, window._comm_hub.serial)
+        from serial_handler import SerialHandler
+        result = exercise(window, window.widgets, window._comm_hub, SerialHandler)
         assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
         return result
     with ExitStack() as stack:

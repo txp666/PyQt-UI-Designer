@@ -3,10 +3,11 @@ from qfluentwidgets import ComboBox, LineEdit, SpinBox
 
 from .link_card import LinkConfigCard
 from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings
+from .tcp_runtime import TcpHandler
 
 
 class TcpConfigCard(ModbusSlaveSettings, LinkConfigCard):
-    LINK = "tcp"
+    LINK_CLASS = TcpHandler
     TITLE = "TCP 配置"
     MODES = ["客户端", "服务端"]
     PROPERTY_SETTERS = (

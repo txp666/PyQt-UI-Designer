@@ -143,7 +143,7 @@ class ModbusPollerTests(unittest.TestCase):
                                              "modbusTimeout": 50, "modbusSlave": 9}),
             control("bus", "SerialConfigCard", {"defaultParser": "modbus", "modbusPeriod": 300,
                                                 "modbusTimeout": 60000, "modbusSlave": 7}, 1),
-            # The same serial link parses Modbus for this card too, but it comes later.
+            # Its own link reaches the same bus and parses Modbus too, but it comes later.
             control("spare", "SerialConfigCard", {"modbusPeriod": 200, "modbusTimeout": 40,
                                                   "modbusSlave": 8}, 2),
             bound("value", {"mbArea": "保持寄存器", "mbRegIndex": 0}, 10),
@@ -154,8 +154,18 @@ class ModbusPollerTests(unittest.TestCase):
             assert (poller.default_period, poller.timeout, poller.default_slave) == (500, 1000, 1)
             assert [card.modbus_settings for card in (tcp, bus, spare)] == [
                 (100, 50, 9), (300, 60000, 7), (200, 40, 8)]
+            spare_link, spare_port = spare.link, MemoryPort()
+            assert spare_link is not serial
+            spare_link.configure({"parser": "modbus"})
+            spare_link._port = spare_port
+            spare_device = create_parser("modbus", {}, spare_link.modbus_requests)
+            def reply(pdu):  # the device answers on both links
+                for link, parser in ((serial, device), (spare_link, spare_device)):
+                    for data in parser.feed(rtu(pdu)):
+                        link.dataReceived.emit(data)
             serial.configure({"parser": "modbus"})
             serial.connected.emit("PLC")
+            spare_link.connected.emit("PLC")
             assert (poller.default_period, poller.timeout, poller.default_slave) == (300, 60000, 7)
             other, value = rtu("0203000a0001"), rtu("070300000001")
             assert poller.blocks() == [[2, 3, 10, 1, 1000], [7, 3, 0, 1, 300]], poller.blocks()
@@ -186,8 +196,11 @@ class ModbusPollerTests(unittest.TestCase):
             check_payloads([other, value, value, rtu("080300000001"), rtu("080300000001")])
             assert serial.modbus_master._timer.interval() == 2000
             reply("0803020003")
+            assert spare_port.writes == port.writes  # every read went out over both links
             # No link card's link parses Modbus any more: the defaults again.
             serial.disconnect()
+            assert (poller.default_period, poller.timeout, poller.default_slave) == (50, 40, 8)  # the spare card's now
+            spare_link.disconnect()
             assert (poller.default_period, poller.timeout, poller.default_slave) == (500, 1000, 1)
             assert bus._status.text() == spare._status.text() == "未连接", bus._status.text()
         """)

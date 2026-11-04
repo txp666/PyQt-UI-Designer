@@ -174,13 +174,24 @@ class ModbusPoller(QObject):
         if self._active:
             return
         self._active = True
-        for link in self._links():
-            for signal in (link.connected, link.disconnected, getattr(link, "peersChanged", None)):
-                if signal is not None:  # a link that comes or goes, or a TCP server's clients
-                    self._link_connections.connect(signal, self._on_link_changed)
+        self._watch_links()
         self._period, self._timeout, self._slave = self._link_settings()
         self._timer.start(self._period)  # it looks for a link that can send, too
         self._tick()
+
+    def _watch_links(self):
+        """Tick when a link connects or disconnects, a TCP server's clients change, or the hub's links do."""
+        self._link_connections.clear()
+        links_changed = getattr(self._hub, "linksChanged", None)
+        if links_changed is not None:  # a card registered its link, or took it off
+            self._link_connections.connect(links_changed, self._on_links_changed)
+        for link in self._links():
+            for signal in (link.connected, link.disconnected, getattr(link, "peersChanged", None)):
+                if signal is not None:
+                    self._link_connections.connect(signal, self._on_link_changed)
+
+    def _on_links_changed(self):
+        self._watch_links()  # a new link counts once it connects; one that left was disconnected first
 
     def stop(self):
         """The runtime goes away: no more reads; those not sent yet are withdrawn."""

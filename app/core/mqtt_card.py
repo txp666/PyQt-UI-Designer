@@ -3,10 +3,11 @@ from PyQt5.QtWidgets import QLineEdit
 from qfluentwidgets import CaptionLabel, CheckBox, ComboBox, LineEdit, SpinBox
 
 from .link_card import LinkConfigCard
+from .mqtt_runtime import MqttHandler
 
 
 class MqttConfigCard(LinkConfigCard):
-    LINK = "mqtt"
+    LINK_CLASS = MqttHandler
     TITLE = "MQTT 配置"
     PROPERTY_SETTERS = (
         ("title", "set_title", "MQTT 配置"),
