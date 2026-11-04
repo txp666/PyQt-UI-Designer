@@ -232,17 +232,17 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         'from PyQt5.QtCore import Qt, QTimer, QRectF',
         'from PyQt5.QtWidgets import (',
         '    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,',
-        '    QScrollArea, QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,',
+        '    QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,',
         '    QSizePolicy, QHeaderView, QAbstractItemView, QTableWidget, QTableWidgetItem,',
         '    QSpinBox, QPushButton, QFileDialog, QLineEdit,',
         ')',
-        'from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient, QPixmap',
+        'from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient',
         '',
         'from qfluentwidgets import (',
         '    PushButton, PrimaryPushButton, BodyLabel, StrongBodyLabel,',
         '    CaptionLabel, LineEdit, ComboBox, TextEdit, CheckBox,',
         '    SwitchButton, Slider, SpinBox, ProgressBar, ProgressRing,',
-        '    CardWidget, TableWidget, ToolButton,',
+        '    CardWidget, TableWidget, ToolButton, ScrollArea,',
         '    FluentWindow, NavigationItemPosition,',
         '    FluentIcon as FIF, InfoBar, InfoBarPosition, isDarkTheme,',
         '    qconfig, setCustomStyleSheet, themeColor,',
@@ -338,12 +338,12 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self._theme_containers = []
         self._create_widgets()
 
-        scroll = QScrollArea()
+        scroll = ScrollArea()
+        scroll.setObjectName("scrollPage")
+        scroll.enableTransparentBackground()  # before the page is in it: it would also clear the page's
         scroll.setWidget(self._page)
         scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
-        scroll.setObjectName("scrollPage")
-        scroll.setStyleSheet("QScrollArea#scrollPage {{ background: transparent; border: none; }}")
 
         self.addSubInterface(scroll, FIF.HOME, "主界面")
         self.apply_theme()
@@ -1269,19 +1269,18 @@ class NumericDisplay(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8,4,8,4); layout.setSpacing(0)
-        self._title = QLabel("标题"); self._title.setAlignment(Qt.AlignCenter)
-        self._value = QLabel("0.00"); self._value.setAlignment(Qt.AlignCenter)
-        self._unit = QLabel(""); self._unit.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self._title); layout.addWidget(self._value); layout.addWidget(self._unit)
-        self.apply_theme()
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
-        self._theme_connections.connect(qconfig.themeColorChanged, self.apply_theme)
-    def apply_theme(self):
-        secondary = "#b3b3b3" if isDarkTheme() else "#606060"
-        self._title.setStyleSheet(f"color:{secondary};font-size:11px;")
-        self._unit.setStyleSheet(f"color:{secondary};font-size:12px;")
+        self._title = CaptionLabel("标题")
+        self._value = BodyLabel("0.00")
+        self._unit = CaptionLabel("")
+        for label in (self._title, self._unit):
+            label.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
+        self._unit.setMinimumHeight(self._unit.fontMetrics().height())  # an empty unit keeps its line
+        for label in (self._title, self._value, self._unit):
+            label.setAlignment(Qt.AlignCenter); layout.addWidget(label)
         self._update_value_style()
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self._update_value_style)
+        self._theme_connections.connect(qconfig.themeColorChanged, self._update_value_style)
     def set_title(self, t): self._title.setText(t)
     def set_value(self, v): self._value.setText(str(v))
     def set_unit(self, u): self._unit.setText(u)
@@ -1292,9 +1291,11 @@ class NumericDisplay(QWidget):
         self._val_font_size = size
         self._update_value_style()
     def _update_value_style(self):
-        color = getattr(self, "_val_color", None) or themeColor().name()
-        size = getattr(self, "_val_font_size", 28)
-        self._value.setStyleSheet(f"font-size:{size}px;font-weight:bold;color:{color};")
+        color = QColor(getattr(self, "_val_color", None) or themeColor())
+        font = self._value.font()
+        font.setPixelSize(getattr(self, "_val_font_size", 28)); font.setBold(True)
+        self._value.setFont(font)
+        self._value.setTextColor(color, color)
 '''
 
 
@@ -1384,33 +1385,55 @@ def _data_table_class() -> str:
 
 def _image_display_class() -> str:
     return '''
+from PyQt5.QtCore import QSize
+from PyQt5.QtGui import QImage
+from PyQt5.QtWidgets import QLayout
+from qfluentwidgets import ImageLabel
+
 class ImageDisplay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._label = QLabel(self); self._label.setAlignment(Qt.AlignCenter)
-        self._label.setText("图片")
-        lo = QVBoxLayout(self); lo.setContentsMargins(0,0,0,0); lo.addWidget(self._label)
         self._path = ""
-        self.apply_theme()
+        self._image = QImage()
+        self._label = ImageLabel(self); self._label.hide()
+        self._placeholder = CaptionLabel("未选择图片", self)
+        self._placeholder.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
+        self._placeholder.setAlignment(Qt.AlignCenter)
+        lo = QVBoxLayout(self); lo.setContentsMargins(0,0,0,0)
+        lo.setSizeConstraint(QLayout.SetNoConstraint)  # the picture's size never pins the minimum
+        lo.addWidget(self._label, 0, Qt.AlignCenter); lo.addWidget(self._placeholder, 0, Qt.AlignCenter)
         self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
-    def apply_theme(self):
-        dark = isDarkTheme()
-        background = "#292929" if dark else "#f5f5f5"
-        foreground = "#f3f3f3" if dark else "#3c3c3c"
-        border = "#606060" if dark else "#c8c8c8"
-        self._label.setStyleSheet(f"background:{background};color:{foreground};border:1px dashed {border};")
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
     def set_image_path(self, path):
         self._path = path
-        if path:
-            pm = QPixmap(path)
-            if not pm.isNull():
-                self._label.setPixmap(pm.scaled(self._label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                return
-        self._label.setText("图片")
+        self._image = QImage(path) if path else QImage()
+        if self._image.isNull():
+            self._label.hide()
+            self._placeholder.setText("无法加载图片" if path else "未选择图片")
+            self._placeholder.show()
+        else:
+            self._placeholder.hide()
+            self._label.setImage(self._image)
+            self._fit_image()
+            self._label.show()
+        self.update()
+    def _fit_image(self):
+        if not self._image.isNull():
+            self._label.setScaledSize(self._image.size().scaled(self.size(), Qt.KeepAspectRatio))
+    def sizeHint(self): return QSize(200, 150)
+    def minimumSizeHint(self): return QSize(1, 1)
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._path: self.set_image_path(self._path)
+        self._fit_image()
+    def paintEvent(self, event):
+        if not self._image.isNull():
+            return
+        dark = isDarkTheme()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(QColor("#606060" if dark else "#c8c8c8"), 1, Qt.DashLine))
+        painter.setBrush(QColor("#292929" if dark else "#f5f5f5"))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
 '''
 
 
@@ -1443,7 +1466,7 @@ def _serial_config_card_class() -> str:
         "from .serial_runtime import SerialHandler, _list_all_ports",
         "from serial_handler import SerialHandler, _list_all_ports"
     ).replace("from .signal_lifetime import SignalConnections", "").replace(
-        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, status_label", "")
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, fluent_tooltip, status_label", "")
 
 
 def _link_polling_source() -> str:

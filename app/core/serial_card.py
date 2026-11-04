@@ -13,7 +13,7 @@ from qfluentwidgets import (
     CheckBox, TextEdit, isDarkTheme, qconfig,
 )
 
-from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, status_label
+from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, fluent_tooltip, status_label
 from .serial_runtime import SerialHandler, _list_all_ports
 from .signal_lifetime import SignalConnections
 
@@ -79,8 +79,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         self._port_label = BodyLabel("端口"); self._port_label.setFixedWidth(LW)
         self._port_combo = ComboBox(); self._port_combo.setMinimumWidth(120)
         self._port_combo.setPlaceholderText("选择串口")
-        self._search_btn = ToolButton(FIF.SEARCH)
-        self._search_btn.setToolTip("搜索串口")
+        self._search_btn = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
         self._search_btn.clicked.connect(self.refresh_ports)
         pl.addWidget(self._port_label); pl.addWidget(self._port_combo, 1)
         pl.addWidget(self._search_btn)
@@ -145,13 +144,13 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         self._sl_baud = ComboBox(); self._sl_baud.addItems(self._BAUDS)
         self._sl_baud.setCurrentIndex(4)
         self._sl_baud.setFixedWidth(90); self._sl_baud.setFixedHeight(H)
-        self._sl_search = ToolButton(FIF.SEARCH)
+        self._sl_search = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
         self._sl_search.clicked.connect(self.refresh_ports)
         self._sl_search.setFixedSize(H, H)
         self._sl_conn = self._toggle_button()
         self._sl_conn.setFixedHeight(H)
         self._sl_conn.clicked.connect(self._on_toggle)
-        self._sl_status = CaptionLabel("未连接")
+        self._sl_status = fluent_tooltip(CaptionLabel("未连接"))
         self._sl_status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         # Left: a status that has to shrink (the poller's, see _show_connected) keeps its start.
         self._sl_status.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)

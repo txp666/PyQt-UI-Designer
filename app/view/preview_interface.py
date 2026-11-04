@@ -7,8 +7,8 @@ import sys
 
 from PyQt5.QtCore import Qt, QProcess, QTimer, QUrl, pyqtSignal
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
-    QDialog, QFileDialog, QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame,
+    QFileDialog, QSizePolicy,
 )
 from PyQt5.QtWidgets import QAbstractSpinBox, QLineEdit, QAbstractButton, QTabBar, QTabWidget
 from PyQt5.QtGui import QFontDatabase, QTextCursor, QColor, QDesktopServices
@@ -16,7 +16,7 @@ from qfluentwidgets import (
     PrimaryPushButton, PushButton, BodyLabel, InfoBar,
     InfoBarPosition, FluentIcon as FIF, CardWidget, isDarkTheme,
     SwitchButton, StrongBodyLabel, CaptionLabel, TextEdit,
-    ProgressBar,
+    ProgressBar, MessageBoxBase, ScrollArea,
 )
 
 from app.common.signal_bus import signalBus
@@ -355,14 +355,14 @@ class PreviewCanvas(QWidget):
         self._widgets.clear()
 
 
-class NuitkaPackDialog(QDialog):
-    """Dialog that runs Nuitka packaging with real-time terminal output."""
+class NuitkaPackDialog(MessageBoxBase):
+    """Dialog that runs Nuitka packaging with real-time terminal output.
+
+    It is a Fluent message box over ``parent``, the main window. 开始打包 starts the build, 取消 stops
+    a running one and otherwise closes the dialog; closing it in any way stops the build too."""
 
     def __init__(self, project_dir: str, app_name: str = "上位机", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Nuitka 打包")
-        self.resize(800, 560)
-        self.setMinimumSize(640, 400)
         self._project_dir = project_dir
         self._app_name = app_name
         self._process = None
@@ -370,46 +370,43 @@ class NuitkaPackDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(16, 12, 16, 12)
-        root.setSpacing(8)
-
+        self.widget.setMinimumSize(640, 400)
         hdr = QHBoxLayout()
-        self._title = StrongBodyLabel("Nuitka 打包")
-        self._status = CaptionLabel("就绪")
+        self._title = StrongBodyLabel("Nuitka 打包", self.widget)
+        self._status = CaptionLabel("就绪", self.widget)
         self._status.setStyleSheet("color:#888;")
         hdr.addWidget(self._title)
         hdr.addStretch()
         hdr.addWidget(self._status)
-        root.addLayout(hdr)
+        self.viewLayout.addLayout(hdr)
 
-        self._progress = ProgressBar()
+        self._progress = ProgressBar(self.widget)
         self._progress.setRange(0, 0)
         self._progress.hide()
-        root.addWidget(self._progress)
+        self.viewLayout.addWidget(self._progress)
 
-        self._terminal = TextEdit()
+        self._terminal = TextEdit(self.widget)
         self._terminal.setReadOnly(True)
         self._terminal.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
         self._terminal.setStyleSheet(
             "QTextEdit { background: #1e1e1e; color: #cccccc; "
             "border: 1px solid #333; border-radius: 6px; padding: 8px; }"
         )
-        root.addWidget(self._terminal, 1)
+        self.viewLayout.addWidget(self._terminal, 1)
 
-        btn_row = QHBoxLayout()
-        self._start_btn = PrimaryPushButton("开始打包")
+        # The base class accepts on yes and rejects on cancel; these buttons do their own work.
+        self._start_btn = self.yesButton
+        self._start_btn.setText("开始打包")
+        self._start_btn.clicked.disconnect()
         self._start_btn.clicked.connect(self._start_pack)
-        self._cancel_btn = PushButton("取消")
+        self._cancel_btn = self.cancelButton
+        self._cancel_btn.setText("取消")
+        self._cancel_btn.clicked.disconnect()
         self._cancel_btn.clicked.connect(self._on_cancel)
-        self._open_dir_btn = PushButton("打开输出目录")
+        self._open_dir_btn = PushButton("打开输出目录", self.buttonGroup)
         self._open_dir_btn.clicked.connect(self._open_output_dir)
         self._open_dir_btn.setEnabled(False)
-        btn_row.addWidget(self._start_btn)
-        btn_row.addWidget(self._cancel_btn)
-        btn_row.addStretch()
-        btn_row.addWidget(self._open_dir_btn)
-        root.addLayout(btn_row)
+        self.buttonLayout.addWidget(self._open_dir_btn, 1, Qt.AlignVCenter)
 
     def _append_text(self, text: str, color: str = None):
         cursor = self._terminal.textCursor()
@@ -697,19 +694,23 @@ class NuitkaPackDialog(QDialog):
             self._status.setText("进程启动失败")
             self._append_text("无法启动 Python，请检查解释器路径和执行权限。\n", "#f44")
 
-    def _on_cancel(self):
+    def _stop_processes(self) -> bool:
+        """Stop the running build, if any; whether one was running."""
         running = False
         for process in (self._pip_process, self._process):
             if process and process.state() != QProcess.NotRunning:
                 running = True
                 process.kill()
                 process.waitForFinished(3000)
-        if running:
+        return running
+
+    def _on_cancel(self):
+        if self._stop_processes():
             self._append_text("\n用户取消打包\n", "#f39c12")
             self._status.setText("已取消")
             self._status.setStyleSheet("color:#f39c12;")
         else:
-            self.close()
+            self.reject()
 
     def _open_output_dir(self):
         from pathlib import Path
@@ -719,11 +720,13 @@ class NuitkaPackDialog(QDialog):
         elif not QDesktopServices.openUrl(QUrl.fromLocalFile(str(build_dir))):
             self._append_text("无法打开输出目录\n", "#f44")
 
+    def done(self, code):
+        # Esc, reject() and accept() all end here.
+        self._stop_processes()
+        super().done(code)
+
     def closeEvent(self, event):
-        for process in (self._pip_process, self._process):
-            if process and process.state() != QProcess.NotRunning:
-                process.kill()
-                process.waitForFinished(3000)
+        self._stop_processes()
         super().closeEvent(event)
 
 
@@ -773,7 +776,7 @@ class PreviewInterface(QWidget):
         layout.addLayout(ctrl_layout)
 
         # scroll area for canvas
-        scroll = self._scroll = QScrollArea()
+        scroll = self._scroll = ScrollArea()
         scroll.setObjectName("previewScroll")
         scroll.setWidgetResizable(True)
         scroll.setAlignment(Qt.AlignCenter)
@@ -887,7 +890,7 @@ class PreviewInterface(QWidget):
             return
 
         app_name = self._project_data.app_name if self._project_data else "上位机"
-        dlg = NuitkaPackDialog(directory, app_name, self)
+        dlg = NuitkaPackDialog(directory, app_name, self.window())
         dlg.exec_()
 
     def set_mica_enabled(self, enabled: bool):

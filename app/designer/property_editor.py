@@ -13,6 +13,7 @@ from qfluentwidgets import (
     ScrollArea, StrongBodyLabel, BodyLabel, CardWidget,
     LineEdit, SpinBox, DoubleSpinBox, SwitchButton,
     ComboBox, EditableComboBox, TextEdit, CaptionLabel, ToolButton,
+    ToolTipFilter, ToolTipPosition,
 )
 from qfluentwidgets import FluentIcon as FIF
 
@@ -29,6 +30,12 @@ from app.core.protocol_parser import (
 )
 from app.widgets.base import PropType, PropDef, WidgetMeta
 from app.designer.canvas_item import CanvasItem
+
+
+def _fluent_tooltip(widget, text):
+    """Give ``widget`` its tooltip, shown the Fluent way rather than as the native one."""
+    widget.setToolTip(text)
+    widget.installEventFilter(ToolTipFilter(widget, 300, ToolTipPosition.TOP))
 
 
 _MODE_VISIBILITY = {
@@ -355,7 +362,7 @@ class PropertyEditor(ScrollArea):
                     label = BodyLabel(prop_def.label)
                     if BIND_PROPERTIES.get(item.type_name) == prop_def.name:
                         label.setText(f"{prop_def.label} ⚡")
-                        label.setToolTip("可绑定到串口数据")
+                        _fluent_tooltip(label, "可绑定到串口数据")
                     props_rows.add(label, editor)
                     self._editors[prop_def.name] = editor
                     self._prop_rows[prop_def.name] = (label, editor)
@@ -380,9 +387,10 @@ class PropertyEditor(ScrollArea):
 
             if item.type_name == "TabWidget":
                 self._sync_tab_editors()
-                self._editors["tabNames"].setToolTip(
-                    "每行一个标签，离开输入框后应用，按序号保留页面。减少页数时，"
-                    "超出页的控件移至最后一页；名称为空时保留“标签1”。")
+                _fluent_tooltip(
+                    self._editors["tabNames"],
+                    "每行一个标签，离开输入框后应用，按序号保留页面。\n"
+                    "减少页数时，超出页的控件移至最后一页；名称为空时保留“标签1”。")
 
             if item.type_name == "RealtimeChart":
                 self._load_curve_editors(item)
@@ -513,7 +521,7 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_period_spin.valueChanged.connect(self._binding_slot("mbPeriod"))
             self._bind_mb_period_label = BodyLabel("采集周期(ms)")
             for widget in (self._bind_mb_period_label, self._bind_mb_period_spin):
-                widget.setToolTip("0 = 用默认周期（链路卡片的「默认轮询(ms)」，默认 500）")
+                _fluent_tooltip(widget, "0 = 用默认周期（链路卡片的「默认轮询(ms)」，默认 500）")
             binding_rows.add(self._bind_mb_period_label, self._bind_mb_period_spin)
 
             self._bind_expr_edit = LineEdit()
@@ -564,8 +572,8 @@ class PropertyEditor(ScrollArea):
         def add(key, text, editor, tip=""):
             label = BodyLabel(text)
             if tip:
-                label.setToolTip(tip)
-                editor.setToolTip(tip)
+                _fluent_tooltip(label, tip)
+                _fluent_tooltip(editor, tip)
             form_rows.add(label, editor)
             rows[key] = (label, editor)
 

@@ -4,11 +4,11 @@ from pathlib import Path
 
 from PyQt5.QtCore import QSize, Qt, QSignalBlocker
 from PyQt5.QtGui import QIcon, QColor, QKeySequence
-from PyQt5.QtWidgets import QApplication, QFileDialog, QShortcut, QMessageBox
+from PyQt5.QtWidgets import QApplication, QFileDialog, QShortcut
 
 from qfluentwidgets import (
     NavigationItemPosition, FluentWindow, SplashScreen,
-    FluentIcon as FIF, InfoBar, InfoBarPosition, MessageBox, qconfig,
+    FluentIcon as FIF, InfoBar, InfoBarPosition, MessageBox, PushButton, qconfig,
 )
 
 from app.common.config import cfg, APP_NAME, isWin11
@@ -26,6 +26,11 @@ from app.widgets.display import register_display_widgets
 from app.widgets.chart import register_chart_widgets
 from app.widgets.comm import register_comm_widgets
 from app.widgets.composite import register_composite_widgets
+
+
+def _project_name(path):
+    """The project's file name, as the title bar shows it."""
+    return path.split("/")[-1].split("\\")[-1] if path else "未保存项目"
 
 
 class MainWindow(TitleBarLifecycleMixin, FluentWindow):
@@ -149,24 +154,30 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
         QApplication.processEvents()
 
     def _update_title(self):
-        path = self._project_mgr.current.file_path
         dirty = " •" if self._project_mgr.is_dirty else ""
-        name = path.split("/")[-1].split("\\")[-1] if path else "未保存项目"
-        self.setWindowTitle(f"{name}{dirty} — {APP_NAME}")
+        self.setWindowTitle(f"{_project_name(self._project_mgr.current.file_path)}{dirty} — {APP_NAME}")
 
     # --- Project operations ---
 
     def _confirm_unsaved_changes(self):
+        """Whether the current project may be replaced or closed: 保存 saves it first (and fails if
+        the save does), 不保存 drops the changes, 取消 and Esc keep everything as it is."""
         if not self._project_mgr.is_dirty:
             return True
-        choice = QMessageBox.question(
-            self, "保存项目", "当前项目有未保存的修改，是否保存？",
-            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-            QMessageBox.Save,
-        )
-        if choice == QMessageBox.Save:
+        name = _project_name(self._project_mgr.current.file_path)
+        box = MessageBox("保存更改？", f"“{name}”有未保存的更改。", self)
+        box.yesButton.setText("保存")
+        box.cancelButton.setText("取消")
+        discard = PushButton("不保存", box.buttonGroup)
+        # Stretch 1, like the box's own buttons, so the three share the row evenly.
+        box.buttonLayout.insertWidget(1, discard, 1, Qt.AlignVCenter)
+        discarded = []
+        discard.clicked.connect(lambda: (discarded.append(True), box.reject()))
+        saving = box.exec()
+        box.deleteLater()
+        if saving:
             return self._save_project()
-        return choice == QMessageBox.Discard
+        return bool(discarded)
 
     def _new_project(self):
         if not self._confirm_unsaved_changes():

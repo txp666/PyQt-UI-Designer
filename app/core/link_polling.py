@@ -21,7 +21,7 @@ from functools import partial
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QSizePolicy
-from qfluentwidgets import CaptionLabel
+from qfluentwidgets import CaptionLabel, ToolTipFilter, ToolTipPosition
 
 from .signal_lifetime import SignalConnections
 from .slave_runtime import ModbusSlaveDevice
@@ -33,10 +33,19 @@ SLAVE_DELAY_RANGE = (0, 5000)  # 响应延时(ms)
 SLAVE_START_RANGE, SLAVE_COUNT_RANGE = (0, 65535), (0, 10000)  # 起始 / 数量 of an area
 
 
+def fluent_tooltip(widget, text=""):
+    """Show ``widget``'s tooltip the Fluent way. Install it once, where the widget is made: the text
+    is read from ``widget.toolTip()`` each time, and an empty one shows nothing."""
+    widget.setToolTip(text)
+    widget.installEventFilter(ToolTipFilter(widget, 300, ToolTipPosition.TOP))
+    return widget
+
+
 def status_label(text):
     """The status of a link card's title row: it takes the room the title leaves, so a long one (the
-    Modbus poller's) never squeezes the title or widens the card; what does not fit is cut at the left."""
-    label = CaptionLabel(text)
+    Modbus poller's) never squeezes the title or widens the card; what does not fit is cut at the left.
+    Its tooltip, the whole status, shows the Fluent way."""
+    label = fluent_tooltip(CaptionLabel(text))
     label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
     label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
     return label

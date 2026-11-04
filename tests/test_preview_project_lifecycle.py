@@ -16,8 +16,8 @@ import tempfile
 from contextlib import ExitStack
 from unittest.mock import patch
 from PyQt5.QtCore import QEvent
-from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
-from qfluentwidgets import InfoBar
+from PyQt5.QtWidgets import QApplication, QFileDialog
+from qfluentwidgets import InfoBar, MessageBox
 from app.core.comm_manager import commHub
 from app.core.data_binding import bindingEngine
 from app.core.project import ProjectData
@@ -159,12 +159,12 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
         self.exercise("""
             document = window._project_mgr.current
             window._project_mgr.mark_dirty()
-            with patch.object(QMessageBox, "question", return_value=QMessageBox.Cancel), \\
+            with patch.object(MessageBox, "exec", return_value=0), \\
                  patch.object(QFileDialog, "getOpenFileName") as dialog:
                 window._open_project()
                 window._new_project()
                 dialog.assert_not_called()
-            with patch.object(QMessageBox, "question", return_value=QMessageBox.Save), \\
+            with patch.object(MessageBox, "exec", return_value=1), \\
                  patch.object(window, "_save_project", return_value=False), \\
                  patch.object(QFileDialog, "getOpenFileName") as dialog:
                 window._open_project()

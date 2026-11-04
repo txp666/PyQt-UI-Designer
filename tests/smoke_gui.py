@@ -33,7 +33,7 @@ python_cmd, ready = NuitkaPackDialog._find_python()
 assert python_cmd and ready, (python_cmd, ready)
 
 with tempfile.TemporaryDirectory() as folder:
-    dialog = NuitkaPackDialog(folder, "构建环境验证")
+    dialog = NuitkaPackDialog(folder, "构建环境验证", window)
     loop = QEventLoop()
     selected_python = []
     dialog._install_nuitka_then_pack = lambda cmd: (selected_python.extend(cmd), loop.quit())

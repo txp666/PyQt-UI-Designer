@@ -10,17 +10,17 @@ from pathlib import Path
 from PyQt5.QtCore import Qt, QTimer, QRectF
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QScrollArea, QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,
+    QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,
     QSizePolicy, QHeaderView, QAbstractItemView, QTableWidget, QTableWidgetItem,
     QSpinBox, QPushButton, QFileDialog, QLineEdit,
 )
-from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient, QPixmap
+from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient
 
 from qfluentwidgets import (
     PushButton, PrimaryPushButton, BodyLabel, StrongBodyLabel,
     CaptionLabel, LineEdit, ComboBox, TextEdit, CheckBox,
     SwitchButton, Slider, SpinBox, ProgressBar, ProgressRing,
-    CardWidget, TableWidget, ToolButton,
+    CardWidget, TableWidget, ToolButton, ScrollArea,
     FluentWindow, NavigationItemPosition,
     FluentIcon as FIF, InfoBar, InfoBarPosition, isDarkTheme,
     qconfig, setCustomStyleSheet, themeColor,
@@ -452,19 +452,18 @@ class NumericDisplay(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8,4,8,4); layout.setSpacing(0)
-        self._title = QLabel("标题"); self._title.setAlignment(Qt.AlignCenter)
-        self._value = QLabel("0.00"); self._value.setAlignment(Qt.AlignCenter)
-        self._unit = QLabel(""); self._unit.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self._title); layout.addWidget(self._value); layout.addWidget(self._unit)
-        self.apply_theme()
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
-        self._theme_connections.connect(qconfig.themeColorChanged, self.apply_theme)
-    def apply_theme(self):
-        secondary = "#b3b3b3" if isDarkTheme() else "#606060"
-        self._title.setStyleSheet(f"color:{secondary};font-size:11px;")
-        self._unit.setStyleSheet(f"color:{secondary};font-size:12px;")
+        self._title = CaptionLabel("标题")
+        self._value = BodyLabel("0.00")
+        self._unit = CaptionLabel("")
+        for label in (self._title, self._unit):
+            label.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
+        self._unit.setMinimumHeight(self._unit.fontMetrics().height())  # an empty unit keeps its line
+        for label in (self._title, self._value, self._unit):
+            label.setAlignment(Qt.AlignCenter); layout.addWidget(label)
         self._update_value_style()
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self._update_value_style)
+        self._theme_connections.connect(qconfig.themeColorChanged, self._update_value_style)
     def set_title(self, t): self._title.setText(t)
     def set_value(self, v): self._value.setText(str(v))
     def set_unit(self, u): self._unit.setText(u)
@@ -475,9 +474,11 @@ class NumericDisplay(QWidget):
         self._val_font_size = size
         self._update_value_style()
     def _update_value_style(self):
-        color = getattr(self, "_val_color", None) or themeColor().name()
-        size = getattr(self, "_val_font_size", 28)
-        self._value.setStyleSheet(f"font-size:{size}px;font-weight:bold;color:{color};")
+        color = QColor(getattr(self, "_val_color", None) or themeColor())
+        font = self._value.font()
+        font.setPixelSize(getattr(self, "_val_font_size", 28)); font.setBold(True)
+        self._value.setFont(font)
+        self._value.setTextColor(color, color)
 
 """Explicit Qt signal lifetimes, including compiled Python callables."""
 
@@ -718,11 +719,11 @@ from pathlib import Path
 
 from PyQt5.QtCore import Qt, QTimer, QPointF, QRectF, QSize
 from PyQt5.QtGui import QColor, QFontMetricsF, QPainter, QPen
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy
 
 from qfluentwidgets import (
     LineEdit as FluentLineEdit, ToolButton as FluentToolButton, FluentIcon,
-    BodyLabel, isDarkTheme, qconfig, setCustomStyleSheet,
+    BodyLabel, CaptionLabel, ToolTipFilter, ToolTipPosition, isDarkTheme, qconfig, setCustomStyleSheet,
 )
 
 
@@ -1016,7 +1017,8 @@ class RealtimeLineChart(QWidget):
         self._disp_edit.editingFinished.connect(self._on_disp_changed)
         tb.addWidget(self._disp_edit)
         # 实时, the cursor's sample, or what went wrong saving, loading or recording
-        self._mode_label = QLabel("实时")
+        self._mode_label = CaptionLabel("实时")
+        self._mode_label.setTextColor(QColor("#0078d4"), QColor("#4aa3df"))
         self._mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._mode_label.setMinimumWidth(1)  # a long message is cut short rather than widening the chart
         tb.addWidget(self._mode_label)
@@ -1034,6 +1036,8 @@ class RealtimeLineChart(QWidget):
         self._clear_ref_btn.clicked.connect(self.clear_reference)
         self._clear_ref_btn.hide()
         tb.addWidget(self._clear_ref_btn)
+        for button in (self._save_btn, self._load_btn, self._clear_ref_btn):
+            button.installEventFilter(ToolTipFilter(button, 300, ToolTipPosition.TOP))
         self._root.addLayout(tb)
 
         self._rebuild_curves()
@@ -1051,7 +1055,6 @@ class RealtimeLineChart(QWidget):
         dark = isDarkTheme()
         foreground = "#e5e5e5" if dark else "#202020"
         muted = "#b0b0b0" if dark else "#606060"
-        accent = "#4aa3df" if dark else "#0078d4"
         self._header.set_foreground(foreground)
         if self._plot:
             self._plot.setBackground("#252525" if dark else "#ffffff")
@@ -1071,8 +1074,6 @@ class RealtimeLineChart(QWidget):
                 "FluentLabelBase { color: #606060; border: 1px dashed #ccc; background: #fafafa; }",
                 "FluentLabelBase { color: #c0c0c0; border: 1px dashed #555; background: #252525; }",
             )
-        self._mode_label.setStyleSheet(
-            f"font-size: 12px; color: {accent}; padding: 1px 0;")
         self._show_values()  # the entries in the new curve colours
         self.update()
 
@@ -1779,7 +1780,7 @@ from functools import partial
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QSizePolicy
-from qfluentwidgets import CaptionLabel
+from qfluentwidgets import CaptionLabel, ToolTipFilter, ToolTipPosition
 
 
 from serial_handler import ModbusSlaveDevice
@@ -1791,10 +1792,19 @@ SLAVE_DELAY_RANGE = (0, 5000)  # 响应延时(ms)
 SLAVE_START_RANGE, SLAVE_COUNT_RANGE = (0, 65535), (0, 10000)  # 起始 / 数量 of an area
 
 
+def fluent_tooltip(widget, text=""):
+    """Show ``widget``'s tooltip the Fluent way. Install it once, where the widget is made: the text
+    is read from ``widget.toolTip()`` each time, and an empty one shows nothing."""
+    widget.setToolTip(text)
+    widget.installEventFilter(ToolTipFilter(widget, 300, ToolTipPosition.TOP))
+    return widget
+
+
 def status_label(text):
     """The status of a link card's title row: it takes the room the title leaves, so a long one (the
-    Modbus poller's) never squeezes the title or widens the card; what does not fit is cut at the left."""
-    label = CaptionLabel(text)
+    Modbus poller's) never squeezes the title or widens the card; what does not fit is cut at the left.
+    Its tooltip, the whole status, shows the Fluent way."""
+    label = fluent_tooltip(CaptionLabel(text))
     label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
     label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
     return label
@@ -2089,8 +2099,7 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         self._port_label = BodyLabel("端口"); self._port_label.setFixedWidth(LW)
         self._port_combo = ComboBox(); self._port_combo.setMinimumWidth(120)
         self._port_combo.setPlaceholderText("选择串口")
-        self._search_btn = ToolButton(FIF.SEARCH)
-        self._search_btn.setToolTip("搜索串口")
+        self._search_btn = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
         self._search_btn.clicked.connect(self.refresh_ports)
         pl.addWidget(self._port_label); pl.addWidget(self._port_combo, 1)
         pl.addWidget(self._search_btn)
@@ -2155,13 +2164,13 @@ class SerialConfigCard(ModbusSlaveSettings, CardWidget):
         self._sl_baud = ComboBox(); self._sl_baud.addItems(self._BAUDS)
         self._sl_baud.setCurrentIndex(4)
         self._sl_baud.setFixedWidth(90); self._sl_baud.setFixedHeight(H)
-        self._sl_search = ToolButton(FIF.SEARCH)
+        self._sl_search = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
         self._sl_search.clicked.connect(self.refresh_ports)
         self._sl_search.setFixedSize(H, H)
         self._sl_conn = self._toggle_button()
         self._sl_conn.setFixedHeight(H)
         self._sl_conn.clicked.connect(self._on_toggle)
-        self._sl_status = CaptionLabel("未连接")
+        self._sl_status = fluent_tooltip(CaptionLabel("未连接"))
         self._sl_status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         # Left: a status that has to shrink (the poller's, see _show_connected) keeps its start.
         self._sl_status.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -2582,12 +2591,12 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self._theme_containers = []
         self._create_widgets()
 
-        scroll = QScrollArea()
+        scroll = ScrollArea()
+        scroll.setObjectName("scrollPage")
+        scroll.enableTransparentBackground()  # before the page is in it: it would also clear the page's
         scroll.setWidget(self._page)
         scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
-        scroll.setObjectName("scrollPage")
-        scroll.setStyleSheet("QScrollArea#scrollPage { background: transparent; border: none; }")
 
         self.addSubInterface(scroll, FIF.HOME, "主界面")
         self.apply_theme()
