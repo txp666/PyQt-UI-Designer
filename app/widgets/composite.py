@@ -1,5 +1,5 @@
 # coding: utf-8
-"""Composite card widgets: connection cards (serial, TCP, MQTT), DataSendCard, DataRecvCard,
+"""Composite card widgets: connection cards (serial, TCP, UDP, MQTT), DataSendCard, DataRecvCard,
 LogBox, ModbusSlaveTable."""
 from html import escape as _escape
 from PyQt5.QtCore import Qt, QTimer
@@ -32,12 +32,13 @@ def _log_html(text):
 
 
 # ---------------------------------------------------------------------------
-# Link cards (serial, TCP, MQTT): the runtime cards themselves. Each owns its link once the
+# Link cards (serial, TCP, UDP, MQTT): the runtime cards themselves. Each owns its link once the
 # preview hands it the hub (preview_interface.PreviewCanvas); on the canvas a card has no link.
 # ---------------------------------------------------------------------------
 
 from app.core.serial_card import SerialConfigCard
 from app.core.tcp_card import TcpConfigCard
+from app.core.udp_card import UdpConfigCard
 from app.core.mqtt_card import MqttConfigCard
 
 
@@ -300,7 +301,7 @@ class LogDisplayBox(RuntimeLogBox):
 from app.core.slave_table import ModbusSlaveTable as RuntimeSlaveTable
 from app.core.modbus_slave import SLAVE_ROLE, store_from_properties
 
-SLAVE_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard")
+SLAVE_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "UdpConfigCard")
 
 
 class ModbusSlaveTable(RuntimeSlaveTable):
@@ -379,7 +380,7 @@ def _slave_area_props(table):
             PropDef(f"slave{table}Count", count, PropType.INT, 100, min_val=0, max_val=10000)]
 
 
-# A serial or TCP card's Modbus role, the polling settings (主站) and the slave settings (从站): the panel
+# A serial, TCP or UDP card's Modbus role, the polling settings (主站) and the slave settings (从站): the panel
 # shows the role and 默认从站 while the card's own parser is a Modbus one, and the settings of its role.
 MODBUS_ROLE_PROPS = [
     PropDef("modbusRole", N_("Modbus 角色"), PropType.ENUM, "主站", options=["主站", "从站"],  # i18n: value
@@ -441,6 +442,29 @@ TCP_CONFIG_META = WidgetMeta(
                 options=["客户端", "服务端"]),  # i18n: value
         PropDef("defaultHost", N_("默认地址"), PropType.STRING, "127.0.0.1"),
         PropDef("defaultPort", N_("默认端口"), PropType.INT, 8080, min_val=1, max_val=65535),
+        PropDef("defaultParser", N_("默认解析模式"), PropType.ENUM, "项目设置",  # i18n: value
+                options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),  # i18n: value
+        *MODBUS_ROLE_PROPS,
+        PARSER_CONFIG_PROP,
+    ],
+)
+
+UDP_CONFIG_META = WidgetMeta(
+    type_name="UdpConfigCard",
+    display_name=N_("UDP 配置卡片"),
+    category=WidgetCategory.COMM,
+    icon="WIFI",
+    default_width=360, default_height=220,
+    min_width=240, min_height=50,
+    properties=[
+        PropDef("title", N_("标题"), PropType.STRING, N_("UDP 配置")),
+        PropDef("displayMode", N_("显示模式"), PropType.ENUM, "完整",  # i18n: value
+                options=["完整", "简洁"]),  # i18n: value
+        PropDef("defaultLocalPort", N_("默认本地端口"), PropType.INT, 0, min_val=0, max_val=65535,
+                description="0 表示由系统选一个空闲端口"),  # i18n: ignore
+        PropDef("defaultHost", N_("默认远程地址"), PropType.STRING, "127.0.0.1",
+                description="留空则回复最后发送方"),  # i18n: ignore
+        PropDef("defaultPort", N_("默认远程端口"), PropType.INT, 8080, min_val=1, max_val=65535),
         PropDef("defaultParser", N_("默认解析模式"), PropType.ENUM, "项目设置",  # i18n: value
                 options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),  # i18n: value
         *MODBUS_ROLE_PROPS,
@@ -529,13 +553,13 @@ SLAVE_TABLE_META = WidgetMeta(
 )
 
 ALL_COMPOSITE = [
-    SERIAL_CONFIG_META, TCP_CONFIG_META, MQTT_CONFIG_META,
+    SERIAL_CONFIG_META, TCP_CONFIG_META, UDP_CONFIG_META, MQTT_CONFIG_META,
     DATA_SEND_META, DATA_RECV_META, LOG_BOX_META, SLAVE_TABLE_META,
 ]
 
 # Cards shared with exported applications, configured through their PROPERTY_SETTERS.
 _RUNTIME_CARDS = {"SerialConfigCard": SerialConfigCard, "TcpConfigCard": TcpConfigCard,
-                  "MqttConfigCard": MqttConfigCard}
+                  "UdpConfigCard": UdpConfigCard, "MqttConfigCard": MqttConfigCard}
 
 
 def register_composite_widgets():

@@ -19,7 +19,7 @@ HANDLE_SIZE = 8
 HANDLE_HALF = HANDLE_SIZE / 2
 MIN_SIZE = 30
 # The link cards: never shorter than their rows, and each can carry its own frame format.
-LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "MqttConfigCard")
+LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "UdpConfigCard", "MqttConfigCard")
 
 FREE_LAYOUT = "自由"  # i18n: value  (a container whose children keep their own places)
 LAYOUT_TYPES = {"HBoxLayout", "VBoxLayout", "FlexLayout", "GroupBox", "TabWidget", "CardContainer"}

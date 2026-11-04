@@ -1,4 +1,4 @@
-"""The link every link card (serial, TCP, MQTT) owns, and its Modbus polling settings and status,
+"""The link every link card (serial, TCP, UDP, MQTT) owns, and its Modbus polling settings and status,
 shared by the designer preview and exported applications.
 
 A link card owns its link. Handed the running application's CommHub, it creates a link of its own and
@@ -8,12 +8,12 @@ the card disconnects its link and takes it off the hub.
 Every link card hands the running application's Modbus poller (modbus_poller.py) its default polling
 period, response timeout and default slave (``modbusPeriod``, ``modbusTimeout``, ``modbusSlave``), which
 count while the card is the first in the document whose link is connected and parses Modbus. While its
-link is connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
-``<connection> · <poller status>``, with the poller's blocks as its tooltip; the poller's waiting status
-is never shown there.
+link is connected, parses Modbus and can send (a TCP server needs a client, a UDP link with no remote a
+sender), the card's status reads ``<connection> · <poller status>``, with the poller's blocks as its
+tooltip; the poller's waiting status is never shown there.
 
-A serial or TCP card also has a Modbus role (ModbusSlaveSettings). As a slave it owns a slave data table
-(slave_runtime.ModbusSlaveDevice) and connects its link as a slave whenever the link parses modbus or
+A serial, TCP or UDP card also has a Modbus role (ModbusSlaveSettings). As a slave it owns a slave data
+table (slave_runtime.ModbusSlaveDevice) and connects its link as a slave whenever the link parses modbus or
 modbus_tcp; while the link answers, the card shows ``<connection> · <slave status>`` in place of the
 poller's status.
 """
@@ -104,7 +104,7 @@ class ModbusLinkSettings:
     ``_attach_link(link)``, which subscribes to a new link and shows its state, ``set_connected()``,
     ``_connected`` and ``_show_connected()``, which shows the connected status again."""
 
-    LINK_CLASS = None  # SerialHandler, TcpHandler or MqttHandler
+    LINK_CLASS = None  # SerialHandler, TcpHandler, UdpHandler or MqttHandler
 
     def _init_modbus(self):
         self._modbus_settings = MODBUS_DEFAULTS
@@ -207,7 +207,7 @@ class ModbusLinkSettings:
 
 
 class ModbusSlaveSettings(ModbusLinkSettings):
-    """The Modbus role of a serial or TCP card (``modbusRole``), set at design time, and the slave settings
+    """The Modbus role of a serial, TCP or UDP card (``modbusRole``), set at design time, and the slave settings
     that count in the slave role: the response delay, exception responses, the four areas and the initial
     values, with the default slave as this slave's address. ``slave_device`` is the card's slave, None in
     the master role; the card passes it to its

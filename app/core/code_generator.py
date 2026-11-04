@@ -63,6 +63,7 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None, the
                         project.app_name),
         "serial_handler.py": _gen_serial_handler(project.serial),
         "tcp_handler.py": _gen_tcp_handler(project.serial),
+        "udp_handler.py": _gen_udp_handler(project.serial),
         "mqtt_handler.py": _gen_mqtt_handler(project.serial),
         "comm_hub.py": _gen_comm_hub(),
         "data_binding.py": _gen_data_binding(bindings, widget_types, _link_card_ids(widgets)),
@@ -346,10 +347,12 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_link_polling_source())  # every link card's Modbus polling settings and status
     if "SerialConfigCard" in widget_types:
         lines.append(_serial_config_card_class())
-    if widget_types & {"TcpConfigCard", "MqttConfigCard"}:
+    if widget_types & {"TcpConfigCard", "UdpConfigCard", "MqttConfigCard"}:
         lines.append(_link_card_class())
     if "TcpConfigCard" in widget_types:
         lines.append(_tcp_config_card_class())
+    if "UdpConfigCard" in widget_types:
+        lines.append(_udp_config_card_class())
     if "MqttConfigCard" in widget_types:
         lines.append(_mqtt_config_card_class())
     if "DataSendCard" in widget_types:
@@ -853,9 +856,10 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
     if wtype in LINK_CARD_TYPES:
         from app.core.serial_card import SerialConfigCard
         from app.core.tcp_card import TcpConfigCard
+        from app.core.udp_card import UdpConfigCard
         from app.core.mqtt_card import MqttConfigCard
         card = {"SerialConfigCard": SerialConfigCard, "TcpConfigCard": TcpConfigCard,
-                "MqttConfigCard": MqttConfigCard}[wtype]
+                "UdpConfigCard": UdpConfigCard, "MqttConfigCard": MqttConfigCard}[wtype]
         code = [f"self.widgets[{wid!r}] = {wtype}({pv})"]
         for prop, method, default in card.PROPERTY_SETTERS:
             code.append(f"self.widgets[{wid!r}].{method}({props.get(prop, default)!r})")
@@ -882,7 +886,7 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
 
 
 def _gen_serial_handler(serial_config: dict) -> str:
-    # The parsers, the Modbus master every link owns, the Modbus slave a serial or TCP link may answer
+    # The parsers, the Modbus master every link owns, the Modbus slave a serial, TCP or UDP link may answer
     # with, then the serial link.
     master = _runtime("modbus_master.py").replace(
         "from .protocol_parser import build_modbus_ascii_frame, build_modbus_frame, build_modbus_tcp_frame", "")
@@ -899,7 +903,7 @@ def _gen_serial_handler(serial_config: dict) -> str:
 
 
 def _link_config(serial_config: dict) -> dict:
-    """TCP and MQTT share the project's frame format; the port settings are serial-only."""
+    """TCP, UDP and MQTT share the project's frame format; the port settings are serial-only."""
     from app.core.comm_runtime import shared_link_config
     return shared_link_config(serial_config)
 
@@ -911,6 +915,15 @@ def _gen_tcp_handler(serial_config: dict) -> str:
         "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster").replace(
         "from .modbus_slave import SLAVE_PARSERS", "from serial_handler import SLAVE_PARSERS")
     return runtime + f"\nTcpHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
+
+
+def _gen_udp_handler(serial_config: dict) -> str:
+    runtime = _runtime("udp_runtime.py").replace(
+        "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
+        "from serial_handler import ModbusRequests, create_parser, text_encoding").replace(
+        "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster").replace(
+        "from .modbus_slave import SLAVE_PARSERS", "from serial_handler import SLAVE_PARSERS")
+    return runtime + f"\nUdpHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
 
 
 def _gen_mqtt_handler(serial_config: dict) -> str:
@@ -1089,7 +1102,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         lines.append('        self._connections.connect(self.hub.rawReceived, self._on_raw)')
         lines.append('        self._connections.connect(self.hub.disconnected, self._reset_stream)')
     lines.append('        self.modbus_poller.start()  # reads once a link that parses Modbus can send')
-    if widget_types and widget_types & {"SerialConfigCard", "TcpConfigCard", "ModbusSlaveTable"}:
+    if widget_types and widget_types & {"SerialConfigCard", "TcpConfigCard", "UdpConfigCard", "ModbusSlaveTable"}:
         lines += [
             '        # The slaves of the link cards in the slave role: a register table shows the first one\'s, and',
             '        # each publishes its whole data table now that the bindings are up.',
@@ -1547,6 +1560,13 @@ def _tcp_config_card_class() -> str:
         "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, add_value_items, select_value",
         "").replace("from .tcp_runtime import CLIENT, SERVER, TcpHandler",
                     "from tcp_handler import CLIENT, SERVER, TcpHandler")
+
+
+def _udp_config_card_class() -> str:
+    return _runtime("udp_card.py").replace(
+        "from .link_card import LinkConfigCard", "").replace(
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings", "").replace(
+        "from .udp_runtime import UdpHandler", "from udp_handler import UdpHandler")
 
 
 def _mqtt_config_card_class() -> str:

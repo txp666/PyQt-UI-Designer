@@ -1,6 +1,6 @@
 """The Modbus slave of a link card in the slave role, on its link: shared by the designer preview and exports.
 
-A serial or TCP card whose Modbus role is slave owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
+A serial, TCP or UDP card whose Modbus role is slave owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
 built from the card's areas and initial values when it is first needed and kept while the program runs, whether the
 link is connected or not. Every write to it (an external master's, a control's, a command's, the register
 table's) gives a slave message on ``written``, which the card publishes on its link like a parsed frame.

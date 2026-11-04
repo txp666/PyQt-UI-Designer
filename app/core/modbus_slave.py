@@ -126,7 +126,7 @@ AREA_PROPERTIES = {"co": "slaveCo", "di": "slaveDi", "hr": "slaveHr", "ir": "sla
 
 
 def store_from_properties(properties):
-    """The data table a serial or TCP card's properties describe, as the card builds it at the start."""
+    """The data table a serial, TCP or UDP card's properties describe, as the card builds it at the start."""
     def whole(name, default):
         try:
             return int(properties.get(name, default))
