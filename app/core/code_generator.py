@@ -850,12 +850,15 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
 
     # Display / Composite widgets
     if wtype == "ImageDisplay":
-        img = props.get("imagePath", "")
-        line = f"self.widgets[{wid!r}] = ImageDisplay({pv})"
-        if img:
-            line += (f"; self.widgets[{wid!r}].set_image_path("
-                     f"str(Path(__file__).resolve().parent / {img!r}))")
-        return line
+        from app.core.image_runtime import ImageDisplay
+        code = [f"self.widgets[{wid!r}] = ImageDisplay({pv})"]
+        for prop, method, default in ImageDisplay.PROPERTY_SETTERS:
+            value = props.get(prop, default)
+            if value != default:
+                argument = (f"str(Path(__file__).resolve().parent / {value!r})" if prop == "imagePath"
+                            else repr(value))
+                code.append(f"self.widgets[{wid!r}].{method}({argument})")
+        return "; ".join(code)
     if wtype == "ProgressRingDisplay":
         label = p("label", "进度")  # i18n: value
         return (f"self.widgets[{wid!r}] = ProgressRingDisplay({pv}); "
@@ -1461,57 +1464,8 @@ def _data_table_class() -> str:
 
 
 def _image_display_class() -> str:
-    return '''
-from PyQt5.QtCore import QSize
-from PyQt5.QtGui import QImage
-from PyQt5.QtWidgets import QLayout
-from qfluentwidgets import ImageLabel
-
-class ImageDisplay(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._path = ""
-        self._image = QImage()
-        self._label = ImageLabel(self); self._label.hide()
-        self._placeholder = CaptionLabel(tr("未选择图片"), self)
-        self._placeholder.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
-        self._placeholder.setAlignment(Qt.AlignCenter)
-        lo = QVBoxLayout(self); lo.setContentsMargins(0,0,0,0)
-        lo.setSizeConstraint(QLayout.SetNoConstraint)  # the picture's size never pins the minimum
-        lo.addWidget(self._label, 0, Qt.AlignCenter); lo.addWidget(self._placeholder, 0, Qt.AlignCenter)
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
-    def set_image_path(self, path):
-        self._path = path
-        self._image = QImage(path) if path else QImage()
-        if self._image.isNull():
-            self._label.hide()
-            self._placeholder.setText(tr("无法加载图片") if path else tr("未选择图片"))
-            self._placeholder.show()
-        else:
-            self._placeholder.hide()
-            self._label.setImage(self._image)
-            self._fit_image()
-            self._label.show()
-        self.update()
-    def _fit_image(self):
-        if not self._image.isNull():
-            self._label.setScaledSize(self._image.size().scaled(self.size(), Qt.KeepAspectRatio))
-    def sizeHint(self): return QSize(200, 150)
-    def minimumSizeHint(self): return QSize(1, 1)
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._fit_image()
-    def paintEvent(self, event):
-        if not self._image.isNull():
-            return
-        dark = isDarkTheme()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor("#606060" if dark else "#c8c8c8"), 1, Qt.DashLine))
-        painter.setBrush(QColor("#292929" if dark else "#f5f5f5"))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
-'''
+    return _runtime("image_runtime.py").replace(
+        "from .signal_lifetime import SignalConnections", "")
 
 
 def _progress_ring_display_class() -> str:
