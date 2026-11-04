@@ -251,7 +251,7 @@ class StandaloneExportTests(unittest.TestCase):
                             "defaultParser": "modbus"}},
         ]
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(project, folder)
+            generate_project(project, folder, language="zh_CN")
             for source in Path(folder).glob("*.py"):
                 compile(source.read_text(encoding="utf-8"), str(source), "exec")
             code = """
@@ -317,7 +317,7 @@ print("STANDALONE_MODBUS_CHART_OK")
             with patch.object(runtime_sources, "ROOT", target), \
                  patch.dict(vars(runtime_sources), {"__compiled__": True}):
                 output = target / "export"
-                generate_project(ProjectData(), str(output))
+                generate_project(ProjectData(), str(output), language="zh_CN")
                 for source in output.glob("*.py"):
                     compile(source.read_text(encoding="utf-8"), str(source), "exec")
                 for name in runtime_sources.RUNTIME_FILES:

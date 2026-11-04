@@ -64,7 +64,7 @@ class ExportPortabilityTests(unittest.TestCase):
             ]
             original_widgets = copy.deepcopy(project.widgets)
             output = root / "export"
-            generate_project(project, output, theme_mode="Light")
+            generate_project(project, output, theme_mode="Light", language="zh_CN")
             self.assertEqual(project.widgets, original_widgets)
             self.assertEqual(len(list((output / "assets").iterdir())), 2)
             self.assertNotIn(str(source_dir), (output / "ui.py").read_text(encoding="utf-8"))
@@ -116,7 +116,7 @@ print("RELOCATED_IMAGES_OK")
             project = ProjectData()
             project.widgets = [image_widget("image", "picture.png")]
             with patch("app.core.code_generator.Path.cwd", return_value=root):
-                generate_project(project, root / "export")
+                generate_project(project, root / "export", language="zh_CN")
             exported = list((root / "export" / "assets").iterdir())
             self.assertEqual(len(exported), 1)
             self.assertEqual(exported[0].read_bytes(), (root / "picture.png").read_bytes())
@@ -142,7 +142,7 @@ print("RELOCATED_IMAGES_OK")
                     ]
                     before = copy.deepcopy(project.widgets)
                     with self.assertRaisesRegex(ValueError, "无法导出图片.*invalid"):
-                        generate_project(project, output)
+                        generate_project(project, output, language="zh_CN")
                     self.assertEqual(main.read_text(), "existing application\n")
                     self.assertFalse((output / "assets").exists())
                     self.assertEqual(project.widgets, before)
@@ -158,7 +158,7 @@ print("RELOCATED_IMAGES_OK")
                  "binding": {"parseMode": "键值匹配", "key": key}}
                 for index, key in enumerate(keys)
             ]
-            generate_project(project, output)
+            generate_project(project, output, language="zh_CN")
             for source in output.glob("*.py"):
                 compile(source.read_text(encoding="utf-8"), str(source), "exec")
             code = f"KEYS = {keys!r}\n" + r'''
@@ -206,7 +206,7 @@ print("ARBITRARY_KEYS_OK")
         }]})
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "export"
-            generate_project(project, output)
+            generate_project(project, output, language="zh_CN")
             code = f"IDS = {ids!r}\n" + r'''
 import sys
 from contextlib import ExitStack
@@ -268,7 +268,7 @@ print("ARBITRARY_WIDGET_IDS_OK")
             root = Path(folder)
             output = root / "export"
             project = ProjectData()
-            generate_project(project, output)
+            generate_project(project, output, language="zh_CN")
             (output / "custom.py").write_text("# user extension\n", encoding="utf-8")
             before = {str(p.relative_to(output)): p.read_bytes()
                       for p in output.rglob("*") if p.is_file()}
@@ -280,7 +280,7 @@ print("ARBITRARY_WIDGET_IDS_OK")
                  "binding": {"parseMode": "HEX字节提取", "byteOffset": "invalid"}},
             ]
             with self.assertRaises(ValueError):
-                generate_project(project, output)
+                generate_project(project, output, language="zh_CN")
             after = {str(p.relative_to(output)): p.read_bytes()
                      for p in output.rglob("*") if p.is_file()}
             self.assertEqual(after, before)

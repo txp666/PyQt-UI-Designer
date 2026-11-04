@@ -120,7 +120,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_empty_project_export_is_runnable_python_with_png_icon(self):
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(ProjectData(), folder)
+            generate_project(ProjectData(), folder, language="zh_CN")
             for source in Path(folder).glob("*.py"):
                 compile(source.read_text(encoding="utf-8"), str(source), "exec")
             self.assertTrue((Path(folder) / "logo.png").is_file())

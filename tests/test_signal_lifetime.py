@@ -207,7 +207,7 @@ class SignalLifetimeTests(unittest.TestCase):
                                 "parseMode": "HEX字节提取", "frameHeader": "AA", "frameTail": "BB",
                                 "dataType": "uint8"}}]
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(project, folder)
+            generate_project(project, folder, language="zh_CN")
             self.run_script('''
                 import sys
                 from contextlib import ExitStack

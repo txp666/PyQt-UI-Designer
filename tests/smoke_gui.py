@@ -124,7 +124,7 @@ with tempfile.TemporaryDirectory() as fixture_folder:
     assert not serial.is_connected and not port.is_open
 
 with tempfile.TemporaryDirectory() as folder:
-    generate_project(project, folder)
+    generate_project(project, folder, language="zh_CN")
     for source in Path(folder).glob("*.py"):
         compile(source.read_text(encoding="utf-8"), str(source), "exec")
     subprocess.run([sys.executable, "-c", """

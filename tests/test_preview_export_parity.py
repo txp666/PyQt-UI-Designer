@@ -125,7 +125,7 @@ class PreviewExportParityTests(unittest.TestCase):
         script = _RUN_APPLICATION.replace(
             "__CHECKS__", textwrap.indent(textwrap.dedent(checks).strip(), "    "))
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(project, folder, theme_mode="Light")
+            generate_project(project, folder, theme_mode="Light", language="zh_CN")
             for mode in ("preview", "export"):
                 with self.subTest(mode=mode):
                     result = subprocess.run(

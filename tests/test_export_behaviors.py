@@ -102,7 +102,7 @@ class ExportBehaviorTests(unittest.TestCase):
         project = ProjectData()
         project.widgets = widgets
         with tempfile.TemporaryDirectory() as folder:
-            generate_project(project, folder, theme_mode="Light")
+            generate_project(project, folder, theme_mode="Light", language="zh_CN")
             for source in Path(folder).glob("*.py"):
                 compile(source.read_text(encoding="utf-8"), str(source), "exec")
             script = _RUN_EXPORT.replace(
