@@ -147,6 +147,7 @@ import struct
 from serial_handler import (  # noqa: F401  (_transaction: the MBAP counter, for callers of this module)
     _transaction, modbus_dispatch, modbus_frame as _modbus_frame, next_modbus_transaction,
 )
+from serial_handler import AREA_TABLES
 
 
 def _command_hex(text):
@@ -256,13 +257,63 @@ def send_modbus_command(hub, slave, func, address, value, data_type="uint16", re
     """Validate once, then send the request over every connected link, framed for that link.
 
     A link parsing Modbus TCP gets an MBAP frame, one parsing Modbus ASCII an ASCII frame,
-    every other link an RTU frame. A link that parses Modbus queues the request in its
+    every other link an RTU frame; a link answering as a Modbus slave gets none. A link that parses Modbus
+    queues the request in its
     ModbusMaster ahead of any polling reads, with a 1000 ms timeout, so it never collides
     with a read on the wire; the others are written at once. Returns the frames that were
     accepted (queued, or written); an invalid request raises before anything is sent.
     """
     request = modbus_request(slave, func, address, value, data_type, reg_order)
     return [frame for frame, _master in modbus_dispatch(hub, request, 1000, "write")]
+
+
+# -- the data tables of the link cards in the 从站 role (modbus_slave.py, slave_runtime.py) --------------
+
+_TYPE_RANGES = {"uint16": (0, 0xFFFF), "int16": (-0x8000, 0x7FFF), "uint32": (0, 0xFFFFFFFF),
+                "int32": (-0x80000000, 0x7FFFFFFF), "float32": (-3.4028234663852886e38, 3.4028234663852886e38)}
+
+
+def slave_devices(widgets):
+    """The slaves of the link cards in the 从站 role among ``widgets``, in their order (the document's)."""
+    return [device for device in (getattr(widget, "slave_device", None) for widget in widgets)
+            if device is not None]
+
+
+def slave_control_write(devices, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+    """A user's change of a control with a Modbus binding, written into every slave's data table at the
+    binding's area and address: 1 or 0 for a coil or discrete input, the registers of the value packed as its
+    type (and clamped to the type's range) for registers, as a Modbus write command packs them. A table that
+    has not every address in its area is left alone."""
+    table = AREA_TABLES.get(area)
+    if table is None or not devices:
+        return
+    if table in ("co", "di"):
+        values = [1 if value else 0]
+    else:
+        low, high = _TYPE_RANGES.get(data_type, _TYPE_RANGES["uint16"])
+        number = float(value) if data_type == "float32" else int(value)
+        try:
+            values = list(modbus_registers(min(max(number, low), high), data_type, reg_order))
+        except ValueError:
+            return
+    for device in devices:
+        device.write(table, int(address), values)
+
+
+def slave_command_write(devices, request):
+    """A validated Modbus command (modbus_request) carried out on every slave's data table, whatever slave
+    it names: 05 writes 1 for a value that is not 0, 06 and 16 the registers the command packs; a read does
+    nothing. True when a table took it."""
+    _slave, func, address, value = request
+    if func == 0x05:
+        table, values = "co", [1 if value else 0]
+    elif func == 0x06:
+        table, values = "hr", [value]
+    elif func == 0x10:
+        table, values = "hr", list(value)
+    else:
+        return False
+    return any([device.write(table, address, values) for device in devices])
 
 """Preserve the designer's tab-relative coordinates in real Qt tab pages."""
 from PyQt5.QtCore import QObject, QEvent, QPoint, QRect, QTimer
@@ -1637,7 +1688,8 @@ def terminal_scroll_bar(edit):
 
 class LogDisplayBox(QWidget):
     """Scrolling, time-stamped log in a dark terminal look: every parsed frame, and the connect,
-    disconnect and error events of every link (serial, TCP, MQTT)."""
+    disconnect and error events of every link (serial, TCP, MQTT). Of a link answering as a Modbus slave it
+    shows the requests and replies (slaveLog), not the slave messages."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1664,6 +1716,8 @@ class LogDisplayBox(QWidget):
             self._serial_connections.connect(handler.disconnected, self._on_disconnected)
             self._serial_connections.connect(handler.error, self._on_serial_error)
             self._serial_connections.connect(handler.dataReceived, self._on_parsed_data)
+            if hasattr(handler, "slaveLog"):
+                self._serial_connections.connect(handler.slaveLog, self.append_log)
 
     def _on_connected(self, port):
         self.append_log(f"已连接: {port}", "ok")
@@ -1675,6 +1729,8 @@ class LogDisplayBox(QWidget):
         self.append_log(f"错误: {message}", "error")
 
     def _on_parsed_data(self, data):
+        if getattr(self._handler, "slave_data", False):
+            return  # a slave message: the request and reply lines tell what happened
         self.append_log(", ".join(f"{key}={value}" for key, value in data.items()))
 
     def append_log(self, text, level="info"):
@@ -1709,15 +1765,24 @@ card is the first in the document whose link is connected and parses Modbus. Whi
 connected, parses Modbus and can send (a TCP server needs a client), the card's status reads
 ``<connection> · <poller status>``, with the poller's blocks as its tooltip; 等待连接 is never shown
 there.
+
+A serial or TCP card also has a Modbus role (ModbusSlaveSettings). As 从站 it owns a slave data table
+(slave_runtime.ModbusSlaveDevice) and connects its link as a slave whenever the link parses modbus or
+modbus_tcp; while the link answers, the card shows ``<connection> · 从站 S · 应答 N`` in place of the
+poller's status.
 """
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QSizePolicy
 from qfluentwidgets import CaptionLabel
 
 
+from serial_handler import ModbusSlaveDevice
+from serial_handler import SLAVE_ROLE
 
 MODBUS_DEFAULTS = (500, 1000, 1)  # modbusPeriod, modbusTimeout, modbusSlave: the poller's own defaults
 MODBUS_RANGES = ((10, 60000), (10, 60000), (1, 247))
+SLAVE_DELAY_RANGE = (0, 5000)  # 响应延时(ms)
+SLAVE_START_RANGE, SLAVE_COUNT_RANGE = (0, 65535), (0, 10000)  # 起始 / 数量 of an area
 
 
 def status_label(text):
@@ -1729,14 +1794,18 @@ def status_label(text):
     return label
 
 
-def _modbus_setting(index, value):
-    """A whole number within the setting's range; its default for what is not a number."""
+def _whole(value, default, low, high):
+    """A whole number within low–high; the default for what is not a number."""
     try:
         number = int(value)
     except (TypeError, ValueError, OverflowError):
-        return MODBUS_DEFAULTS[index]
-    low, high = MODBUS_RANGES[index]
+        return default
     return min(max(number, low), high)
+
+
+def _modbus_setting(index, value):
+    """A whole number within the setting's range; its default for what is not a number."""
+    return _whole(value, MODBUS_DEFAULTS[index], *MODBUS_RANGES[index])
 
 
 class ModbusLinkSettings:
@@ -1801,7 +1870,13 @@ class ModbusLinkSettings:
     def _with_poll_status(self, text):
         """``text``, which describes the connection, then `` · `` and the poller's status while the
         link parses Modbus and can send; and the tooltip for it: the poller's blocks, one per line, or the whole
-        text without blocks. The tooltip is None when the poller's status is not shown."""
+        text without blocks. The tooltip is None when the poller's status is not shown. While the link answers
+        as this card's slave, the slave's status takes the poller's place."""
+        slave = getattr(self._handler, "slave_device", None)
+        if slave is not None and slave is getattr(self, "_slave_device", None):
+            self._poll_shown = False
+            text = f"{text} · {slave.status_text()}"
+            return text, text
         poller = self._modbus_poller
         status = poller.shown_status(self._handler) if poller is not None else ""
         self._poll_shown = bool(status)
@@ -1809,6 +1884,81 @@ class ModbusLinkSettings:
             return text, None
         text = f"{text} · {status}"
         return text, poller.tooltip() if poller.blocks() else text
+
+
+class ModbusSlaveSettings(ModbusLinkSettings):
+    """The Modbus role of a serial or TCP card (``modbusRole``), set at design time, and the slave settings
+    that count in the 从站 role: 响应延时(ms), 异常响应, the four areas and 初始值, with 默认从站 as this
+    slave's address. ``slave_device`` is the card's slave, None in the 主站 role; the card passes it to its
+    link's connect(), which answers with it while it parses modbus or modbus_tcp."""
+
+    def _init_modbus(self):
+        super()._init_modbus()
+        self._modbus_role = "主站"
+        self._slave_device = ModbusSlaveDevice(self)
+        self._slave_device.written.connect(self._on_slave_written)
+        self._slave_device.statusChanged.connect(self._on_slave_status)
+
+    @property
+    def slave_device(self):
+        return self._slave_device if self._modbus_role == SLAVE_ROLE else None
+
+    def set_modbus_role(self, value):
+        self._modbus_role = SLAVE_ROLE if value == SLAVE_ROLE else "主站"
+
+    def set_modbus_slave(self, value):
+        super().set_modbus_slave(value)
+        self._slave_device.address = self._modbus_settings[2]
+
+    def set_modbus_delay(self, value):
+        self._slave_device.delay = _whole(value, 0, *SLAVE_DELAY_RANGE)
+
+    def set_modbus_exceptions(self, value):
+        self._slave_device.exceptions = bool(value)
+
+    def _set_slave_start(self, table, value):
+        self._slave_device.set_area(table, start=_whole(value, 0, *SLAVE_START_RANGE))
+
+    def _set_slave_count(self, table, value):
+        self._slave_device.set_area(table, count=_whole(value, 100, *SLAVE_COUNT_RANGE))
+
+    def set_slave_co_start(self, value): self._set_slave_start("co", value)
+    def set_slave_co_count(self, value): self._set_slave_count("co", value)
+    def set_slave_di_start(self, value): self._set_slave_start("di", value)
+    def set_slave_di_count(self, value): self._set_slave_count("di", value)
+    def set_slave_hr_start(self, value): self._set_slave_start("hr", value)
+    def set_slave_hr_count(self, value): self._set_slave_count("hr", value)
+    def set_slave_ir_start(self, value): self._set_slave_start("ir", value)
+    def set_slave_ir_count(self, value): self._set_slave_count("ir", value)
+
+    def set_slave_init(self, value):
+        self._slave_device.set_init(value)
+
+    def _on_slave_written(self, message):
+        """A write to the data table: published on the card's link, connected or not, like a frame it read."""
+        publish = getattr(self._handler, "publish_slave_data", None)
+        if publish is not None and self.slave_device is not None:
+            publish(message)
+
+    def _on_slave_status(self):
+        if self._connected and getattr(self._handler, "slave_device", None) is self._slave_device:
+            self._show_connected()
+
+
+# The slave settings of PROPERTY_SETTERS, after the role and the polling settings.
+SLAVE_PROPERTY_SETTERS = (
+    ("modbusDelay", "set_modbus_delay", 0),
+    ("modbusExceptions", "set_modbus_exceptions", True),
+    ("slaveCoStart", "set_slave_co_start", 0),
+    ("slaveCoCount", "set_slave_co_count", 100),
+    ("slaveDiStart", "set_slave_di_start", 0),
+    ("slaveDiCount", "set_slave_di_count", 100),
+    ("slaveHrStart", "set_slave_hr_start", 0),
+    ("slaveHrCount", "set_slave_hr_count", 100),
+    ("slaveIrStart", "set_slave_ir_start", 0),
+    ("slaveIrCount", "set_slave_ir_count", 100),
+    ("slaveInit", "set_slave_init", ""),
+)
 
 # coding: utf-8
 """Composite card widgets: SerialConfigCard, DataSendCard, DataRecvCard, LogBox, ProgressRing."""
@@ -1829,13 +1979,14 @@ from qfluentwidgets import (
 from serial_handler import _list_all_ports
 
 
-class SerialConfigCard(ModbusLinkSettings, CardWidget):
+class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
     One button connects or disconnects the hub's serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
     height is what the rows of its display mode need. Like every link card it hands the Modbus
-    poller its settings and shows the poller's status while its link parses Modbus."""
+    poller its settings and shows the poller's status while its link parses Modbus; in the 从站 role
+    it answers as a Modbus slave instead (link_polling.ModbusSlaveSettings)."""
 
     LINK = "serial"  # name of this card's link on a CommHub
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
@@ -1849,9 +2000,11 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         ("defaultStopbits", "set_default_stopbits", "1"),
         ("defaultFlow", "set_default_flow", "无"),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusRole", "set_modbus_role", "主站"),
         ("modbusPeriod", "set_modbus_period", 500),
         ("modbusTimeout", "set_modbus_timeout", 1000),
         ("modbusSlave", "set_modbus_slave", 1),
+        *SLAVE_PROPERTY_SETTERS,
         ("parserConfig", "set_parser_config", {}),
     )
 
@@ -2145,7 +2298,7 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
             parity=parity_map.get(self._parity_combo.currentText(), "N"),
             stopbits=float(self._stopbits_combo.currentText()),
             flowcontrol=flow_map.get(self._flow_combo.currentText(), "none"),
-            parser_type=self.parser_type, parser_config=self.parser_config,
+            parser_type=self.parser_type, parser_config=self.parser_config, slave=self.slave_device,
         )
         if not ok:
             for btn in (self._connect_btn, self._sl_conn):
@@ -2448,7 +2601,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self.widgets['help'].setGeometry(24, 50, 1020, 28)
         self.widgets['help'].show()
 
-        self.widgets['serial'] = SerialConfigCard(self._page); self.widgets['serial'].set_title('串口配置'); self.widgets['serial'].set_display_mode('单行'); self.widgets['serial'].set_default_baud('115200'); self.widgets['serial'].set_default_databits('8'); self.widgets['serial'].set_default_parity('None'); self.widgets['serial'].set_default_stopbits('1'); self.widgets['serial'].set_default_flow('无'); self.widgets['serial'].set_default_parser('项目设置'); self.widgets['serial'].set_modbus_period(500); self.widgets['serial'].set_modbus_timeout(1000); self.widgets['serial'].set_modbus_slave(1); self.widgets['serial'].set_parser_config({})
+        self.widgets['serial'] = SerialConfigCard(self._page); self.widgets['serial'].set_title('串口配置'); self.widgets['serial'].set_display_mode('单行'); self.widgets['serial'].set_default_baud('115200'); self.widgets['serial'].set_default_databits('8'); self.widgets['serial'].set_default_parity('None'); self.widgets['serial'].set_default_stopbits('1'); self.widgets['serial'].set_default_flow('无'); self.widgets['serial'].set_default_parser('项目设置'); self.widgets['serial'].set_modbus_role('主站'); self.widgets['serial'].set_modbus_period(500); self.widgets['serial'].set_modbus_timeout(1000); self.widgets['serial'].set_modbus_slave(1); self.widgets['serial'].set_modbus_delay(0); self.widgets['serial'].set_modbus_exceptions(True); self.widgets['serial'].set_slave_co_start(0); self.widgets['serial'].set_slave_co_count(100); self.widgets['serial'].set_slave_di_start(0); self.widgets['serial'].set_slave_di_count(100); self.widgets['serial'].set_slave_hr_start(0); self.widgets['serial'].set_slave_hr_count(100); self.widgets['serial'].set_slave_ir_start(0); self.widgets['serial'].set_slave_ir_count(100); self.widgets['serial'].set_slave_init(''); self.widgets['serial'].set_parser_config({})
         self.widgets['serial'].setGeometry(24, 90, 1032, 48)
         self.widgets['serial'].show()
 
@@ -2562,7 +2715,15 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send(frame)
 
     def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):
-        # One request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
+        # A write goes into the data table of every link card in the 从站 role, connected or not; then one
+        # request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
+        devices = slave_devices(self.widgets.values())
+        if devices:
+            try:
+                slave_command_write(devices, modbus_request(slave, func, address, value, data_type, reg_order))
+            except ValueError as exc:
+                self._command_error(exc)
+                return
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 send_modbus_command(self._comm_hub, slave, func, address, value, data_type, reg_order)

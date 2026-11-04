@@ -5,6 +5,7 @@ import struct
 from .modbus_master import (  # noqa: F401  (_transaction: the MBAP counter, for callers of this module)
     _transaction, modbus_dispatch, modbus_frame as _modbus_frame, next_modbus_transaction,
 )
+from .modbus_slave import AREA_TABLES
 
 
 def _command_hex(text):
@@ -114,10 +115,60 @@ def send_modbus_command(hub, slave, func, address, value, data_type="uint16", re
     """Validate once, then send the request over every connected link, framed for that link.
 
     A link parsing Modbus TCP gets an MBAP frame, one parsing Modbus ASCII an ASCII frame,
-    every other link an RTU frame. A link that parses Modbus queues the request in its
+    every other link an RTU frame; a link answering as a Modbus slave gets none. A link that parses Modbus
+    queues the request in its
     ModbusMaster ahead of any polling reads, with a 1000 ms timeout, so it never collides
     with a read on the wire; the others are written at once. Returns the frames that were
     accepted (queued, or written); an invalid request raises before anything is sent.
     """
     request = modbus_request(slave, func, address, value, data_type, reg_order)
     return [frame for frame, _master in modbus_dispatch(hub, request, 1000, "write")]
+
+
+# -- the data tables of the link cards in the 从站 role (modbus_slave.py, slave_runtime.py) --------------
+
+_TYPE_RANGES = {"uint16": (0, 0xFFFF), "int16": (-0x8000, 0x7FFF), "uint32": (0, 0xFFFFFFFF),
+                "int32": (-0x80000000, 0x7FFFFFFF), "float32": (-3.4028234663852886e38, 3.4028234663852886e38)}
+
+
+def slave_devices(widgets):
+    """The slaves of the link cards in the 从站 role among ``widgets``, in their order (the document's)."""
+    return [device for device in (getattr(widget, "slave_device", None) for widget in widgets)
+            if device is not None]
+
+
+def slave_control_write(devices, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+    """A user's change of a control with a Modbus binding, written into every slave's data table at the
+    binding's area and address: 1 or 0 for a coil or discrete input, the registers of the value packed as its
+    type (and clamped to the type's range) for registers, as a Modbus write command packs them. A table that
+    has not every address in its area is left alone."""
+    table = AREA_TABLES.get(area)
+    if table is None or not devices:
+        return
+    if table in ("co", "di"):
+        values = [1 if value else 0]
+    else:
+        low, high = _TYPE_RANGES.get(data_type, _TYPE_RANGES["uint16"])
+        number = float(value) if data_type == "float32" else int(value)
+        try:
+            values = list(modbus_registers(min(max(number, low), high), data_type, reg_order))
+        except ValueError:
+            return
+    for device in devices:
+        device.write(table, int(address), values)
+
+
+def slave_command_write(devices, request):
+    """A validated Modbus command (modbus_request) carried out on every slave's data table, whatever slave
+    it names: 05 writes 1 for a value that is not 0, 06 and 16 the registers the command packs; a read does
+    nothing. True when a table took it."""
+    _slave, func, address, value = request
+    if func == 0x05:
+        table, values = "co", [1 if value else 0]
+    elif func == 0x06:
+        table, values = "hr", [value]
+    elif func == 0x10:
+        table, values = "hr", list(value)
+    else:
+        return False
+    return any([device.write(table, address, values) for device in devices])

@@ -269,7 +269,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
     lines.append(runtime_source("signal_lifetime.py"))
     lines.append(runtime_source("qt_window_lifetime.py"))
     lines.append(runtime_source("command_runtime.py").replace(
-        "from .modbus_master import (", "from serial_handler import ("))
+        "from .modbus_master import (", "from serial_handler import (").replace(
+        "from .modbus_slave import AREA_TABLES", "from serial_handler import AREA_TABLES"))
 
     # custom widget classes needed (recursive)
     def _collect_types(items):
@@ -318,6 +319,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_data_send_card_class())
     if "DataRecvCard" in widget_types:
         lines.append(_data_recv_card_class())
+    if "ModbusSlaveTable" in widget_types:
+        lines.append(_slave_table_class())
 
     # MainUI class
     lines.append(f'''
@@ -422,7 +425,15 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send(frame)
 
     def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):
-        # One request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
+        # A write goes into the data table of every link card in the 从站 role, connected or not; then one
+        # request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
+        devices = slave_devices(self.widgets.values())
+        if devices:
+            try:
+                slave_command_write(devices, modbus_request(slave, func, address, value, data_type, reg_order))
+            except ValueError as exc:
+                self._command_error(exc)
+                return
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 send_modbus_command(self._comm_hub, slave, func, address, value, data_type, reg_order)
@@ -439,7 +450,46 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send(frame)
 ''')
 
+    if _has_slave_writes(widgets):
+        lines.append('''
+    def _slave_write(self, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+        # A user's change of a control with a Modbus binding, into every 从站 card's data table.
+        slave_control_write(slave_devices(self.widgets.values()), area, address, value, data_type, reg_order)
+''')
+
     return "\n".join(lines)
+
+
+def _slave_write_binding(wtype, binding):
+    """The Modbus binding a control's changes write into the slaves' data tables, or None: a switch,
+    slider or spin box bound in Modbus mode without an expression (its value cannot be worked back)."""
+    if (wtype not in ("ToggleSwitch", "Slider", "SpinBox") or not binding
+            or binding.get("parseMode") != "Modbus" or binding.get("expression")):
+        return None
+    return binding
+
+
+def _has_slave_writes(widgets):
+    return any(_slave_write_binding(w["type"], w.get("binding")) is not None
+               or _has_slave_writes(w.get("children", [])) for w in widgets)
+
+
+def _gen_slave_write_connection(wid, wtype, binding):
+    """Lines that write a control's changes into the slaves' data tables, when a command would go out."""
+    binding = _slave_write_binding(wtype, binding)
+    if binding is None:
+        return []
+    from app.core.command_runtime import MODBUS_ORDERS
+    args = (binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)))
+    typed = (binding.get("mbDataType", "uint16"), binding.get("mbRegOrder", MODBUS_ORDERS[0]))
+    head, tail = f"{args[0]!r}, {args[1]}", f", {typed[0]!r}, {typed[1]!r}"
+    w_ref = f"self.widgets[{wid!r}]"
+    if wtype == "ToggleSwitch":
+        return [f"        {w_ref}._switch.checkedChanged.connect("
+                f"lambda c: self._slave_write({head}, 1 if c else 0{tail}))"]
+    if wtype == "Slider":
+        return [f"        SendOnRelease({w_ref}, lambda v: self._slave_write({head}, v{tail}))"]
+    return [f"        {w_ref}.valueChanged.connect(lambda v: self._slave_write({head}, v{tail}))"]
 
 
 def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=None):
@@ -464,6 +514,7 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=
         cmd_lines = _gen_command_connection(wid, wtype, props)
         if cmd_lines:
             lines += cmd_lines
+        lines += _gen_slave_write_connection(wid, wtype, w.get("binding"))
 
         if props.get("notify"):
             lines += _gen_notify_connection(wid, wtype, props)
@@ -770,19 +821,29 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
         return (f"self.widgets[{wid!r}] = DataRecvCard({pv}); "
                 f"self.widgets[{wid!r}].set_title({p('title', '数据接收')}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 1000)})")
+    if wtype == "ModbusSlaveTable":
+        return (f"self.widgets[{wid!r}] = ModbusSlaveTable({pv}); "
+                f"self.widgets[{wid!r}].set_area({p('mbArea', '保持寄存器')}); "
+                f"self.widgets[{wid!r}].set_display_format({p('displayFormat', '无符号')})")
 
     return f"self.widgets[{wid!r}] = QLabel('未知控件: {wtype}', {pv})"
 
 
 def _gen_serial_handler(serial_config: dict) -> str:
-    # The parsers, the Modbus master every link owns, then the serial link.
+    # The parsers, the Modbus master every link owns, the Modbus slave a serial or TCP link may answer
+    # with, then the serial link.
     master = runtime_source("modbus_master.py").replace(
         "from .protocol_parser import build_modbus_ascii_frame, build_modbus_frame, build_modbus_tcp_frame", "")
+    slave = runtime_source("modbus_slave.py").replace(
+        "from .protocol_parser import BaseParser, modbus_crc", "")
+    slave_link = runtime_source("slave_runtime.py").replace(
+        "from .modbus_slave import DEFAULT_AREA, TABLES, ModbusSlave, SlaveStore, request_framer", "")
     runtime = runtime_source("serial_runtime.py").replace(
         "from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding", "").replace(
-        "from .modbus_master import ModbusMaster", "")
-    return (runtime_source("protocol_parser.py") + "\n" + master + "\n" + runtime +
-            f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
+        "from .modbus_master import ModbusMaster", "").replace(
+        "from .modbus_slave import SLAVE_PARSERS", "")
+    return (runtime_source("protocol_parser.py") + "\n" + master + "\n" + slave + "\n" + slave_link + "\n"
+            + runtime + f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
 
 
 def _link_config(serial_config: dict) -> dict:
@@ -795,7 +856,8 @@ def _gen_tcp_handler(serial_config: dict) -> str:
     runtime = runtime_source("tcp_runtime.py").replace(
         "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
         "from serial_handler import ModbusRequests, create_parser, text_encoding").replace(
-        "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster")
+        "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster").replace(
+        "from .modbus_slave import SLAVE_PARSERS", "from serial_handler import SLAVE_PARSERS")
     return runtime + f"\nTcpHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
 
 
@@ -978,6 +1040,17 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         lines.append('        self._connections.connect(self.hub.rawReceived, self._on_raw)')
         lines.append('        self._connections.connect(self.hub.disconnected, self._reset_stream)')
     lines.append('        self.modbus_poller.start()  # reads once a link that parses Modbus can send')
+    if widget_types and widget_types & {"SerialConfigCard", "TcpConfigCard", "ModbusSlaveTable"}:
+        lines += [
+            '        # The slaves of the link cards in the 从站 role: a register table shows the first one\'s, and',
+            '        # each publishes its whole data table now that the bindings are up.',
+            '        slaves = [w.slave_device for w in ui.widgets.values() if getattr(w, "slave_device", None)]',
+            '        for w in ui.widgets.values():',
+            '            if hasattr(w, "set_slave_device"):',
+            '                w.set_slave_device(slaves[0] if slaves else None)',
+            '        for device in slaves:',
+            '            device.publish_start()',
+        ]
     lines.append('')
 
     # -- _on_data for 键值匹配 / JSON路径 --
@@ -1372,12 +1445,19 @@ def _serial_config_card_class() -> str:
     return runtime_source("serial_card.py").replace(
         "from .serial_runtime import _list_all_ports", "from serial_handler import _list_all_ports"
     ).replace("from .signal_lifetime import SignalConnections", "").replace(
-        "from .link_polling import ModbusLinkSettings, status_label", "")
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, status_label", "")
 
 
 def _link_polling_source() -> str:
     return runtime_source("link_polling.py").replace(
-        "from .signal_lifetime import SignalConnections", "")
+        "from .signal_lifetime import SignalConnections", "").replace(
+        "from .slave_runtime import ModbusSlaveDevice", "from serial_handler import ModbusSlaveDevice").replace(
+        "from .modbus_slave import SLAVE_ROLE", "from serial_handler import SLAVE_ROLE")
+
+
+def _slave_table_class() -> str:
+    return runtime_source("slave_table.py").replace(
+        "from .modbus_slave import AREA_TABLES", "from serial_handler import AREA_TABLES")
 
 
 def _link_card_class() -> str:
@@ -1388,7 +1468,8 @@ def _link_card_class() -> str:
 
 def _tcp_config_card_class() -> str:
     return runtime_source("tcp_card.py").replace(
-        "from .link_card import LinkConfigCard", "")
+        "from .link_card import LinkConfigCard", "").replace(
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings", "")
 
 
 def _mqtt_config_card_class() -> str:

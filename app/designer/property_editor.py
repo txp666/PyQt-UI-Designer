@@ -45,9 +45,13 @@ _MODE_FIELDS = {
 
 _SEND_TOGGLE_FIELDS = {"commandMode", "commands"}
 
-# A link card's Modbus polling settings, shown while its own parser is a Modbus one (they still count
-# when it uses the project's settings).
-_MODBUS_LINK_FIELDS = ("modbusPeriod", "modbusTimeout", "modbusSlave")
+# A link card's Modbus settings, shown while its own parser is a Modbus one (they still count when it
+# uses the project's settings): the role and 默认从站 always, then the settings of its role.
+_MODBUS_LINK_FIELDS = ("modbusRole", "modbusSlave")
+_MODBUS_MASTER_FIELDS = ("modbusPeriod", "modbusTimeout")
+_MODBUS_SLAVE_FIELDS = ("modbusDelay", "modbusExceptions", "slaveCoStart", "slaveCoCount", "slaveDiStart",
+                        "slaveDiCount", "slaveHrStart", "slaveHrCount", "slaveIrStart", "slaveIrCount",
+                        "slaveInit")
 
 # Chart per-curve fields visibility based on curveParseMode
 _CHART_PARSE_VIS = {
@@ -359,7 +363,7 @@ class PropertyEditor(ScrollArea):
             self._layout.addWidget(props_card)
 
             if item.type_name in LINK_CARD_TYPES:
-                self._apply_link_parser_visibility(item.properties.get("defaultParser", "项目设置"))
+                self._apply_link_parser_visibility()
                 self._card_frame_section = self._card_frame_format()
                 self._layout.addWidget(self._card_frame_section)
 
@@ -795,11 +799,17 @@ class PropertyEditor(ScrollArea):
             if name in self._prop_rows:
                 self._show_row(self._prop_rows[name][1], name in visible)
 
-    def _apply_link_parser_visibility(self, parser: str):
-        """A link card's 默认轮询 / 响应超时 / 默认从站 rows show while it parses Modbus itself."""
-        for name in _MODBUS_LINK_FIELDS:
-            if name in self._prop_rows:
-                self._show_row(self._prop_rows[name][1], parser in MODBUS_PARSERS)
+    def _apply_link_parser_visibility(self):
+        """A link card's Modbus rows show while it parses Modbus itself: Modbus 角色 and 默认从站, then
+        默认轮询 / 响应超时 for a 主站, the slave settings for a 从站."""
+        properties = self._current_item.properties
+        modbus = properties.get("defaultParser", "项目设置") in MODBUS_PARSERS
+        slave = properties.get("modbusRole", "主站") == "从站"
+        for names, shown in ((_MODBUS_LINK_FIELDS, modbus), (_MODBUS_MASTER_FIELDS, modbus and not slave),
+                             (_MODBUS_SLAVE_FIELDS, modbus and slave)):
+            for name in names:
+                if name in self._prop_rows:
+                    self._show_row(self._prop_rows[name][1], shown)
 
     def _apply_send_toggle_visibility(self, enabled: bool):
         """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles.
@@ -910,9 +920,11 @@ class PropertyEditor(ScrollArea):
             self._apply_send_toggle_visibility(bool(value))
         elif prop_name == "displayMode" and self._current_item.type_name in LINK_CARD_TYPES:
             self._sync_height_editor()  # another display mode needs another least height
+        elif prop_name == "modbusRole" and self._current_item.type_name in LINK_CARD_TYPES:
+            self._apply_link_parser_visibility()
         elif (prop_name == "defaultParser" and self._card_frame_section is not None
               and self._current_item.type_name in LINK_CARD_TYPES):
-            self._apply_link_parser_visibility(value)
+            self._apply_link_parser_visibility()
             # Another mode shows other rows, and possibly the project's values.
             section = self._card_frame_format()
             self._layout.replaceWidget(self._card_frame_section, section)

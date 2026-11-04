@@ -2,7 +2,9 @@
 
 The serial, TCP and MQTT links expose the same signals. The hub forwards all of them on
 one surface, so bindings, charts, tables and log boxes never need to know which link a
-frame came from, and a command goes out over every link that is currently connected.
+frame came from, and a command goes out over every link that is currently connected. A serial or
+TCP link answering as a Modbus slave adds its log lines (slaveLog) and publishes its slave messages on
+dataReceived like parsed frames, with slave_data set meanwhile.
 """
 from functools import partial
 
@@ -28,6 +30,7 @@ class CommHub(QObject):
     connected = pyqtSignal(str)
     disconnected = pyqtSignal()
     error = pyqtSignal(str)
+    slaveLog = pyqtSignal(str, str)  # a slave's log line and its level
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)
@@ -43,6 +46,8 @@ class CommHub(QObject):
             link.disconnected.connect(self.disconnected)
             link.error.connect(self.error)
             link.connectionChanged.connect(self._on_link_state)
+            if hasattr(link, "slaveLog"):
+                link.slaveLog.connect(self.slaveLog)
         if config:
             self.configure(config)
 
@@ -69,6 +74,11 @@ class CommHub(QObject):
         shared = shared_link_config(config)
         self.tcp.configure(shared)
         self.mqtt.configure(shared)
+
+    @property
+    def slave_data(self):
+        """dataReceived is carrying a slave message, not a frame a link received."""
+        return any(getattr(link, "slave_data", False) for link in self.links)
 
     @property
     def is_connected(self):

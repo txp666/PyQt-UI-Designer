@@ -1,6 +1,6 @@
 # coding: utf-8
 """Composite card widgets: connection cards (serial, TCP, MQTT), DataSendCard, DataRecvCard,
-LogBox."""
+LogBox, ModbusSlaveTable."""
 from html import escape as _escape
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter, QFont
@@ -308,6 +308,69 @@ class LogDisplayBox(RuntimeLogBox):
         self._serial_connections.connect(signalBus.serialDisconnected, self._on_disconnected)
         self._serial_connections.connect(signalBus.serialError, self._on_serial_error)
         self._serial_connections.connect(signalBus.serialDataReceived, self._on_parsed_data)
+        self._serial_connections.connect(signalBus.serialSlaveLog, self.append_log)
+
+    def _on_parsed_data(self, data):
+        from app.core.comm_manager import commHub
+        if not commHub.slave_data:  # a slave message: the request and reply lines tell what happened
+            super()._on_parsed_data(data)
+
+
+# ---------------------------------------------------------------------------
+# Register table of a Modbus slave
+# ---------------------------------------------------------------------------
+
+from app.core.slave_table import ModbusSlaveTable as RuntimeSlaveTable
+from app.core.modbus_slave import SLAVE_ROLE, store_from_properties
+
+SLAVE_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard")
+
+
+class ModbusSlaveTable(RuntimeSlaveTable):
+    """The shared register table. On the designer canvas it shows the areas of the first card in the 从站
+    role with their 初始值, kept current as the design changes; the preview hands it the running slave."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from app.common.signal_bus import signalBus
+        self._design = None  # the properties shown on the canvas
+        self._design_timer = QTimer(self)  # one look at the design after a burst of edits
+        self._design_timer.setSingleShot(True)
+        self._design_timer.timeout.connect(self._show_design)
+        self._design_connections = SignalConnections(self)
+        for changed in (signalBus.canvasChanged, signalBus.projectLoaded):
+            self._design_connections.connect(changed, self._design_changed)
+        self._design_timer.start(0)
+
+    def set_slave_device(self, device):
+        self._design_connections.clear()
+        self._design_timer.stop()
+        super().set_slave_device(device)
+
+    def _design_changed(self, *_):
+        self._design_timer.start(0)
+
+    def _show_design(self):
+        proxy = self.graphicsProxyWidget()
+        scene = proxy.scene() if proxy is not None else None
+        if scene is None or not hasattr(scene, "top_level_canvas_items"):
+            return
+
+        def first_slave(items):
+            for item in items:
+                if item.type_name in SLAVE_CARD_TYPES and item.properties.get("modbusRole") == SLAVE_ROLE:
+                    return item
+                found = first_slave(item._container_children)
+                if found is not None:
+                    return found
+            return None
+
+        card = first_slave(scene.top_level_canvas_items())
+        design = None if card is None else {key: value for key, value in card.properties.items()
+                                            if key.startswith("slave")}
+        if design != self._design:
+            self._design = design
+            self.show_store(None if design is None else store_from_properties(design))
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +384,26 @@ MODBUS_LINK_PROPS = [
     PropDef("modbusPeriod", "默认轮询(ms)", PropType.INT, 500, min_val=10, max_val=60000),
     PropDef("modbusTimeout", "响应超时(ms)", PropType.INT, 1000, min_val=10, max_val=60000),
     PropDef("modbusSlave", "默认从站", PropType.INT, 1, min_val=1, max_val=247),
+]
+
+
+def _slave_area_props(table, name):
+    return [PropDef(f"slave{table}Start", f"{name}起始", PropType.INT, 0, min_val=0, max_val=65535),
+            PropDef(f"slave{table}Count", f"{name}数量", PropType.INT, 100, min_val=0, max_val=10000)]
+
+
+# A serial or TCP card's Modbus role, the polling settings (主站) and the slave settings (从站): the panel
+# shows the role and 默认从站 while the card's own parser is a Modbus one, and the settings of its role.
+MODBUS_ROLE_PROPS = [
+    PropDef("modbusRole", "Modbus 角色", PropType.ENUM, "主站", options=["主站", "从站"],
+            description="从站：解析模式为 modbus 或 modbus_tcp 时应答外部主站"),
+    *MODBUS_LINK_PROPS,
+    PropDef("modbusDelay", "响应延时(ms)", PropType.INT, 0, min_val=0, max_val=5000),
+    PropDef("modbusExceptions", "异常响应", PropType.BOOL, True, description="关掉后出错的请求不应答"),
+    *_slave_area_props("Co", "线圈"), *_slave_area_props("Di", "离散输入"),
+    *_slave_area_props("Hr", "保持寄存器"), *_slave_area_props("Ir", "输入寄存器"),
+    PropDef("slaveInit", "初始值", PropType.TEXT, "",
+            description="每行一条 `区地址=值`，如 `hr100=1234`、`co3=1`；寄存器 −32768–65535，线圈、离散输入 0 或 1"),
 ]
 
 # A link card's own frame format, edited in the property panel's 帧格式 section.
@@ -342,7 +425,7 @@ SERIAL_CONFIG_META = WidgetMeta(
                 options=["完整", "简洁", "单行"]),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
                 options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
-        *MODBUS_LINK_PROPS,
+        *MODBUS_ROLE_PROPS,
         PARSER_CONFIG_PROP,
         PropDef("defaultBaud", "默认波特率", PropType.ENUM, "115200",
                 options=["9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"]),
@@ -374,7 +457,7 @@ TCP_CONFIG_META = WidgetMeta(
         PropDef("defaultPort", "默认端口", PropType.INT, 8080, min_val=1, max_val=65535),
         PropDef("defaultParser", "默认解析模式", PropType.ENUM, "项目设置",
                 options=["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]),
-        *MODBUS_LINK_PROPS,
+        *MODBUS_ROLE_PROPS,
         PARSER_CONFIG_PROP,
     ],
 )
@@ -444,9 +527,24 @@ LOG_BOX_META = WidgetMeta(
     ],
 )
 
+SLAVE_TABLE_META = WidgetMeta(
+    type_name="ModbusSlaveTable",
+    display_name="从站寄存器表",
+    category=WidgetCategory.COMM,
+    icon="TABLE",
+    default_width=260, default_height=300,
+    min_width=160, min_height=120,
+    properties=[
+        PropDef("mbArea", "区", PropType.ENUM, "保持寄存器",
+                options=["保持寄存器", "输入寄存器", "线圈", "离散输入"]),
+        PropDef("displayFormat", "显示格式", PropType.ENUM, "无符号", options=["无符号", "有符号", "十六进制"],
+                description="线圈和离散输入总是显示 0/1"),
+    ],
+)
+
 ALL_COMPOSITE = [
     SERIAL_CONFIG_META, TCP_CONFIG_META, MQTT_CONFIG_META,
-    DATA_SEND_META, DATA_RECV_META, LOG_BOX_META,
+    DATA_SEND_META, DATA_RECV_META, LOG_BOX_META, SLAVE_TABLE_META,
 ]
 
 # Cards shared with exported applications, configured through their PROPERTY_SETTERS.
@@ -479,6 +577,11 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
         w = LogDisplayBox(parent)
         w.set_max_lines(props.get("maxLines", 500))
         return w
+    if type_name == "ModbusSlaveTable":
+        w = ModbusSlaveTable(parent)
+        w.set_area(props.get("mbArea", "保持寄存器"))
+        w.set_display_format(props.get("displayFormat", "无符号"))
+        return w
     return None
 
 
@@ -495,3 +598,6 @@ def apply_composite_property(widget, type_name: str, prop_name: str, value):
         elif prop_name == "maxLines": widget.set_max_lines(value)
     elif type_name == "LogBox":
         if prop_name == "maxLines": widget.set_max_lines(value)
+    elif type_name == "ModbusSlaveTable":
+        if prop_name == "mbArea": widget.set_area(value)
+        elif prop_name == "displayFormat": widget.set_display_format(value)

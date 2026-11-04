@@ -5,6 +5,10 @@ queue. A client is one byte stream with one parser. A server accepts any number 
 each with its own parser, so interleaved streams cannot corrupt each other's frames; a
 command is written to every connected peer. A parser that frames by silence gets a
 single-shot timer per stream, restarted by every read, that flushes it when it fires.
+
+Connected with a card's slave (slave_runtime.ModbusSlaveDevice) while it parses modbus or modbus_tcp, the
+link answers the requests it reads instead of parsing replies: each stream (the client's, or each peer's)
+frames its own, and a reply goes back on the stream its request came from.
 """
 from functools import partial
 
@@ -13,6 +17,7 @@ from PyQt5.QtNetwork import QAbstractSocket, QHostAddress, QTcpServer, QTcpSocke
 
 from .protocol_parser import ModbusRequests, create_parser, text_encoding
 from .modbus_master import ModbusMaster
+from .modbus_slave import SLAVE_PARSERS
 
 CLIENT, SERVER = "客户端", "服务端"
 _MODES = {CLIENT: CLIENT, SERVER: SERVER, "client": CLIENT, "server": SERVER}
@@ -28,6 +33,7 @@ def tcp_mode(value):
 
 class TcpHandler(QObject):
     text_encoding = "utf-8"  # of the text this link receives, for the receive log
+    slave_data = False  # True while dataReceived carries a slave message (publish_slave_data)
     dataReceived = pyqtSignal(dict)
     rawReceived = pyqtSignal(bytes)
     dataSent = pyqtSignal(bytes)
@@ -36,6 +42,7 @@ class TcpHandler(QObject):
     disconnected = pyqtSignal()
     error = pyqtSignal(str)
     peersChanged = pyqtSignal(int)  # server mode: number of connected clients
+    slaveLog = pyqtSignal(str, str)  # a slave's log line and its level
     DEFAULT_CONFIG = {}
 
     def __init__(self, parent=None, config=None):
@@ -48,6 +55,7 @@ class TcpHandler(QObject):
         self._parser_setup = ("line", {})
         self.modbus_requests = ModbusRequests()  # shared by every peer's parser
         self.modbus_master = ModbusMaster(self)  # one Modbus request at a time, answered by any peer
+        self.slave_device = None  # the slave answering on this link while it is connected as one
         self._mode = CLIENT
         self._description = ""
         self._pending_error = ""
@@ -70,6 +78,19 @@ class TcpHandler(QObject):
             return self._server.isListening()
         return (self._socket is not None
                 and self._socket.state() == QAbstractSocket.ConnectedState)
+
+    @property
+    def slave_active(self):
+        """Answering as a Modbus slave: the poller and Modbus commands leave this link alone."""
+        return self.slave_device is not None
+
+    def publish_slave_data(self, message):
+        """A slave message, published like a parsed frame; slave_data tells the log box to leave it out."""
+        self.slave_data = True
+        try:
+            self.dataReceived.emit(message)
+        finally:
+            self.slave_data = False
 
     @property
     def can_send(self):
@@ -102,7 +123,7 @@ class TcpHandler(QObject):
     def description(self):
         return self._description
 
-    def connect(self, host=None, port=None, mode=None, parser_type=None, parser_config=None):
+    def connect(self, host=None, port=None, mode=None, parser_type=None, parser_config=None, slave=None):
         """Start connecting (client) or listening (server).
 
         A server is up when this returns True. A client only begins its attempt: the
@@ -118,7 +139,10 @@ class TcpHandler(QObject):
             selected_config = parser_config
             if selected_config is None:
                 selected_config = cfg["parserConfig"] if selected_parser == cfg["parser"] else {}
-            parser = create_parser(selected_parser, selected_config, self.modbus_requests)
+            if selected_parser not in SLAVE_PARSERS:
+                slave = None  # another mode: the card's slave settings do not count
+            parser = (slave.framer(selected_parser) if slave is not None
+                      else create_parser(selected_parser, selected_config, self.modbus_requests))
         except (TypeError, ValueError) as exc:
             self.error.emit(f"TCP 参数无效: {exc}")
             return False
@@ -132,10 +156,18 @@ class TcpHandler(QObject):
         self._parser = parser
         self.text_encoding = text_encoding(selected_parser, selected_config)
         self._mode = mode
+        self.slave_device = slave
+        if slave is not None:
+            slave.begin(self, selected_parser)
         if mode == CLIENT:
             self._watch_idle(parser)
         if mode == SERVER:
-            return self._listen(host, port)
+            if self._listen(host, port):
+                return True
+            if slave is not None:
+                slave.end()
+                self.slave_device = None
+            return False
         socket = QTcpSocket(self)
         socket.connected.connect(partial(self._on_client_connected, socket))
         socket.disconnected.connect(partial(self._on_client_disconnected, socket))
@@ -186,6 +218,9 @@ class TcpHandler(QObject):
             server.deleteLater()
         if socket is not None:
             self._drop(socket)
+        if self.slave_device is not None:
+            self.slave_device.end()
+            self.slave_device = None
         if socket is not None or server is not None:
             self.disconnected.emit()
             self.connectionChanged.emit(False)
@@ -274,7 +309,11 @@ class TcpHandler(QObject):
             peer = server.nextPendingConnection()
             if peer is None:
                 break
-            self._peers[peer] = parser = create_parser(*self._parser_setup, self.modbus_requests)
+            if self.slave_device is not None:  # each client's requests are framed apart
+                parser = self.slave_device.framer(self.parser_type)
+            else:
+                parser = create_parser(*self._parser_setup, self.modbus_requests)
+            self._peers[peer] = parser
             self._watch_idle(parser)
             peer.readyRead.connect(partial(self._on_peer_ready_read, peer))
             peer.disconnected.connect(partial(self._on_peer_disconnected, peer))
@@ -324,3 +363,22 @@ class TcpHandler(QObject):
             self.rawReceived.emit(unit)
             for parsed in parser.parse(unit):
                 self.dataReceived.emit(parsed)
+            if self.slave_device is not None:  # a request the slave answers on the stream it came from
+                self.slave_device.receive(unit, partial(self._send_reply, parser))
+
+    def _send_reply(self, parser, data):
+        """A slave's reply, to the stream whose parser framed the request: written like send(), but to that
+        stream alone and with no read noted for it. False once the stream is gone."""
+        if self._server is not None:
+            stream = next((peer for peer, framer in self._peers.items() if framer is parser), None)
+        else:
+            stream = self._socket if parser is self._parser else None
+        if stream is None or stream.state() != QAbstractSocket.ConnectedState:
+            return False
+        try:
+            self._write(stream, data)
+        except Exception as exc:
+            self.error.emit(f"发送失败: {exc}")
+            return False
+        self.dataSent.emit(bytes(data))
+        return True

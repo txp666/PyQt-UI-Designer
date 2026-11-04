@@ -13,17 +13,18 @@ from qfluentwidgets import (
     CheckBox, TextEdit, isDarkTheme, qconfig,
 )
 
-from .link_polling import ModbusLinkSettings, status_label
+from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, status_label
 from .serial_runtime import _list_all_ports
 from .signal_lifetime import SignalConnections
 
-class SerialConfigCard(ModbusLinkSettings, CardWidget):
+class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
     One button connects or disconnects the hub's serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
     height is what the rows of its display mode need. Like every link card it hands the Modbus
-    poller its settings and shows the poller's status while its link parses Modbus."""
+    poller its settings and shows the poller's status while its link parses Modbus; in the 从站 role
+    it answers as a Modbus slave instead (link_polling.ModbusSlaveSettings)."""
 
     LINK = "serial"  # name of this card's link on a CommHub
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
@@ -37,9 +38,11 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         ("defaultStopbits", "set_default_stopbits", "1"),
         ("defaultFlow", "set_default_flow", "无"),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusRole", "set_modbus_role", "主站"),
         ("modbusPeriod", "set_modbus_period", 500),
         ("modbusTimeout", "set_modbus_timeout", 1000),
         ("modbusSlave", "set_modbus_slave", 1),
+        *SLAVE_PROPERTY_SETTERS,
         ("parserConfig", "set_parser_config", {}),
     )
 
@@ -333,7 +336,7 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
             parity=parity_map.get(self._parity_combo.currentText(), "N"),
             stopbits=float(self._stopbits_combo.currentText()),
             flowcontrol=flow_map.get(self._flow_combo.currentText(), "none"),
-            parser_type=self.parser_type, parser_config=self.parser_config,
+            parser_type=self.parser_type, parser_config=self.parser_config, slave=self.slave_device,
         )
         if not ok:
             for btn in (self._connect_btn, self._sl_conn):

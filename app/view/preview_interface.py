@@ -28,7 +28,8 @@ from app.core.modbus_poller import ModbusPoller
 from app.core.signal_lifetime import SignalConnections
 from app.core.slider_release import SendOnRelease
 from app.core.command_runtime import (
-    MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, send_modbus_command,
+    MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, modbus_request,
+    send_modbus_command, slave_command_write, slave_control_write, slave_devices,
 )
 
 
@@ -42,6 +43,7 @@ class PreviewCanvas(QWidget):
         self._widgets = []
         self._asset_base_dir = None
         self._modbus_poller = None
+        self._slave_devices = []  # the slaves of the link cards in the 从站 role, in document order
         self._update_style()
 
     def _update_style(self):
@@ -65,7 +67,16 @@ class PreviewCanvas(QWidget):
 
         for wd in project.widgets:
             self._create_widget_recursive(wd, self)
+        self._slave_devices = slave_devices(self._widgets)
+        for widget in self._widgets:
+            if hasattr(widget, "set_slave_device"):  # a register table shows the first slave's
+                widget.set_slave_device(self._slave_devices[0] if self._slave_devices else None)
         self._modbus_poller.start()
+
+    def start_slaves(self):
+        """The bindings are up: every slave publishes its whole data table, so bound widgets show it."""
+        for device in self._slave_devices:
+            device.publish_start()
 
     def _create_widget_recursive(self, wd: dict, parent_widget: QWidget):
         type_name = wd["type"]
@@ -103,6 +114,7 @@ class PreviewCanvas(QWidget):
                 bindingEngine.register_widget(widget_id, widget)
 
             self._wire_commands(widget, type_name, props)
+            self._wire_slave_writes(widget, type_name, wd.get("binding") or {})
             if hasattr(widget, "set_modbus_poller"):  # a link card: its settings, the poller's status
                 widget.set_modbus_poller(self._modbus_poller)
 
@@ -131,27 +143,57 @@ class PreviewCanvas(QWidget):
     def _command_error(error):
         signalBus.showNotification.emit("提示", str(error), "错误", 2000)
 
-    @staticmethod
-    def _send_modbus_frame(props: dict, value: int = None):
+    def _send_modbus_frame(self, props: dict, value: int = None):
         """Send a Modbus request from widget properties over every connected link, framed
         for each link: RTU, or MBAP / ASCII where the link parses Modbus TCP / ASCII.
-        If value is provided, it overrides mbValue from props."""
+        If value is provided, it overrides mbValue from props. A write is carried out on the
+        data table of every link card in the 从站 role too, connected or not."""
         from app.core.comm_manager import commHub
+        fields = (
+            props.get("mbSlave", 1),
+            MODBUS_FUNCTIONS.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
+            props.get("mbAddress", 0),
+            value if value is not None else props.get("mbValue", 1),
+            props.get("mbDataType", "uint16"),
+            props.get("mbRegOrder", MODBUS_ORDERS[0]),
+        )
+        wrote = False
+        if self._slave_devices:
+            try:
+                wrote = slave_command_write(self._slave_devices, modbus_request(*fields))
+            except ValueError as exc:
+                self._command_error(exc)
+                return
         if not commHub.is_connected:
-            signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
+            if not wrote:
+                signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
         try:
-            send_modbus_command(
-                commHub,
-                props.get("mbSlave", 1),
-                MODBUS_FUNCTIONS.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
-                props.get("mbAddress", 0),
-                value if value is not None else props.get("mbValue", 1),
-                props.get("mbDataType", "uint16"),
-                props.get("mbRegOrder", MODBUS_ORDERS[0]),
-            )
+            send_modbus_command(commHub, *fields)
         except ValueError as exc:
-            PreviewCanvas._command_error(exc)
+            self._command_error(exc)
+
+    def _wire_slave_writes(self, widget: QWidget, type_name: str, binding: dict):
+        """A user's change of a switch, slider or spin box with a Modbus binding goes into the data table
+        of every link card in the 从站 role, when the command would go out (sendOnChange aside). A
+        binding's own update is signal-blocked, so it never writes back; one with an expression is not
+        written, since its value cannot be worked back."""
+        if (type_name not in ("ToggleSwitch", "Slider", "SpinBox") or binding.get("parseMode") != "Modbus"
+                or binding.get("expression")):
+            return
+        write = partial(self._slave_write, binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)),
+                        binding.get("mbDataType", "uint16"), binding.get("mbRegOrder", MODBUS_ORDERS[0]))
+        if type_name == "ToggleSwitch":
+            switch = widget.findChild(SwitchButton)
+            if switch:
+                switch.checkedChanged.connect(lambda checked: write(1 if checked else 0))
+        elif type_name == "Slider":
+            SendOnRelease(widget, write)
+        else:
+            widget.valueChanged.connect(write)
+
+    def _slave_write(self, area, address, data_type, reg_order, value):
+        slave_control_write(self._slave_devices, area, address, value, data_type, reg_order)
 
     @staticmethod
     def _send_serial_bytes(raw: bytes):
@@ -161,15 +203,14 @@ class PreviewCanvas(QWidget):
             return
         commHub.send(raw)
 
-    @staticmethod
-    def _send_command(cmd: str, mode: str, newline: str, props: dict):
+    def _send_command(self, cmd: str, mode: str, newline: str, props: dict):
         from app.core.comm_manager import commHub
         if not commHub.is_connected:
             signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
 
         if mode == "Modbus":
-            PreviewCanvas._send_modbus_frame(props, cmd)
+            self._send_modbus_frame(props, cmd)
             return
         elif mode == "HEX":
             try:
@@ -190,15 +231,14 @@ class PreviewCanvas(QWidget):
         "float32": ("f", float),
     }
 
-    @staticmethod
-    def _apply_template(tpl: str, value: str, mode: str, newline: str, props: dict):
+    def _apply_template(self, tpl: str, value: str, mode: str, newline: str, props: dict):
         """Apply template and send via the appropriate mode.
 
         For HEX mode with a struct data type, packs the value as binary first,
         then applies the template to the hex representation.
         """
         if mode == "Modbus":
-            PreviewCanvas._send_modbus_frame(props, value)
+            self._send_modbus_frame(props, value)
             return
         if mode == "HEX":
             dt = props.get("dataType", "HEX字符串")
@@ -217,10 +257,9 @@ class PreviewCanvas(QWidget):
                 return
 
         cmd = tpl.replace("{value}", value) if "{value}" in tpl else tpl
-        PreviewCanvas._send_command(cmd, mode, newline, props)
+        self._send_command(cmd, mode, newline, props)
 
-    @staticmethod
-    def _wire_commands(widget: QWidget, type_name: str, props: dict):
+    def _wire_commands(self, widget: QWidget, type_name: str, props: dict):
         """Connect command properties to sending over the communication hub."""
         mode = props.get("commandMode", "文本")
         newline = props.get("commandNewline", "\\r\\n")
@@ -231,11 +270,11 @@ class PreviewCanvas(QWidget):
             if mode == "Modbus":
                 settings = {"mbFunc": "03 读保持寄存器", **props}
                 widget.clicked.connect(
-                    lambda _, p=settings: PreviewCanvas._send_modbus_frame(p))
+                    lambda _, p=settings: self._send_modbus_frame(p))
             elif cmd:
                 widget.clicked.connect(
                     lambda _, c=cmd, m=mode, n=newline, p=props, t=tpl:
-                        PreviewCanvas._apply_template(t, c, m, n, p))
+                        self._apply_template(t, c, m, n, p))
 
         elif type_name == "ToggleSwitch":
             on_cmd = props.get("onCommand", "").strip()
@@ -247,19 +286,19 @@ class PreviewCanvas(QWidget):
                                    _m=mode, _n=newline, _p=props, _t=tpl):
                         if _m == "Modbus":
                             val = 0xFF00 if checked else 0x0000
-                            PreviewCanvas._send_modbus_frame(
+                            self._send_modbus_frame(
                                 {**_p, "mbFunc": "05 写单线圈"}, val)
                         else:
                             c = _on if checked else _off
                             if c:
-                                PreviewCanvas._apply_template(_t, c, _m, _n, _p)
+                                self._apply_template(_t, c, _m, _n, _p)
                     sw.checkedChanged.connect(_on_toggle)
 
         elif type_name == "LineEdit" and (props.get("sendOnEnter") or mode == "Modbus"):
             def _on_enter(_w=widget, _m=mode, _n=newline, _p=props, _t=tpl):
                 text = _w.text().strip()
                 if text or _m == "Modbus":
-                    PreviewCanvas._apply_template(_t, text, _m, _n, _p)
+                    self._apply_template(_t, text, _m, _n, _p)
             widget.returnPressed.connect(_on_enter)
 
         elif type_name == "ComboBox" and (props.get("sendOnSelect") or mode == "Modbus"):
@@ -272,12 +311,12 @@ class PreviewCanvas(QWidget):
                     return
                 raw = _cmds[idx] if idx < len(_cmds) and _cmds[idx] else _w.currentText()
                 if raw:
-                    PreviewCanvas._apply_template(_t, raw, _m, _n, _p)
+                    self._apply_template(_t, raw, _m, _n, _p)
             widget.currentIndexChanged.connect(_on_select)
 
         elif type_name in ("Slider", "SpinBox") and (props.get("sendOnChange") or mode == "Modbus"):
             def _on_value_changed(val, _tpl=tpl, _m=mode, _n=newline, _p=props):
-                PreviewCanvas._apply_template(_tpl, str(val), _m, _n, _p)
+                self._apply_template(_tpl, str(val), _m, _n, _p)
             if type_name == "Slider":  # a drag sends once, when it lets go
                 SendOnRelease(widget, _on_value_changed)
             else:
@@ -304,6 +343,7 @@ class PreviewCanvas(QWidget):
             self._modbus_poller.stop()
             self._modbus_poller.deleteLater()
             self._modbus_poller = None
+        self._slave_devices = []
         for w in self._widgets:
             if hasattr(w, "stop_listening"):
                 w.stop_listening()
@@ -794,6 +834,7 @@ class PreviewInterface(QWidget):
 
         bindingEngine.load_bindings_from_project(self._project_data.widgets)
         bindingEngine.start()
+        self._preview_canvas.start_slaves()
 
         self._preview_canvas.setEnabled(True)
         self._placeholder.hide()

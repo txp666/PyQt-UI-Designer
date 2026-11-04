@@ -18,7 +18,7 @@ from PyQt5.QtGui import QFocusEvent
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QWidget
 
-from app.core import modbus_master
+from app.core import modbus_master, modbus_slave
 from app.core.code_generator import _gen_ui
 from app.common.signal_bus import signalBus
 from app.core.project import ProjectData, ProjectManager
@@ -103,7 +103,11 @@ class DesignerEditingTests(unittest.TestCase):
                 self.app.processEvents()
                 names = [prop.name for prop in registry.get(type_name).properties]
                 at = names.index("defaultParser")
-                self.assertEqual(names[at:at + 5], ["defaultParser", *fields, "parserConfig"])
+                role = type_name != "MqttConfigCard"  # serial and TCP cards have a Modbus role first
+                slave_fields = [name for name in names if name.startswith("slave")] if role else []
+                self.assertEqual(names[at:at + 5 + role + 2 * role + len(slave_fields)],
+                                 ["defaultParser", *["modbusRole"] * role, *fields,
+                                  *["modbusDelay", "modbusExceptions"] * role, *slave_fields, "parserConfig"])
                 rows = [editor._prop_rows[name] for name in fields]
                 self.assertEqual([label.text() for label, _spin in rows], ["默认轮询(ms)", "响应超时(ms)", "默认从站"])
                 self.assertEqual([(spin.minimum(), spin.maximum(), spin.value()) for _label, spin in rows],
@@ -117,7 +121,7 @@ class DesignerEditingTests(unittest.TestCase):
                 parser.setCurrentText("modbus_tcp")
                 self.assertTrue(all(spin.isVisible() for _label, spin in rows))
                 self.assertEqual(form.getWidgetPosition(rows[0][1])[0],
-                                 form.getWidgetPosition(parser)[0] + 1, "right after 默认解析模式")
+                                 form.getWidgetPosition(parser)[0] + 1 + role, "right after 默认解析模式 (and 角色)")
                 rows[0][1].setValue(250)
                 rows[2][1].setValue(3)
                 self.assertEqual([item.properties[name] for name in fields], [250, 1000, 3])
@@ -385,8 +389,9 @@ class DesignerEditingTests(unittest.TestCase):
                 # A QWidget host avoids requiring native frameless-window APIs.
                 serial_module = ModuleType("serial_handler")
                 serial_module._list_all_ports = lambda: []
-                vars(serial_module).update(  # the exported serial_handler holds the Modbus master
-                    (name, value) for name, value in vars(modbus_master).items() if not name.startswith("__"))
+                for runtime in (modbus_master, modbus_slave):  # the exported serial_handler holds both
+                    vars(serial_module).update(
+                        (name, value) for name, value in vars(runtime).items() if not name.startswith("__"))
                 namespace = {"__file__": str(Path(self.temp.name) / "ui.py")}
                 with patch.dict("sys.modules", {"serial_handler": serial_module}):
                     exec(_gen_ui([document], 500, 350), namespace)

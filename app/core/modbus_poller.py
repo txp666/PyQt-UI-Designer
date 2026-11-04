@@ -12,7 +12,9 @@ time, so a control's write goes out between two reads.
 Its settings are the link cards' (serial, TCP, MQTT; link_card.ModbusLinkSettings): the first
 card in document order whose link is connected and parses Modbus hands it its 默认轮询(ms)
 (``modbusPeriod``), 响应超时(ms) (``modbusTimeout``) and 默认从站 (``modbusSlave``, read by the
-bindings that filter no slave). Without such a card the period is 500 ms, a read waits 1000 ms
+bindings that filter no slave). A link answering as a Modbus slave (modbus_slave.py) is not read over, and
+its card neither hands the poller its settings nor shows its status; bindings and curves of a slave address
+that one of the program's 从站 cards answers to are left to that card's table and not read. Without such a card the period is 500 ms, a read waits 1000 ms
 for its reply and the slave is 1. A change counts at once. A link card whose link is connected,
 parses Modbus and can send shows the poller's status after its own.
 """
@@ -56,8 +58,8 @@ def _can_send(link):
 
 
 def _parses_modbus(link):
-    """Connected, and parsing Modbus RTU, TCP or ASCII."""
-    return (link is not None and link.is_connected
+    """Connected, parsing Modbus RTU, TCP or ASCII, and not answering as a slave."""
+    return (link is not None and link.is_connected and not getattr(link, "slave_active", False)
             and getattr(link, "parser_type", "") in MODBUS_PARSERS)
 
 
@@ -229,9 +231,11 @@ class ModbusPoller(QObject):
     def _plan(self):
         """The read blocks for what the bindings on screen and the chart curves read."""
         needs = []
+        own = {device.address for device in (getattr(card, "slave_device", None) for card in self._cards)
+               if device is not None}  # this program's slaves serve those from their tables
         for _widget, slave, table, address, count, period, visible in (self._needs() if self._needs else ()):
             slave = slave if slave > 0 else self._slave
-            if visible and 1 <= slave <= 247 and 0 <= address <= 65535:
+            if visible and 1 <= slave <= 247 and 0 <= address <= 65535 and slave not in own:
                 needs.append({"slave": slave, "table": table, "address": address,
                               "count": count, "period": max(0, period)})
         return plan_blocks(needs, self._period)
