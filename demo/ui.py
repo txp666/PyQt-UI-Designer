@@ -23,7 +23,7 @@ from qfluentwidgets import (
     CardWidget, TableWidget, ToolButton,
     FluentWindow, NavigationItemPosition,
     FluentIcon as FIF, InfoBar, InfoBarPosition, isDarkTheme,
-    qconfig, setCustomStyleSheet,
+    qconfig, setCustomStyleSheet, themeColor,
 )
 
 from serial_handler import _list_all_ports
@@ -408,6 +408,7 @@ class NumericDisplay(QWidget):
         self.apply_theme()
         self._theme_connections = SignalConnections(self)
         self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
+        self._theme_connections.connect(qconfig.themeColorChanged, self.apply_theme)
     def apply_theme(self):
         secondary = "#b3b3b3" if isDarkTheme() else "#606060"
         self._title.setStyleSheet(f"color:{secondary};font-size:11px;")
@@ -423,7 +424,7 @@ class NumericDisplay(QWidget):
         self._val_font_size = size
         self._update_value_style()
     def _update_value_style(self):
-        color = getattr(self, "_val_color", "#0078d4")
+        color = getattr(self, "_val_color", None) or themeColor().name()
         size = getattr(self, "_val_font_size", 28)
         self._value.setStyleSheet(f"font-size:{size}px;font-weight:bold;color:{color};")
 

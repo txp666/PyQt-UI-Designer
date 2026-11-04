@@ -13,7 +13,7 @@ from PyQt5 import sip
 from PyQt5.QtCore import QPoint
 from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget
-from qfluentwidgets import Theme, qconfig, setTheme
+from qfluentwidgets import Theme, qconfig, setTheme, setThemeColor
 
 from app.core.chart_runtime import RealtimeLineChart
 from app.core.code_generator import generate_project
@@ -304,6 +304,40 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual(qconfig.themeMode.value, Theme.AUTO)
             self.assertEqual(qconfig.theme, Theme.DARK)
             self.assertLess(self.app.palette().color(QPalette.Window).lightness(), 100)
+
+    def test_exported_main_inherits_theme_color(self):
+        # A designer set to orange once exported a cyan application.
+        previous_color = QColor(qconfig.get(qconfig.themeColor))
+        self.addCleanup(lambda: setThemeColor(previous_color, save=False))
+        setThemeColor("#e8590c", save=False)
+        code = """
+import runpy, sys
+from unittest.mock import patch
+from PyQt5.QtGui import QPalette
+from PyQt5.QtWidgets import QApplication
+from qfluentwidgets import themeColor
+
+def report():
+    app = QApplication.instance()
+    print("COLORS", themeColor().name(), app.palette().color(QPalette.Highlight).name())
+    return 0
+
+if sys.platform == "darwin":
+    from qframelesswindow.mac import MacFramelessWindow
+    for method in ("updateFrameless", "_hideSystemTitleBar", "setSystemTitleBarButtonVisible"):
+        setattr(MacFramelessWindow, method, lambda *args, **kwargs: None)
+with patch.object(QApplication, "exec", staticmethod(report)):
+    runpy.run_path("main.py", run_name="__main__")
+"""
+        with tempfile.TemporaryDirectory() as folder:
+            generate_project(ProjectData(), folder, theme_mode="Light")
+            result = subprocess.run(
+                [sys.executable, "-c", code], cwd=folder,
+                env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
+                text=True, capture_output=True, timeout=30,
+            )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("COLORS #e8590c #e8590c", result.stdout)
 
     def test_exported_main_inherits_mode_and_keeps_widgets_readable(self):
         # Deliberately omit RealtimeChart/SerialConfigCard: their embedded
