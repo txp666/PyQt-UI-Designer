@@ -29,9 +29,9 @@
 
 ---
 
-**PyQt UI Designer** is a no-code / low-code designer for desktop control and monitoring apps (上位机) for hardware. Drag widgets onto a canvas, set their properties, and bind them to serial, TCP or MQTT data, and it generates a standalone PyQt5 app that it can package as an exe on Windows or an `.app` on macOS. No more writing the UI, the communication code and the protocol parsing from scratch for every hardware project.
+**PyQt UI Designer** is a no-code / low-code designer for desktop control and monitoring apps (上位机) for hardware. Drag widgets onto a canvas, set their properties, and bind them to serial, TCP, UDP or MQTT data, and it generates a standalone PyQt5 app that it can package as an exe on Windows or an `.app` on macOS. No more writing the UI, the communication code and the protocol parsing from scratch for every hardware project.
 
-> **Language**: the designer's interface, the online user guide and the documents in `docs/` are in Chinese for now.
+> **Language**: the designer's interface is in English or Simplified Chinese (Settings → Language); the online user guide and the documents in `docs/` are in Chinese.
 
 > **Try the C++ version, [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio)**: it opens the same `.uidp` projects, with a smaller download and faster startup, and exports an app in under a second without Python or a compiler. See [C++ version: FluentHMI Studio](#c-version-fluenthmi-studio) below.
 
@@ -138,14 +138,15 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 | **Layout** | Horizontal layout, vertical layout, flex layout, group box, tab widget, separator, card container |
 | **Display** | LED indicator, numeric display, progress bar, progress ring, image |
 | **Charts** | Live chart (multiple channels, cursor, data save / load), gauge, data table |
-| **Communication** | Serial config card, TCP config card, MQTT config card, send card, receive card, log box |
+| **Communication** | Serial config card, TCP config card, UDP config card, MQTT config card, send card, receive card, log box |
 
 ### Receiving and binding data
 
 - **Serial ports**: scans ports automatically; baud rate, data bits, parity, stop bits and flow control are configurable
 - **TCP client / server**: connect to a device as a client, or listen on a port and let devices connect in; the server accepts several devices at once and frames each connection separately
+- **UDP**: bind a local port and send commands to a remote host and port, or, with no remote, reply to the last sender; each datagram is one frame, each sender is framed separately, and a broadcast address broadcasts
 - **MQTT subscribe / publish**: connect to a broker and subscribe to one or more topics (with `+` and `#` wildcards) to receive data, and publish commands to a chosen topic; supports username and password, QoS 0/1/2 and TLS
-- All three links share the same parser modes, data bindings, charts, tables and logs, and commands go to every connected link
+- All four links share the same parser modes, data bindings, charts, tables and logs, and commands go to every connected link
 - Every link card has a link of its own, so a project can hold several cards of one kind, each connected on its own: two serial ports, say, a TCP server next to a TCP client, or two MQTT brokers
 - **Key-value matching**: parses `key1=value1,key2=value2`, top-level JSON fields, or CSV (channels are named `ch0`, `ch1`… automatically)
 - **JSON path**: parses JSON data, including nested paths
@@ -154,7 +155,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **Modbus TCP**: frames by the MBAP header and outputs exactly the same dictionary as RTU, so the same binding settings work for both
 - **Modbus ASCII**: frames by `:` and `\r\n` and checks the LRC, with the same output as RTU; Modbus commands are framed as ASCII on a `modbus_ascii` link
 - **Binding by register address**: read requests sent from here are remembered, so the registers in a response are also named by address (holding register 100 is `hr100`) and a binding can pick a register table and an address; polling several address blocks of a PLC doesn't mix them up
-- Serial, TCP and MQTT all offer five parser modes (line text, binary HEX frame, Modbus RTU, Modbus TCP, Modbus ASCII) and can detect the format of a line protocol automatically; binary HEX frames are framed by header and footer, length field, checksum, fixed length or idle gap, set for the project or for each link card
+- Serial, TCP, UDP and MQTT all offer five parser modes (line text, binary HEX frame, Modbus RTU, Modbus TCP, Modbus ASCII) and can detect the format of a line protocol automatically; binary HEX frames are framed by header and footer, length field, checksum, fixed length or idle gap, set for the project or for each link card
 
 ### Sending commands
 
@@ -162,7 +163,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **HEX mode**: frame header and trailer, and packing values by data type
 - **Modbus mode**: builds frames automatically and can poll; the frame format is chosen per link: links whose parser mode is `modbus_tcp` send MBAP frames, `modbus_ascii` links send ASCII frames, the others send RTU frames with a CRC. FC16 write multiple registers writes int16, 32-bit integers and float32 values by data type
 - **Automatic Modbus polling**: pick a Modbus parser on the link card and bind widgets to register addresses, and they are read automatically: once the link connects, neighbouring addresses are merged into read blocks and the widgets on screen are read at each binding's own period; control writes go out between two reads instead of colliding with them. The polling parameters (default period, reply timeout, default slave) are set on the link card, whose status line shows the polling state (missing replies, the exception codes a device returns)
-- **Modbus RTU / TCP slave**: set a serial or TCP card's Modbus role to 从站 (slave) and it answers an external master from the coil, discrete input, holding register and input register areas you set (01–06, 0F, 10); bound widgets show the data table, and switches, sliders, Modbus write commands and the slave register table write into it, while the log box records every request and reply
+- **Modbus RTU / TCP slave**: set a serial, TCP or UDP card's Modbus role to 从站 (slave) and it answers an external master from the coil, discrete input, holding register and input register areas you set (01–06, 0F, 10); bound widgets show the data table, and switches, sliders, Modbus write commands and the slave register table write into it, while the log box records every request and reply
 - **Command templates**: insert a widget's current value with the `{value}` placeholder
 
 ### Export and packaging
@@ -188,8 +189,7 @@ This is the raw text of [docs/uidp-format.md](docs/uidp-format.md), which an AI 
 | **Serial** | ✅ Supported | RS-232/485/TTL, with line text, HEX frame and Modbus RTU parsing |
 | **TCP Client/Server** | ✅ Supported | TCP client or server; the server accepts several devices. Same parser modes as serial, plus Modbus TCP (MBAP): with `modbus_tcp` selected, Modbus commands are framed as MBAP automatically |
 | **MQTT** | ✅ Supported | Subscribe / publish, with wildcard topics, username and password, QoS 0/1/2 and TLS; each message is parsed as one frame, and a payload that is just a number can be bound by its topic name |
-| **UDP** | 📋 Planned | UDP datagrams |
-| **Bluetooth** | 📋 Planned | Bluetooth serial (SPP) / BLE |
+| **UDP** | ✅ Supported | Local port and remote host / port; with no remote, replies go to the last sender. Each datagram is one frame, each sender is framed separately; Modbus TCP over UDP, RTU and ASCII too, as master or slave; broadcast by entering a broadcast address |
 
 The communication layer is modular: every link implements the same set of signals, and `CommHub` gathers them for bindings, charts, tables and logs, which makes it easy to add more protocols. PRs are welcome. See [docs/protocol.md](docs/protocol.md#六传输链路串口tcpmqtt) for details of each link.
 
@@ -200,7 +200,7 @@ The full illustrated guide is on the [website](https://modusignal.cn/pyqt-ui-des
 1. **Design the UI**: drag widgets from the widget panel on the left onto the canvas, and set their properties in the property editor on the right.
 2. **Bind data**: select a display widget (numeric display, LED, progress bar and so on) and set its binding key (绑定键, the field name in the device's data) and parse mode (解析模式: key-value matching, JSON path, HEX byte extraction or Modbus).
 3. **Configure commands**: select an interactive widget (button, switch, slider and so on) and set the send mode (text, HEX or Modbus), the command, and optionally a `{value}` command template.
-4. **Preview**: switch to the Preview page (预览运行) and click Run preview (运行预览), then connect to the device with a serial, TCP or MQTT config card to test it live.
+4. **Preview**: switch to the Preview page (预览运行) and click Run preview (运行预览), then connect to the device with a serial, TCP, UDP or MQTT config card to test it live.
 5. **Export and package**: the shortcut for exporting code is `Ctrl+Shift+E` on Windows and `⌘⇧E` on a Mac, or click Export code (导出代码) in the navigation bar. On the Preview page, click Package (一键打包) and choose a folder; it exports, compiles with Nuitka and zips the result automatically. Packaging needs a C/C++ compiler on the machine: the Xcode Command Line Tools on macOS, and on Windows a compiler that Nuitka supports (MSVC for Python 3.13+).
 
 <details>
@@ -210,9 +210,9 @@ Line text ends with the line terminator (LF `\n` by default, CRLF works too; the
 
 Sliders, spin boxes, progress bars, progress rings and gauges ignore data that can't be converted: integer widgets reject values outside Qt's integer range, and gauges reject NaN and Infinity, while the other bindings in the same frame keep updating. Switches accept explicit boolean text and numbers, and unknown text leaves their state unchanged; an LED's custom on and off values take precedence. The preview and standalone exports follow the same rules, and odd-length hex text in a HEX frame header or trailer gets a leading zero.
 
-The default parser mode (默认解析模式) of the serial, TCP and MQTT config cards can be `line`, `hex`, `modbus`, `modbus_tcp`, `modbus_ascii` or project settings (项目设置). Project settings uses `serial.parser` / `parserConfig` from the `.uidp`, which defaults to line text, and the three links share this one frame format configuration. Data bits, parity, stop bits, flow control and the parser mode use the same implementation in the preview and in exported programs. Switching to another parser mode uses that mode's configuration, and choosing project settings brings back the project's.
+The default parser mode (默认解析模式) of the serial, TCP, UDP and MQTT config cards can be `line`, `hex`, `modbus`, `modbus_tcp`, `modbus_ascii` or project settings (项目设置). Project settings uses `serial.parser` / `parserConfig` from the `.uidp`, which defaults to line text, and the four links share this one frame format configuration. Data bits, parity, stop bits, flow control and the parser mode use the same implementation in the preview and in exported programs. Switching to another parser mode uses that mode's configuration, and choosing project settings brings back the project's.
 
-The TCP server frames each connected device separately, and commands are written to every connected device. MQTT treats each message as one frame: in line text mode, payloads without a trailing line terminator are parsed too; a payload that is a single plain number is also given a second time with the topic name as its key, so you can bind to the topic name directly; HEX frames buffer partial packets per topic. When several links are connected at once, commands go to every connected link.
+The TCP server frames each connected device separately, and commands are written to every connected device. UDP treats each datagram as one frame, framed separately per sender, and sends each command as one datagram. MQTT treats each message as one frame: in line text mode, payloads without a trailing line terminator are parsed too; a payload that is a single plain number is also given a second time with the topic name as its key, so you can bind to the topic name directly; HEX frames buffer partial packets per topic. When several links are connected at once, commands go to every connected link.
 
 </details>
 
@@ -245,7 +245,7 @@ A tab name is applied when you leave the edit box, or when you save, preview or 
 <details>
 <summary><b>Export details and themes</b></summary>
 
-Exports keep a button's disabled state, a line edit's default text and read-only state, and a combo box's default item. Custom properties of the send, receive, table, log and Modbus widgets and of the serial / TCP / MQTT config cards carry over to the exported program. Tables and logs receive data from all links automatically, and text such as `<` and `>` in the receive area is shown as it is.
+Exports keep a button's disabled state, a line edit's default text and read-only state, and a combo box's default item. Custom properties of the send, receive, table, log and Modbus widgets and of the serial / TCP / UDP / MQTT config cards carry over to the exported program. Tables and logs receive data from all links automatically, and text such as `<` and `>` in the receive area is shown as it is.
 
 Exports and packages inherit the theme (light, dark or follow system), theme color and language currently set on the Settings page, so the standalone program starts looking like the designer's preview; with the language set to follow the system, the standalone program follows the system language of the computer it runs on. Follow system updates when the standalone program starts and when the system appearance changes. Switching themes updates the design canvas, the running preview, native Qt widgets and chart colors together, and keeps widget values, chart history, check states and custom font sizes and colors; the receive and log terminals keep a dark background so that existing colored messages stay readable.
 
@@ -319,7 +319,7 @@ PyQt-UI-Designer/
 ├── requirements.txt     # Dependencies
 ├── app/
 │   ├── common/          # Config, version info, packaging support, update check
-│   ├── core/            # Project I/O, data binding, protocol parsing, serial / TCP / MQTT runtime, code generation
+│   ├── core/            # Project I/O, data binding, protocol parsing, serial / TCP / UDP / MQTT runtime, code generation
 │   ├── designer/        # Design canvas, widget panel, property editor, selection and alignment
 │   ├── resource/        # Widget panel icons
 │   ├── view/            # Main window, and the designer, preview and settings pages
@@ -348,7 +348,7 @@ PyQt-UI-Designer/
 
 ## Feedback and contributing
 
-Bug reports and feature requests are welcome as [Issues](https://github.com/txp666/PyQt-UI-Designer/issues). Protocols such as UDP and Bluetooth are planned, and PRs are welcome too.
+Bug reports and feature requests are welcome as [Issues](https://github.com/txp666/PyQt-UI-Designer/issues). Pull requests are welcome too.
 
 ## License
 

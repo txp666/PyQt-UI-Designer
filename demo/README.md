@@ -64,6 +64,7 @@ python main.py
 | `comm_hub.py` | 生成的通信汇总：每张链路卡片把自己的链路登记在这里，所有链路共用一组信号 |
 | `serial_handler.py` | 生成的串口线程及协议解析器 |
 | `tcp_handler.py` | 生成的 TCP 客户端 / 服务端链路（本示例未放置 TCP 卡片，随导出一并生成） |
+| `udp_handler.py` | 生成的 UDP 链路（同上） |
 | `mqtt_handler.py` | 生成的 MQTT 链路（同上） |
 | `data_binding.py` | 生成的数据绑定 |
 | `theme_support.py` | 生成的浅色、深色及跟随系统主题支持 |
