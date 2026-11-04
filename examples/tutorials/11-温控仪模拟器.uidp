@@ -1,0 +1,305 @@
+{
+  "version": "1.0",
+  "appName": "温控仪模拟器",
+  "canvas": {
+    "width": 900,
+    "height": 600,
+    "gridSize": 10
+  },
+  "serial": {
+    "baudRate": 9600,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "modbus",
+    "parserConfig": {}
+  },
+  "widgets": [
+    {
+      "type": "Label",
+      "id": "title",
+      "geometry": {
+        "x": 20,
+        "y": 10,
+        "w": 560,
+        "h": 30
+      },
+      "properties": {
+        "text": "温控仪模拟器（Modbus 从站）",
+        "fontSize": 20,
+        "bold": true,
+        "alignment": "Left"
+      }
+    },
+    {
+      "type": "SerialConfigCard",
+      "id": "serial",
+      "geometry": {
+        "x": 20,
+        "y": 60,
+        "w": 860,
+        "h": 50
+      },
+      "properties": {
+        "title": "串口（从站）",
+        "displayMode": "单行",
+        "defaultParser": "modbus",
+        "defaultBaud": "9600",
+        "modbusRole": "从站",
+        "modbusSlave": 1,
+        "slaveCoStart": 0,
+        "slaveCoCount": 1,
+        "slaveDiCount": 0,
+        "slaveHrStart": 0,
+        "slaveHrCount": 6,
+        "slaveIrCount": 0,
+        "slaveInit": "hr0=253\nhr1=40\nhr2=35\nhr3=1\nhr4=16842\nhr5=26214"
+      }
+    },
+    {
+      "type": "Label",
+      "id": "devHint",
+      "geometry": {
+        "x": 20,
+        "y": 120,
+        "w": 450,
+        "h": 24
+      },
+      "properties": {
+        "text": "设备侧：拖动滑块，主站读到的就是这些值",
+        "fontSize": 12
+      }
+    },
+    {
+      "type": "GaugeMeter",
+      "id": "temp",
+      "geometry": {
+        "x": 20,
+        "y": 150,
+        "w": 170,
+        "h": 170
+      },
+      "properties": {
+        "title": "实测温度",
+        "unit": "°C",
+        "minimum": 0.0,
+        "maximum": 100.0
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 0,
+        "mbDataType": "int16",
+        "expression": "value * 0.1"
+      }
+    },
+    {
+      "type": "Label",
+      "id": "tempLbl",
+      "geometry": {
+        "x": 210,
+        "y": 150,
+        "w": 260,
+        "h": 22
+      },
+      "properties": {
+        "text": "实测温度 hr0（单位 0.1 °C）",
+        "fontSize": 12
+      }
+    },
+    {
+      "type": "Slider",
+      "id": "tempRaw",
+      "geometry": {
+        "x": 210,
+        "y": 172,
+        "w": 260,
+        "h": 30
+      },
+      "properties": {
+        "minimum": 0,
+        "maximum": 1000,
+        "value": 253
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 0,
+        "mbDataType": "int16"
+      }
+    },
+    {
+      "type": "Label",
+      "id": "floatLbl",
+      "geometry": {
+        "x": 210,
+        "y": 208,
+        "w": 260,
+        "h": 22
+      },
+      "properties": {
+        "text": "曲线温度 hr4–5（float32，°C）",
+        "fontSize": 12
+      }
+    },
+    {
+      "type": "Slider",
+      "id": "tempFloat",
+      "geometry": {
+        "x": 210,
+        "y": 230,
+        "w": 260,
+        "h": 30
+      },
+      "properties": {
+        "minimum": 0,
+        "maximum": 100,
+        "value": 25
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 4,
+        "mbDataType": "float32"
+      }
+    },
+    {
+      "type": "Label",
+      "id": "powerLbl",
+      "geometry": {
+        "x": 210,
+        "y": 266,
+        "w": 260,
+        "h": 22
+      },
+      "properties": {
+        "text": "加热功率 hr2（%）",
+        "fontSize": 12
+      }
+    },
+    {
+      "type": "Slider",
+      "id": "power",
+      "geometry": {
+        "x": 210,
+        "y": 288,
+        "w": 260,
+        "h": 30
+      },
+      "properties": {
+        "minimum": 0,
+        "maximum": 100,
+        "value": 35
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 2,
+        "mbDataType": "uint16"
+      }
+    },
+    {
+      "type": "ToggleSwitch",
+      "id": "running",
+      "geometry": {
+        "x": 20,
+        "y": 335,
+        "w": 200,
+        "h": 30
+      },
+      "properties": {
+        "label": "运行状态 hr3"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 3,
+        "mbDataType": "uint16"
+      }
+    },
+    {
+      "type": "Label",
+      "id": "masterHint",
+      "geometry": {
+        "x": 20,
+        "y": 380,
+        "w": 450,
+        "h": 24
+      },
+      "properties": {
+        "text": "主站写入：设定温度用 06，启停用 05",
+        "fontSize": 12
+      }
+    },
+    {
+      "type": "NumericDisplay",
+      "id": "setpoint",
+      "geometry": {
+        "x": 20,
+        "y": 410,
+        "w": 170,
+        "h": 90
+      },
+      "properties": {
+        "title": "设定温度 hr1",
+        "unit": "°C",
+        "displayFormat": "十进制"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 1,
+        "mbDataType": "uint16"
+      }
+    },
+    {
+      "type": "LEDIndicator",
+      "id": "startCmd",
+      "geometry": {
+        "x": 210,
+        "y": 440,
+        "w": 220,
+        "h": 30
+      },
+      "properties": {
+        "label": "启停命令 线圈 0",
+        "color": "green",
+        "onValue": "1",
+        "offValue": "0"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbArea": "线圈",
+        "mbRegIndex": 0,
+        "mbDataType": "uint16"
+      }
+    },
+    {
+      "type": "ModbusSlaveTable",
+      "id": "table",
+      "geometry": {
+        "x": 490,
+        "y": 120,
+        "w": 390,
+        "h": 380
+      },
+      "properties": {
+        "mbArea": "保持寄存器",
+        "displayFormat": "有符号"
+      }
+    },
+    {
+      "type": "LogBox",
+      "id": "log",
+      "geometry": {
+        "x": 20,
+        "y": 510,
+        "w": 860,
+        "h": 80
+      },
+      "properties": {
+        "maxLines": 500
+      }
+    }
+  ]
+}
