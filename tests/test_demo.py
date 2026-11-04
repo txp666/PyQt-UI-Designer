@@ -22,6 +22,7 @@ from app.widgets.comm import register_comm_widgets
 from app.widgets.composite import register_composite_widgets
 from app.widgets.display import register_display_widgets
 from app.widgets.layout import register_layout_widgets
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 DEMO = Path(__file__).resolve().parents[1] / "demo"
@@ -341,7 +342,7 @@ class DemoTests(unittest.TestCase):
             unrelated = root / "unrelated-working-directory"
             unrelated.mkdir()
             result = subprocess.run(
-                [sys.executable, "-c", textwrap.dedent(_RUN_DEMO), str(copied)],
+                [sys.executable, "-c", CHILD_PRELUDE + textwrap.dedent(_RUN_DEMO), str(copied)],
                 cwd=unrelated,
                 env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
                 text=True, capture_output=True, timeout=25,

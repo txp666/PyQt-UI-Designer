@@ -17,6 +17,7 @@ from app.core.code_generator import generate_project
 from app.core.data_binding import bindingEngine
 from app.core.project import ProjectData
 from app.widgets.basic import create_widget
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 _RUN_EXPORT = r"""
@@ -108,7 +109,7 @@ class ExportBehaviorTests(unittest.TestCase):
             script = _RUN_EXPORT.replace(
                 "__CHECKS__", textwrap.indent(textwrap.dedent(checks).strip(), "    "))
             result = subprocess.run(
-                [sys.executable, "-c", script], cwd=folder,
+                [sys.executable, "-c", CHILD_PRELUDE + script], cwd=folder,
                 env={**os.environ, "PYTHONPATH": "", "QT_QPA_PLATFORM": "offscreen"},
                 capture_output=True, text=True, encoding="utf-8", timeout=30,
             )

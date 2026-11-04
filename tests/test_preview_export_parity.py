@@ -12,6 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from app.core.code_generator import generate_project
 from app.core.project import ProjectData
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -129,7 +130,7 @@ class PreviewExportParityTests(unittest.TestCase):
             for mode in ("preview", "export"):
                 with self.subTest(mode=mode):
                     result = subprocess.run(
-                        [sys.executable, "-c", script], cwd=folder,
+                        [sys.executable, "-c", CHILD_PRELUDE + script], cwd=folder,
                         env={
                             **os.environ, "PYTHONPATH": "",
                             "QT_QPA_PLATFORM": "offscreen",

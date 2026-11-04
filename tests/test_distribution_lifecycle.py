@@ -7,6 +7,8 @@ import sys
 import tempfile
 import unittest
 
+from tests.orderly_exit import CHILD_PRELUDE
+
 
 ROOT = Path(__file__).resolve().parents[1]
 _RUN_MAIN = r"""
@@ -42,7 +44,7 @@ class DistributionLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             report = Path(folder) / "smoke.json"
             result = subprocess.run(
-                [sys.executable, "-c", _RUN_MAIN.replace("__FAULT__", fault),
+                [sys.executable, "-c", CHILD_PRELUDE + _RUN_MAIN.replace("__FAULT__", fault),
                  "--smoke-test-project", str(ROOT / "demo/project.uidp"),
                  "--smoke-test-report", str(report)],
                 cwd=ROOT, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},

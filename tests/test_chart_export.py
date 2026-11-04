@@ -22,6 +22,7 @@ from app.core.code_generator import _realtime_chart_class, generate_project
 from app.core.project import ProjectData
 from app.core.protocol_parser import RawFrameBuffer
 from types import SimpleNamespace
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 def click_legend_entry(chart, index):
@@ -299,7 +300,7 @@ with patch.object(runtime.serial, "Serial") as port, patch.object(runtime, "Seri
     handler.disconnect()
 print("STANDALONE_MODBUS_CHART_OK")
 """
-            result = subprocess.run([sys.executable, "-c", code], cwd=folder,
+            result = subprocess.run([sys.executable, "-c", CHILD_PRELUDE + code], cwd=folder,
                                     env={**os.environ, "QT_QPA_PLATFORM": "offscreen",
                                          "PYTHONPATH": ""},
                                     text=True, capture_output=True, timeout=30)

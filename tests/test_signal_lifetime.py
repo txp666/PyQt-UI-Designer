@@ -9,6 +9,7 @@ import unittest
 
 from app.core.code_generator import generate_project
 from app.core.project import ProjectData
+from tests.orderly_exit import CHILD_PRELUDE
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class SignalLifetimeTests(unittest.TestCase):
     def run_script(self, code, cwd=ROOT):
         result = subprocess.run(
-            [sys.executable, "-c", textwrap.dedent(code)], cwd=cwd,
+            [sys.executable, "-c", CHILD_PRELUDE + textwrap.dedent(code)], cwd=cwd,
             env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
             capture_output=True, text=True, encoding="utf-8", timeout=40,
         )

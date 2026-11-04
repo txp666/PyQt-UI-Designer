@@ -7,6 +7,7 @@ import textwrap
 import unittest
 
 from tests import test_preview_export_parity as parity
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,7 +65,7 @@ class CommandLifecycleTests(unittest.TestCase):
     def run_preview(self, checks):
         script = _PREVIEW.replace("__CHECKS__", textwrap.dedent(checks))
         result = subprocess.run(
-            [sys.executable, "-c", script], cwd=ROOT,
+            [sys.executable, "-c", CHILD_PRELUDE + script], cwd=ROOT,
             env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
             capture_output=True, text=True, encoding="utf-8", timeout=20,
         )
