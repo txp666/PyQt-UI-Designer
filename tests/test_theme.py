@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5 import sip
 from PyQt5.QtCore import QPoint
 from PyQt5.QtGui import QColor, QPalette
-from PyQt5.QtWidgets import QApplication, QLabel, QWidget
+from PyQt5.QtWidgets import QApplication, QLabel, QStyleOptionViewItem, QWidget
 from qfluentwidgets import Theme, qconfig, setTheme, setThemeColor
 
 from app.core.chart_runtime import RealtimeLineChart
@@ -55,24 +55,23 @@ class ThemeTests(unittest.TestCase):
         label = self.track(create_widget("Label", {
             "text": "采集状态", "fontSize": 23, "bold": True,
         }))
-        light_title = numeric._title_label.styleSheet()
         for theme in (Theme.DARK, Theme.LIGHT):
             with self.subTest(theme=theme):
                 self.change_theme(theme)
                 self.assertEqual(numeric._value_label.text(), "25.30")
                 self.assertEqual(numeric._title_label.text(), "压力")
                 self.assertEqual(numeric._unit_label.text(), "kPa")
-                self.assertIn("#b04bd1", numeric._value_label.styleSheet())
-                self.assertIn("37px", numeric._value_label.styleSheet())
+                self.assertEqual(numeric._value_label.lightColor.name(), "#b04bd1")
+                self.assertEqual(numeric._value_label.darkColor.name(), "#b04bd1")
+                self.assertEqual(numeric._value_label.font().pixelSize(), 37)
                 self.assertEqual(label.text(), "采集状态")
                 self.assertEqual(label.font().pointSize(), 23)
                 self.assertTrue(label.font().bold())
                 self.assertIn("transparent", label.styleSheet())
                 self.assertIn("border: none", label.styleSheet())
-                if theme == Theme.DARK:
-                    self.assertNotEqual(numeric._title_label.styleSheet(), light_title)
-                else:
-                    self.assertEqual(numeric._title_label.styleSheet(), light_title)
+                numeric._title_label.ensurePolished()
+                self.assertEqual(numeric._title_label.palette().color(QPalette.WindowText).name(),
+                                 "#b3b3b3" if theme == Theme.DARK else "#606060")
 
     def test_chart_recolors_without_rebuilding_or_losing_samples(self):
         chart = self.track(RealtimeLineChart())
@@ -127,7 +126,7 @@ class ThemeTests(unittest.TestCase):
         palette = self.track(_DraggableListWidget())
         palette.addItems(["按钮", "标签"])
         palette.setCurrentRow(1)
-        widgets = (layout, group, tabs, palette)
+        widgets = (layout, group, tabs)  # the palette's Fluent list has no QSS of its own
         light_styles = [widget.styleSheet() for widget in widgets]
         for theme in (Theme.DARK, Theme.LIGHT):
             with self.subTest(theme=theme):
@@ -147,8 +146,9 @@ class ThemeTests(unittest.TestCase):
                         self.assertNotEqual(before, after)
                 else:
                     self.assertEqual(styles, light_styles)
-                palette.ensurePolished()
-                foreground = palette.palette().color(QPalette.Text).lightness()
+                option = QStyleOptionViewItem()
+                palette.delegate.initStyleOption(option, palette.model().index(1, 0))
+                foreground = option.palette.color(QPalette.Text).lightness()
                 if theme == Theme.DARK:
                     self.assertGreater(foreground, 150)
                 else:
@@ -398,8 +398,8 @@ def check_application():
         assert receive._text.palette().color(QPalette.Text).lightness() > 150
         assert receive._text.toHtml() == content
         assert number._value.text() == "25.30"
-        assert "#b04bd1" in number._value.styleSheet()
-        assert "37px" in number._value.styleSheet()
+        assert number._value.lightColor.name() == number._value.darkColor.name() == "#b04bd1"
+        assert number._value.font().pixelSize() == 37
         assert label.font().pointSize() == 21
         assert label.font().bold()
         assert tabs.widget(1) is page and tabs.currentIndex() == 1

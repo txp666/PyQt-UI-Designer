@@ -145,6 +145,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **TCP client / server**: connect to a device as a client, or listen on a port and let devices connect in; the server accepts several devices at once and frames each connection separately
 - **MQTT subscribe / publish**: connect to a broker and subscribe to one or more topics (with `+` and `#` wildcards) to receive data, and publish commands to a chosen topic; supports username and password, QoS 0/1/2 and TLS
 - All three links share the same parser modes, data bindings, charts, tables and logs, and commands go to every connected link
+- Every link card has a link of its own, so a project can hold several cards of one kind, each connected on its own: two serial ports, say, a TCP server next to a TCP client, or two MQTT brokers
 - **Key-value matching**: parses `key1=value1,key2=value2`, top-level JSON fields, or CSV (channels are named `ch0`, `ch1`… automatically)
 - **JSON path**: parses JSON data, including nested paths
 - **HEX byte extraction**: extracts data from binary frames by offset, with several data types
@@ -160,6 +161,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **HEX mode**: frame header and trailer, and packing values by data type
 - **Modbus mode**: builds frames automatically and can poll; the frame format is chosen per link: links whose parser mode is `modbus_tcp` send MBAP frames, `modbus_ascii` links send ASCII frames, the others send RTU frames with a CRC. FC16 write multiple registers writes int16, 32-bit integers and float32 values by data type
 - **Automatic Modbus polling**: pick a Modbus parser on the link card and bind widgets to register addresses, and they are read automatically: once the link connects, neighbouring addresses are merged into read blocks and the widgets on screen are read at each binding's own period; control writes go out between two reads instead of colliding with them. The polling parameters (default period, reply timeout, default slave) are set on the link card, whose status line shows the polling state (missing replies, the exception codes a device returns)
+- **Modbus RTU / TCP slave**: set a serial or TCP card's Modbus role to 从站 (slave) and it answers an external master from the coil, discrete input, holding register and input register areas you set (01–06, 0F, 10); bound widgets show the data table, and switches, sliders, Modbus write commands and the slave register table write into it, while the log box records every request and reply
 - **Command templates**: insert a widget's current value with the `{value}` placeholder
 
 ### Export and packaging
@@ -233,7 +235,7 @@ Changing the design, opening another project or creating a new one stops the old
 
 A Modbus button only uses the protocol settings currently visible, and an invalid address, quantity or value isn't sent. HEX content, frame headers and trailers and binary values use the same encoding rules in the preview and in exports. A failed or short write is reported by the link as a send failure. When a link parses `modbus` / `modbus_tcp` / `modbus_ascii`, a Modbus command waits in the link's request queue for the device's reply or the timeout before the next one goes out. A Modbus switch sends an FC05 write single coil command in both the preview and exports.
 
-New, Open and Quit offer Save / Discard / Cancel. Cancelling the save, or a failed save, stops the switch. Projects are validated before saving and loading, and a failure keeps the current canvas and the existing file. Saving replaces the file atomically through a temporary file in the same folder, so an interrupted write can't corrupt the original. Resizing respects each widget's minimum width and height, and each tab page keeps its own layout and child widget positions.
+New, Open and Quit offer Save / Don't Save / Cancel (保存 / 不保存 / 取消). Cancelling the save, or a failed save, stops the switch. Projects are validated before saving and loading, and a failure keeps the current canvas and the existing file. Saving replaces the file atomically through a temporary file in the same folder, so an interrupted write can't corrupt the original. Resizing respects each widget's minimum width and height, and each tab page keeps its own layout and child widget positions.
 
 A tab name is applied when you leave the edit box, or when you save, preview or export, so a half-typed name doesn't change which page a widget belongs to. When the number of pages is reduced, widgets on the removed pages move to the last page; an empty name keeps one default page. Aligning across containers uses canvas coordinates, and children of automatic layouts stay managed by their layout.
 

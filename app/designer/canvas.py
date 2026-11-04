@@ -4,12 +4,12 @@ import json
 import sys
 from typing import Optional, List, Dict
 
-from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QRectF, QPointF, QTimer, pyqtSignal
 from PyQt5.QtGui import QPen, QColor, QPainter, QBrush, QTransform
 from PyQt5.QtWidgets import (
     QGraphicsScene, QGraphicsView, QGraphicsItem, QWidget,
 )
-from qfluentwidgets import isDarkTheme
+from qfluentwidgets import SmoothScrollDelegate, isDarkTheme
 
 from app.common.config import cfg
 from app.common.signal_bus import signalBus
@@ -189,6 +189,10 @@ class DesignView(QGraphicsView):
         self._fit_timer.setInterval(0)
         self._fit_timer.timeout.connect(self._fit_if_pending)
         self._apply_view_style()
+        # Fluent overlay scroll bars and smooth scrolling. The view's own filter, installed after the
+        # delegate's, sees each wheel event first and keeps the zooming ones for wheelEvent.
+        self._scroll_delegate = SmoothScrollDelegate(self)
+        self.viewport().installEventFilter(self)
 
         self._scene_connections = SignalConnections(self)
         self._scene_connections.connect(
@@ -223,9 +227,19 @@ class DesignView(QGraphicsView):
     # Events
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _wheel_zooms(event):
+        # On Mac a two-finger gesture pans; Command + scroll zooms. Elsewhere the wheel zooms.
+        return sys.platform != "darwin" or bool(event.modifiers() & Qt.ControlModifier)
+
+    def eventFilter(self, obj, event):
+        if obj is self.viewport() and event.type() == QEvent.Wheel and self._wheel_zooms(event):
+            self.wheelEvent(event)
+            return True
+        return super().eventFilter(obj, event)
+
     def wheelEvent(self, event):
-        # On Mac a two-finger gesture pans; Command + scroll zooms.
-        if sys.platform == "darwin" and not event.modifiers() & Qt.ControlModifier:
+        if not self._wheel_zooms(event):
             super().wheelEvent(event)
             return
         delta = event.angleDelta().y()

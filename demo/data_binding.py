@@ -186,7 +186,9 @@ time, so a control's write goes out between two reads.
 Its settings are the link cards' (serial, TCP, MQTT; link_card.ModbusLinkSettings): the first
 card in document order whose link is connected and parses Modbus hands it its 默认轮询(ms)
 (``modbusPeriod``), 响应超时(ms) (``modbusTimeout``) and 默认从站 (``modbusSlave``, read by the
-bindings that filter no slave). Without such a card the period is 500 ms, a read waits 1000 ms
+bindings that filter no slave). A link answering as a Modbus slave (modbus_slave.py) is not read over, and
+its card neither hands the poller its settings nor shows its status; bindings and curves of a slave address
+that one of the program's 从站 cards answers to are left to that card's table and not read. Without such a card the period is 500 ms, a read waits 1000 ms
 for its reply and the slave is 1. A change counts at once. A link card whose link is connected,
 parses Modbus and can send shows the poller's status after its own.
 """
@@ -230,8 +232,8 @@ def _can_send(link):
 
 
 def _parses_modbus(link):
-    """Connected, and parsing Modbus RTU, TCP or ASCII."""
-    return (link is not None and link.is_connected
+    """Connected, parsing Modbus RTU, TCP or ASCII, and not answering as a slave."""
+    return (link is not None and link.is_connected and not getattr(link, "slave_active", False)
             and getattr(link, "parser_type", "") in MODBUS_PARSERS)
 
 
@@ -346,13 +348,24 @@ class ModbusPoller(QObject):
         if self._active:
             return
         self._active = True
-        for link in self._links():
-            for signal in (link.connected, link.disconnected, getattr(link, "peersChanged", None)):
-                if signal is not None:  # a link that comes or goes, or a TCP server's clients
-                    self._link_connections.connect(signal, self._on_link_changed)
+        self._watch_links()
         self._period, self._timeout, self._slave = self._link_settings()
         self._timer.start(self._period)  # it looks for a link that can send, too
         self._tick()
+
+    def _watch_links(self):
+        """Tick when a link connects or disconnects, a TCP server's clients change, or the hub's links do."""
+        self._link_connections.clear()
+        links_changed = getattr(self._hub, "linksChanged", None)
+        if links_changed is not None:  # a card registered its link, or took it off
+            self._link_connections.connect(links_changed, self._on_links_changed)
+        for link in self._links():
+            for signal in (link.connected, link.disconnected, getattr(link, "peersChanged", None)):
+                if signal is not None:
+                    self._link_connections.connect(signal, self._on_link_changed)
+
+    def _on_links_changed(self):
+        self._watch_links()  # a new link counts once it connects; one that left was disconnected first
 
     def stop(self):
         """The runtime goes away: no more reads; those not sent yet are withdrawn."""
@@ -403,9 +416,11 @@ class ModbusPoller(QObject):
     def _plan(self):
         """The read blocks for what the bindings on screen and the chart curves read."""
         needs = []
+        own = {device.address for device in (getattr(card, "slave_device", None) for card in self._cards)
+               if device is not None}  # this program's slaves serve those from their tables
         for _widget, slave, table, address, count, period, visible in (self._needs() if self._needs else ()):
             slave = slave if slave > 0 else self._slave
-            if visible and 1 <= slave <= 247 and 0 <= address <= 65535:
+            if visible and 1 <= slave <= 247 and 0 <= address <= 65535 and slave not in own:
                 needs.append({"slave": slave, "table": table, "address": address,
                               "count": count, "period": max(0, period)})
         return plan_blocks(needs, self._period)
@@ -523,27 +538,36 @@ _STRUCT_FMT = {
 
 
 class DataBinding:
-    """Wire the hub (serial, TCP and MQTT links) to bound widgets and command senders."""
+    """Wire the hub (the link cards' links) to bound widgets and command senders."""
     def __init__(self, ui, hub):
         self.ui = ui
         self.hub = hub
         self._connections = SignalConnections(ui)
         ui._comm_hub = hub
         # Reads what the Modbus bindings and chart curves show; the link cards, in document
-        # order, hand it their settings and show its status.
+        # order, register their own links on the hub, hand it their settings and show its status.
         self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)
+        for widget_id in ['serial']:
+            ui.widgets[widget_id].set_serial_handler(hub)
+            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)
         for w in ui.widgets.values():
             if hasattr(w, "set_serial_handler"):
-                w.set_serial_handler(hub)  # connection cards pick their own link
+                w.set_serial_handler(hub)  # the receive card, log box and data table listen to it
             if isinstance(w, RealtimeLineChart):
                 w._serial_connections.clear()
                 w._serial_connections.connect(hub.dataReceived, w.on_parsed)
                 w._serial_connections.connect(hub.rawReceived, w.on_raw)
                 w._serial_connections.connect(hub.disconnected, w.reset_stream)
-        for widget_id in ['serial']:
-            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)
         self._connections.connect(self.hub.dataReceived, self._on_data)
         self.modbus_poller.start()  # reads once a link that parses Modbus can send
+        # The slaves of the link cards in the 从站 role: a register table shows the first one's, and
+        # each publishes its whole data table now that the bindings are up.
+        slaves = [w.slave_device for w in ui.widgets.values() if getattr(w, "slave_device", None)]
+        for w in ui.widgets.values():
+            if hasattr(w, "set_slave_device"):
+                w.set_slave_device(slaves[0] if slaves else None)
+        for device in slaves:
+            device.publish_start()
 
     def _on_data(self, data: dict):
         try:

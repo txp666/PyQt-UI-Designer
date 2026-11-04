@@ -14,6 +14,8 @@ from app.core.binding_values import binding_decimals
 from app.core.comm_manager import commHub
 from app.core.data_binding import BindingEntry
 from app.core.protocol_parser import text_encoding
+from app.core.serial_runtime import SerialHandler
+from app.core.tcp_runtime import TcpHandler
 from app.widgets.composite import DataRecvCard, register_composite_widgets
 
 
@@ -54,17 +56,19 @@ class ReceiveLogTests(unittest.TestCase):
         card = DataRecvCard()
         self.addCleanup(card.deleteLater)
         output = card._output.toPlainText
-        try:
-            commHub.serial.text_encoding = "gbk"
-            commHub.serial.rawReceived.emit("温度:25.3,湿度:60;".encode("gbk"))
-            self.wait_for(lambda: "温度:25.3,湿度:60;" in output(), "the GBK text")
-            self.assertEqual(commHub.raw_encoding, "gbk")
-            # Another link still in UTF-8 is not read as GBK.
-            commHub.tcp.rawReceived.emit("湿度=60\n".encode("utf-8"))
-            self.wait_for(lambda: "湿度=60" in output(), "the UTF-8 text")
-            self.assertEqual(commHub.raw_encoding, "utf-8")
-        finally:
-            commHub.serial.text_encoding = "utf-8"
+        serial, tcp = SerialHandler(), TcpHandler()
+        for link in (serial, tcp):
+            commHub.add_link(link)
+            self.addCleanup(link.deleteLater)
+            self.addCleanup(commHub.remove_link, link)
+        serial.text_encoding = "gbk"
+        serial.rawReceived.emit("温度:25.3,湿度:60;".encode("gbk"))
+        self.wait_for(lambda: "温度:25.3,湿度:60;" in output(), "the GBK text")
+        self.assertEqual(commHub.raw_encoding, "gbk")
+        # Another link still in UTF-8 is not read as GBK.
+        tcp.rawReceived.emit("湿度=60\n".encode("utf-8"))
+        self.wait_for(lambda: "湿度=60" in output(), "the UTF-8 text")
+        self.assertEqual(commHub.raw_encoding, "utf-8")
 
 
 if __name__ == "__main__":

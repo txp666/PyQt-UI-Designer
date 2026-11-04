@@ -5,8 +5,8 @@ connects, disconnects or cancels an attempt (at the end of the last row shown), 
 link signal wiring. A card is never shorter than its rows: its minimum height is what the
 rows of its display mode need. A subclass adds its option rows and tells its link how to
 connect. Cards work in the designer preview and, from the same source, in exported
-applications. Like the serial card, a frame card has the Modbus polling settings and status
-of link_polling.ModbusLinkSettings.
+applications. Like the serial card, a frame card owns its link (a subclass names its LINK_CLASS)
+and has the Modbus polling settings and status of link_polling.ModbusLinkSettings.
 """
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QColor
@@ -27,7 +27,6 @@ STATUS_COLORS = {
 
 
 class LinkConfigCard(ModbusLinkSettings, CardWidget):
-    LINK = ""  # name of this card's link on a CommHub
     TITLE = "连接配置"
     LABEL_WIDTH = 56
     PARSERS = ["项目设置", "line", "hex", "modbus", "modbus_tcp", "modbus_ascii"]
@@ -144,20 +143,13 @@ class LinkConfigCard(ModbusLinkSettings, CardWidget):
 
     # ---- link wiring ----
 
-    def set_serial_handler(self, handler):
-        """Attach this card's link; a CommHub is resolved to the link named by LINK."""
-        if self.LINK:
-            handler = getattr(handler, self.LINK, handler)
-        if handler is self._handler:
-            return
-        self._serial_connections.clear()
-        self._handler = handler
-        if handler is not None:
-            self._serial_connections.connect(handler.connected, self._on_link_connected)
-            self._serial_connections.connect(handler.disconnected, self._on_link_disconnected)
-            self._serial_connections.connect(handler.error, self._on_link_error)
-            self._attach_extra(handler)
-            self.set_connected(handler.is_connected)
+    def _attach_link(self, link):
+        """Follow the card's new link (link_polling.ModbusLinkSettings.set_serial_handler)."""
+        self._serial_connections.connect(link.connected, self._on_link_connected)
+        self._serial_connections.connect(link.disconnected, self._on_link_disconnected)
+        self._serial_connections.connect(link.error, self._on_link_error)
+        self._attach_extra(link)
+        self.set_connected(link.is_connected)
 
     def _on_toggle(self):
         if self._connected or self._pending:

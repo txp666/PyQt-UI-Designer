@@ -85,7 +85,6 @@ class SignalLifetimeTests(unittest.TestCase):
             from PyQt5.QtWidgets import QApplication
             from qfluentwidgets import qconfig
             from app.common.signal_bus import signalBus
-            from app.core.serial_manager import serialManager
             from app.widgets.composite import DataRecvCard, LogDisplayBox
             from app.widgets.comm import DataTableWidget
             from app.widgets.chart import RealtimeLineChart, GaugeMeter
@@ -116,7 +115,8 @@ class SignalLifetimeTests(unittest.TestCase):
                 chart._cursor_line.setPos(1)
                 for card in widgets[-3:]:
                     card.set_serial_handler(commHub)
-                    assert card._handler is getattr(commHub, card.LINK)
+                    assert type(card.link) is card.LINK_CLASS
+                assert commHub.links == [card.link for card in widgets[-3:]]
                 controller = ThemeController(app, "Light")
                 groups = [group for w in widgets + [controller] for name, group in vars(w).items()
                           if name.endswith("_connections")]
@@ -126,6 +126,7 @@ class SignalLifetimeTests(unittest.TestCase):
                 app.sendPostedEvents(None, QEvent.DeferredDelete)
                 assert all(not group._connections for group in groups)
                 assert [signalBus.receivers(s) for s in signals] == baseline
+                assert not commHub.links  # the cards' links went with them
                 signalBus.serialConnected.emit("TEST")
                 signalBus.serialDisconnected.emit()
                 signalBus.serialDataReceived.emit({"value": 1})
@@ -147,7 +148,7 @@ class SignalLifetimeTests(unittest.TestCase):
             from PyQt5.QtWidgets import QApplication
             from qfluentwidgets import qconfig
             from app.common.signal_bus import signalBus
-            from app.core.serial_manager import serialManager
+            from app.core.comm_manager import commHub
             from app.core.project import ProjectData
             from app.view.preview_interface import PreviewInterface
             app = QApplication([])
@@ -165,22 +166,24 @@ class SignalLifetimeTests(unittest.TestCase):
                        signalBus.serialDataReceived, signalBus.serialRawReceived,
                        signalBus.serialDataSent, signalBus.serialError]
             baseline = [signalBus.receivers(s) for s in signals]
-            serial_baseline = serialManager.receivers(serialManager.connected)
+            hub_baseline = commHub.receivers(commHub.connected)
             for cycle in range(4):
                 QTest.mouseClick(preview._run_btn, Qt.LeftButton)
                 app.processEvents()
                 assert preview._running
-                serialManager.connected.emit("TEST")
-                serialManager.dataReceived.emit({"value": cycle})
-                serialManager.rawReceived.emit(b"value=1\\n")
-                serialManager.dataSent.emit(b"READ")
+                assert len(commHub.links) == 3  # the serial, TCP and MQTT cards' own
+                serial = preview._preview_canvas._widgets[2].link
+                serial.connected.emit("TEST")
+                serial.dataReceived.emit({"value": cycle})
+                serial.rawReceived.emit(b"value=1\\n")
+                serial.dataSent.emit(b"READ")
                 qconfig.themeChangedFinished.emit()
                 QTest.mouseClick(preview._stop_btn, Qt.LeftButton)
                 app.sendPostedEvents(None, QEvent.DeferredDelete)
                 assert [signalBus.receivers(s) for s in signals] == baseline
-                assert serialManager.receivers(serialManager.connected) == serial_baseline
-                serialManager.disconnected.emit()
-                serialManager.error.emit("after stop")
+                assert commHub.receivers(commHub.connected) == hub_baseline and not commHub.links
+                commHub.disconnected.emit()
+                commHub.error.emit("after stop")
                 qconfig.themeChangedFinished.emit()
                 app.processEvents()
                 assert not errors, errors
@@ -229,9 +232,11 @@ class SignalLifetimeTests(unittest.TestCase):
                     # DataTable plus chart, log and binding each subscribe exactly once; the link
                     # cards hear the Modbus poller, not the data.
                     assert handler.receivers(handler.dataReceived) == 4
+                    assert len(handler.links) == 3  # the serial, TCP and MQTT cards' own
                     window.deleteLater()
                     app.sendPostedEvents(None, QEvent.DeferredDelete)
                     assert [handler.receivers(s) for s in signals] == [0] * len(signals)
+                    assert not handler.links  # they went with their cards
                     handler.connected.emit("TEST")
                     handler.disconnected.emit()
                     handler.error.emit("after destruction")

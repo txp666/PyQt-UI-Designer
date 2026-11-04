@@ -239,7 +239,7 @@ assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
     def test_destroyed_designer_panels_release_global_and_scene_callbacks(self):
         self.run_script("""
             from app.common.signal_bus import signalBus
-            from app.designer.palette import WidgetPalette, _DraggableListWidget
+            from app.designer.palette import WidgetPalette
             from app.designer.property_editor import PropertyEditor
             from app.view.main_window import MainWindow
             from app.view.preview_interface import PreviewInterface
@@ -250,7 +250,6 @@ assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
                          ("_on_widget_selected", "_on_deselected",
                           "_sync_saved_image_path", "commit_pending_edits"))
             opaque_slots(stack, WidgetPalette, ("refresh_icons",))
-            opaque_slots(stack, _DraggableListWidget, ("apply_theme",))
             window = MainWindow()
             scene = window.designer_interface.scene
 
@@ -271,7 +270,7 @@ assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
             expected = {"_on_canvas_changed", "_on_theme_changed", "setMicaEffectEnabled",
                         "_show_notification", "_on_widget_selected", "_on_deselected",
                         "_sync_saved_image_path", "commit_pending_edits",
-                        "refresh_icons", "apply_theme"}
+                        "refresh_icons"}
             assert expected.issubset({name for _, name in calls}), calls
             assert not errors, errors
             window.deleteLater()

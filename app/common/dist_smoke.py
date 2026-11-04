@@ -143,9 +143,13 @@ class DistributionSmokeTest:
         QTimer.singleShot(100, self._advance)
 
     def _load_demo(self):
+        from app.core.comm_manager import commHub
         from app.core.data_binding import bindingEngine
-        from app.core.serial_manager import serialManager
-        self.engine, self.serial = bindingEngine, serialManager
+        from app.core.serial_runtime import SerialHandler
+        # A serial link of the smoke test's own on the designer's hub, as a link card registers its
+        # own; it outlives every preview cycle, so retired widgets are proven deaf to it.
+        self.engine, self.serial = bindingEngine, SerialHandler(self.app)
+        commHub.add_link(self.serial)
         self._mode = "demo"
         self.window._project_mgr.load_to_scene(self.window.designer_interface.scene,
                                                str(self.project))
@@ -167,7 +171,7 @@ class DistributionSmokeTest:
                              "w": 260, "h": 180},
             })
         self.result["widget_types"] = sorted(meta.type_name for meta in registry.all())
-        assert len(self.result["widget_types"]) == 28
+        assert len(self.result["widget_types"]) == 29
         path = self.report.with_suffix(".uidp")
         path.write_text(json.dumps(project.to_dict(), ensure_ascii=False), encoding="utf-8")
         self.window._project_mgr.load_to_scene(self.window.designer_interface.scene, str(path))
@@ -223,17 +227,18 @@ class DistributionSmokeTest:
         from app.core.tcp_runtime import TcpHandler
         self.hub = commHub
         card = self.widgets["all_TcpConfigCard"]
-        assert card._handler is commHub.tcp
-        assert commHub.tcp.connect("127.0.0.1", 0, mode="服务端")
+        self.tcp = card.link  # the card's own link
+        assert isinstance(self.tcp, TcpHandler) and self.tcp in commHub.links
+        assert self.tcp.connect("127.0.0.1", 0, mode="服务端")
         assert "监听中" in card._status.text(), card._status.text()
         self.tcp_received = []
         self.tcp_client = TcpHandler()
         self.tcp_client.rawReceived.connect(self.tcp_received.append)
-        assert self.tcp_client.connect("127.0.0.1", commHub.tcp.port)
+        assert self.tcp_client.connect("127.0.0.1", self.tcp.port)
 
     def _tcp_loopback_exchange(self):
         card = self.widgets["all_TcpConfigCard"]
-        self._wait_for(lambda: self.tcp_client.is_connected and self.hub.tcp.peer_count == 1,
+        self._wait_for(lambda: self.tcp_client.is_connected and self.tcp.peer_count == 1,
                        "the loopback TCP client")
         assert "1 客户端" in card._status.text(), card._status.text()
         assert card._connect_btn.isEnabled() and card._connect_btn.text() == "断开"
@@ -254,8 +259,8 @@ class DistributionSmokeTest:
         card = self.widgets["all_TcpConfigCard"]
         self.tcp_client.disconnect()
         self.tcp_client.deleteLater()
-        self.hub.tcp.disconnect()
-        assert not self.hub.tcp.is_active and self.hub.is_connected
+        self.tcp.disconnect()
+        assert not self.tcp.is_active and self.hub.is_connected
         assert card._connect_btn.isEnabled() and card._connect_btn.text() == "连接"
         assert card._status.text() == "未连接", card._status.text()
 

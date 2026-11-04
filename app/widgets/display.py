@@ -1,12 +1,12 @@
 # coding: utf-8
 """Display widgets: LED indicator, numeric display, progress bar, progress ring, image display."""
 from pathlib import Path
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPainter, QColor, QFont, QPixmap
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
+from PyQt5.QtCore import Qt, QRectF, QSize
+from PyQt5.QtGui import QPainter, QColor, QFont, QImage, QPen
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLayout
+from qfluentwidgets import (
+    ProgressBar, ProgressRing, BodyLabel, CaptionLabel, ImageLabel, isDarkTheme, qconfig, themeColor,
 )
-from qfluentwidgets import ProgressBar, ProgressRing, BodyLabel, CaptionLabel, isDarkTheme, qconfig, themeColor
 
 from app.widgets.base import WidgetMeta, WidgetCategory, PropDef, PropType
 from app.core.widget_registry import registry
@@ -99,28 +99,20 @@ class NumericDisplay(QWidget):
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(0)
 
-        self._title_label = QLabel("标题")
-        self._title_label.setAlignment(Qt.AlignCenter)
-
-        self._value_label = QLabel("0.00")
-        self._value_label.setAlignment(Qt.AlignCenter)
-
-        self._unit_label = QLabel("")
-        self._unit_label.setAlignment(Qt.AlignCenter)
-
-        layout.addWidget(self._title_label)
-        layout.addWidget(self._value_label)
-        layout.addWidget(self._unit_label)
-        self.apply_theme()
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
-        self._theme_connections.connect(qconfig.themeColorChanged, self.apply_theme)
-
-    def apply_theme(self):
-        secondary = "#b3b3b3" if isDarkTheme() else "#606060"
-        self._title_label.setStyleSheet(f"color: {secondary}; font-size: 11px;")
-        self._unit_label.setStyleSheet(f"color: {secondary}; font-size: 12px;")
+        self._title_label = CaptionLabel("标题")
+        self._value_label = BodyLabel("0.00")
+        self._unit_label = CaptionLabel("")
+        for label in (self._title_label, self._unit_label):
+            label.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
+        # An empty unit keeps its line, so the titles of cards with and without one line up.
+        self._unit_label.setMinimumHeight(self._unit_label.fontMetrics().height())
+        for label in (self._title_label, self._value_label, self._unit_label):
+            label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(label)
         self._update_value_style()
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self._update_value_style)
+        self._theme_connections.connect(qconfig.themeColorChanged, self._update_value_style)
 
     def set_title(self, text: str):
         self._title_label.setText(text)
@@ -141,11 +133,12 @@ class NumericDisplay(QWidget):
 
     def _update_value_style(self):
         # The value takes the theme colour, as FluentHMI Studio's does, unless one was set.
-        color = getattr(self, "_val_color", None) or themeColor().name()
-        size = getattr(self, "_val_font_size", 28)
-        self._value_label.setStyleSheet(
-            f"font-size: {size}px; font-weight: bold; color: {color};"
-        )
+        color = QColor(getattr(self, "_val_color", None) or themeColor())
+        font = self._value_label.font()
+        font.setPixelSize(getattr(self, "_val_font_size", 28))
+        font.setBold(True)
+        self._value_label.setFont(font)
+        self._value_label.setTextColor(color, color)
 
 
 class ProgressRingDisplay(QWidget):
@@ -177,46 +170,64 @@ class ProgressRingDisplay(QWidget):
 
 
 class ImageDisplay(QWidget):
-    """Static image display widget."""
+    """Static image display widget: the picture aspect-fit and centred, or a placeholder."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._label = QLabel(self)
-        self._label.setAlignment(Qt.AlignCenter)
-        self._label.setText("图片")
+        self._path = ""
+        self._image = QImage()
+        self._label = ImageLabel(self)
+        self._label.hide()
+        self._placeholder = CaptionLabel("未选择图片", self)
+        self._placeholder.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
+        self._placeholder.setAlignment(Qt.AlignCenter)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self._label)
-        self._path = ""
-        self.apply_theme()
+        # The picture's fixed size must never become the widget's minimum.
+        layout.setSizeConstraint(QLayout.SetNoConstraint)
+        layout.addWidget(self._label, 0, Qt.AlignCenter)
+        layout.addWidget(self._placeholder, 0, Qt.AlignCenter)
         self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
-
-    def apply_theme(self):
-        dark = isDarkTheme()
-        background = "#292929" if dark else "#f5f5f5"
-        foreground = "#f3f3f3" if dark else "#3c3c3c"
-        border = "#606060" if dark else "#c8c8c8"
-        self._label.setStyleSheet(
-            f"background: {background}; color: {foreground}; "
-            f"border: 1px dashed {border};"
-        )
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
     def set_image_path(self, path: str):
         self._path = path
-        if path:
-            pixmap = QPixmap(path)
-            if not pixmap.isNull():
-                self._label.setPixmap(
-                    pixmap.scaled(self._label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                )
-                return
-        self._label.setText("图片")
+        self._image = QImage(path) if path else QImage()
+        if self._image.isNull():
+            self._label.hide()
+            self._placeholder.setText("无法加载图片" if path else "未选择图片")
+            self._placeholder.show()
+        else:
+            self._placeholder.hide()
+            self._label.setImage(self._image)
+            self._fit_image()
+            self._label.show()
+        self.update()
+
+    def _fit_image(self):
+        if not self._image.isNull():
+            self._label.setScaledSize(self._image.size().scaled(self.size(), Qt.KeepAspectRatio))
+
+    def sizeHint(self):
+        return QSize(200, 150)
+
+    def minimumSizeHint(self):
+        return QSize(1, 1)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._path:
-            self.set_image_path(self._path)
+        self._fit_image()
+
+    def paintEvent(self, event):
+        if not self._image.isNull():
+            return
+        dark = isDarkTheme()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        pen = QPen(QColor("#606060" if dark else "#c8c8c8"), 1, Qt.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(QColor("#292929" if dark else "#f5f5f5"))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
 
 
 # ---------------------------------------------------------------------------

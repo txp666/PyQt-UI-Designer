@@ -67,14 +67,16 @@ def modbus_dispatch(hub, request, timeout_ms=1000, priority="write", on_done=Non
 
     A connected link that parses Modbus queues it in its master, which calls ``on_done``
     once with the outcome; any other link gets the frame at once and no answer is awaited
-    (with ``modbus_only``, it gets nothing). Returns ``(frame, master)`` for each link that
-    took it; ``master`` is None for a link written directly.
+    (with ``modbus_only``, it gets nothing). A link answering as a Modbus slave gets nothing either.
+    Returns ``(frame, master)`` for each link that took it; ``master`` is None for a link written directly.
     """
     links = getattr(hub, "connected_links", None)
     if links is None:  # a single link rather than a hub
         links = [hub] if hub.is_connected else []
     accepted = []
     for link in links:
+        if getattr(link, "slave_active", False):
+            continue
         master = getattr(link, "modbus_master", None)
         if master is not None and getattr(link, "parser_type", "") in MODBUS_PARSERS:
             frame = master.enqueue(request, timeout_ms, priority, on_done, owner=owner)

@@ -1,12 +1,12 @@
 """MQTT configuration card shared by the designer preview and exported applications."""
-from PyQt5.QtWidgets import QLineEdit
-from qfluentwidgets import CaptionLabel, CheckBox, ComboBox, LineEdit, SpinBox
+from qfluentwidgets import CaptionLabel, CheckBox, ComboBox, LineEdit, PasswordLineEdit, SpinBox
 
 from .link_card import LinkConfigCard
+from .mqtt_runtime import MqttHandler
 
 
 class MqttConfigCard(LinkConfigCard):
-    LINK = "mqtt"
+    LINK_CLASS = MqttHandler
     TITLE = "MQTT 配置"
     PROPERTY_SETTERS = (
         ("title", "set_title", "MQTT 配置"),
@@ -40,9 +40,8 @@ class MqttConfigCard(LinkConfigCard):
         self.add_row("客户端ID", self._client_id_edit, full_only=True)
         self._username_edit = LineEdit()
         self._username_edit.setPlaceholderText("可选")
-        self._password_edit = LineEdit()
+        self._password_edit = PasswordLineEdit()
         self._password_edit.setPlaceholderText("可选")
-        self._password_edit.setEchoMode(QLineEdit.Password)
         self.add_row("用户名", (self._username_edit, 1), (CaptionLabel("密码"), 0),
                      (self._password_edit, 1), full_only=True)
         self._subscribe_edit = LineEdit()

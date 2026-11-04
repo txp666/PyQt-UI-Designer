@@ -2,13 +2,9 @@
 """Widget palette — categorized drag source for the designer."""
 from PyQt5.QtCore import Qt, QMimeData, QByteArray, QSize
 from PyQt5.QtGui import QDrag, QPixmap, QPainter, QColor, QFont
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QAbstractItemView, QHBoxLayout, QFrame, QSizePolicy,
-)
-from PyQt5.QtWidgets import QScrollArea
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QListWidgetItem, QAbstractItemView, QSizePolicy
 from qfluentwidgets import (
-    StrongBodyLabel, isDarkTheme, Theme, getIconColor, qconfig,
+    ListWidget, ScrollArea, SimpleCardWidget, StrongBodyLabel, isDarkTheme, Theme, qconfig,
 )
 
 from app.common.icon import widget_icon
@@ -18,7 +14,7 @@ from app.widgets.base import WidgetCategory, WidgetMeta
 from app.designer.canvas import MIME_WIDGET_TYPE
 
 
-class _DraggableListWidget(QListWidget):
+class _DraggableListWidget(ListWidget):
     """List that initiates a drag with widget-type MIME data."""
 
     def __init__(self, parent=None):
@@ -26,37 +22,10 @@ class _DraggableListWidget(QListWidget):
         self.setDragEnabled(True)
         self.setDefaultDropAction(Qt.CopyAction)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.setSpacing(2)
         # The icons are drawn for 16 px; Fusion (Linux) would scale them to 24 and blur them.
         self.setIconSize(QSize(16, 16))
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.apply_theme()
-        self._external_connections = SignalConnections(self)
-        self._external_connections.connect(
-            qconfig.themeChangedFinished, self.apply_theme)
-
-    def apply_theme(self):
-        foreground = "#f3f3f3" if isDarkTheme() else "#202020"
-        self.setStyleSheet("""
-            QListWidget {
-                background: transparent;
-                color: FOREGROUND;
-                border: none;
-                outline: none;
-            }
-            QListWidget::item {
-                padding: 6px 10px;
-                border-radius: 6px;
-            }
-            QListWidget::item:hover {
-                background: rgba(128, 128, 128, 0.1);
-            }
-            QListWidget::item:selected {
-                background: rgba(0, 120, 212, 0.15);
-                color: FOREGROUND;
-            }
-        """.replace("FOREGROUND", foreground))
 
     def startDrag(self, supportedActions):
         item = self.currentItem()
@@ -89,20 +58,12 @@ class _DraggableListWidget(QListWidget):
         drag.exec_(Qt.CopyAction)
 
 
-class _CategoryCard(QFrame):
+class _CategoryCard(SimpleCardWidget):
     """Card showing widgets in one category."""
 
     def __init__(self, category: WidgetCategory, widgets: list, parent=None):
         super().__init__(parent)
-        self.setObjectName("categoryCard")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setStyleSheet("""
-            #categoryCard {
-                background: rgba(128, 128, 128, 0.06);
-                border: 1px solid rgba(128, 128, 128, 0.1);
-                border-radius: 8px;
-            }
-        """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
@@ -116,18 +77,20 @@ class _CategoryCard(QFrame):
         for meta in widgets:
             item = QListWidgetItem(meta.display_name)
             item.setData(Qt.UserRole, meta.type_name)
+            item.setToolTip(meta.type_name)
             icon = widget_icon(meta.icon)
             if icon:
                 item.setIcon(icon.icon(theme))
             self._list.addItem(item)
 
-        row_height = 36
-        list_h = len(widgets) * row_height + 8
-        self._list.setFixedHeight(list_h)
+        # Every row shown: the list never scrolls, the palette does.
+        self._list.ensurePolished()  # the Fluent QSS sets the row height and the list's margins
+        margins = self._list.contentsMargins()
+        rows = sum(self._list.sizeHintForRow(row) for row in range(self._list.count()))
+        self._list.setFixedHeight(rows + margins.top() + margins.bottom())
         layout.addWidget(self._list)
 
-        total_h = list_h + 28 + 24  # header ~28px + margins
-        self.setFixedHeight(total_h)
+        self.setFixedHeight(layout.sizeHint().height())
 
 
 class WidgetPalette(QWidget):
@@ -142,20 +105,19 @@ class WidgetPalette(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
-        self._scroll = QScrollArea()
+        self._scroll = ScrollArea()
         self._scroll.setWidgetResizable(True)
+        # Before the container is in it: afterwards this would also give every card and list a QSS background.
+        self._scroll.enableTransparentBackground()
 
         self._container = QWidget()
-        self._container.setObjectName("paletteContainer")
         self._layout = QVBoxLayout(self._container)
-        self._scroll.setStyleSheet(
-            "QScrollArea, #paletteContainer { background: transparent; border: none; }"
-        )
         self._layout.setContentsMargins(8, 8, 8, 8)
         self._layout.setSpacing(8)
         self._layout.setAlignment(Qt.AlignTop)
 
         self._scroll.setWidget(self._container)
+        self._container.setAutoFillBackground(False)  # setWidget turned it on: the panel shows through
         outer.addWidget(self._scroll)
         self._external_connections = SignalConnections(self)
         self._external_connections.connect(

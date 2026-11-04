@@ -2,10 +2,12 @@
 from qfluentwidgets import ComboBox, LineEdit, SpinBox
 
 from .link_card import LinkConfigCard
+from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings
+from .tcp_runtime import TcpHandler
 
 
-class TcpConfigCard(LinkConfigCard):
-    LINK = "tcp"
+class TcpConfigCard(ModbusSlaveSettings, LinkConfigCard):
+    LINK_CLASS = TcpHandler
     TITLE = "TCP 配置"
     MODES = ["客户端", "服务端"]
     PROPERTY_SETTERS = (
@@ -15,9 +17,11 @@ class TcpConfigCard(LinkConfigCard):
         ("defaultHost", "set_default_host", "127.0.0.1"),
         ("defaultPort", "set_default_port", 8080),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusRole", "set_modbus_role", "主站"),
         ("modbusPeriod", "set_modbus_period", 500),
         ("modbusTimeout", "set_modbus_timeout", 1000),
         ("modbusSlave", "set_modbus_slave", 1),
+        *SLAVE_PROPERTY_SETTERS,
         ("parserConfig", "set_parser_config", {}),
     )
 
@@ -46,7 +50,7 @@ class TcpConfigCard(LinkConfigCard):
 
     def _connect_link(self, handler):
         return handler.connect(self.host, self.port, mode=self.mode, parser_type=self.parser_type,
-                               parser_config=self.parser_config)
+                               parser_config=self.parser_config, slave=self.slave_device)
 
     def _attach_extra(self, handler):
         self._serial_connections.connect(handler.peersChanged, self._on_peers_changed)

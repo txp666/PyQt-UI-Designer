@@ -25,7 +25,8 @@ def terminal_scroll_bar(edit):
 
 class LogDisplayBox(QWidget):
     """Scrolling, time-stamped log in a dark terminal look: every parsed frame, and the connect,
-    disconnect and error events of every link (serial, TCP, MQTT)."""
+    disconnect and error events of every link (serial, TCP, MQTT). Of a link answering as a Modbus slave it
+    shows the requests and replies (slaveLog), not the slave messages."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -52,6 +53,8 @@ class LogDisplayBox(QWidget):
             self._serial_connections.connect(handler.disconnected, self._on_disconnected)
             self._serial_connections.connect(handler.error, self._on_serial_error)
             self._serial_connections.connect(handler.dataReceived, self._on_parsed_data)
+            if hasattr(handler, "slaveLog"):
+                self._serial_connections.connect(handler.slaveLog, self.append_log)
 
     def _on_connected(self, port):
         self.append_log(f"已连接: {port}", "ok")
@@ -63,6 +66,8 @@ class LogDisplayBox(QWidget):
         self.append_log(f"错误: {message}", "error")
 
     def _on_parsed_data(self, data):
+        if getattr(self._handler, "slave_data", False):
+            return  # a slave message: the request and reply lines tell what happened
         self.append_log(", ".join(f"{key}={value}" for key, value in data.items()))
 
     def append_log(self, text, level="info"):

@@ -47,8 +47,9 @@ def exercise_application():
     app = QApplication.instance()
     window = next(w for w in app.topLevelWidgets() if hasattr(w, "widgets"))
     widgets = window.widgets
-    serial = window._comm_hub.serial
     card = widgets["serial"]
+    serial = card.link
+    assert window._comm_hub.links == [serial]
     chart = widgets["chart"]
     receive = widgets["receive"]
     samples, received, sent, errors, failures = [], [], [], [], []
@@ -61,8 +62,7 @@ def exercise_application():
     timer = QTimer(app)
     timer.setInterval(20)
 
-    for name in ("ui", "serial_handler", "tcp_handler", "mqtt_handler", "comm_hub",
-                 "data_binding", "theme_support"):
+    for name in ("ui", "serial_handler", "comm_hub", "data_binding", "theme_support"):
         assert Path(sys.modules[name].__file__).resolve().parent == demo_path
     assert not any(name == "app" or name.startswith("app.") for name in sys.modules)
     assert not serial.is_connected

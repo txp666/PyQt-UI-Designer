@@ -13,19 +13,20 @@ from qfluentwidgets import (
     CheckBox, TextEdit, isDarkTheme, qconfig,
 )
 
-from .link_polling import ModbusLinkSettings, status_label
-from .serial_runtime import _list_all_ports
+from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, fluent_tooltip, status_label
+from .serial_runtime import SerialHandler, _list_all_ports
 from .signal_lifetime import SignalConnections
 
-class SerialConfigCard(ModbusLinkSettings, CardWidget):
+class SerialConfigCard(ModbusSlaveSettings, CardWidget):
     """Serial port configuration card with three display modes:
     完整 (full), 简洁 (simple: port and baud), 单行 (single-line toolbar).
-    One button connects or disconnects the hub's serial link, at the end of the last row shown,
+    One button connects or disconnects the card's own serial link, at the end of the last row shown,
     so the card works in preview mode. The card is never shorter than its rows: its minimum
     height is what the rows of its display mode need. Like every link card it hands the Modbus
-    poller its settings and shows the poller's status while its link parses Modbus."""
+    poller its settings and shows the poller's status while its link parses Modbus; in the 从站 role
+    it answers as a Modbus slave instead (link_polling.ModbusSlaveSettings)."""
 
-    LINK = "serial"  # name of this card's link on a CommHub
+    LINK_CLASS = SerialHandler
     _BAUDS = ["9600", "19200", "38400", "57600", "115200",
               "230400", "460800", "921600"]
     PROPERTY_SETTERS = (
@@ -37,9 +38,11 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         ("defaultStopbits", "set_default_stopbits", "1"),
         ("defaultFlow", "set_default_flow", "无"),
         ("defaultParser", "set_default_parser", "项目设置"),
+        ("modbusRole", "set_modbus_role", "主站"),
         ("modbusPeriod", "set_modbus_period", 500),
         ("modbusTimeout", "set_modbus_timeout", 1000),
         ("modbusSlave", "set_modbus_slave", 1),
+        *SLAVE_PROPERTY_SETTERS,
         ("parserConfig", "set_parser_config", {}),
     )
 
@@ -76,8 +79,7 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         self._port_label = BodyLabel("端口"); self._port_label.setFixedWidth(LW)
         self._port_combo = ComboBox(); self._port_combo.setMinimumWidth(120)
         self._port_combo.setPlaceholderText("选择串口")
-        self._search_btn = ToolButton(FIF.SEARCH)
-        self._search_btn.setToolTip("搜索串口")
+        self._search_btn = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
         self._search_btn.clicked.connect(self.refresh_ports)
         pl.addWidget(self._port_label); pl.addWidget(self._port_combo, 1)
         pl.addWidget(self._search_btn)
@@ -142,13 +144,13 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         self._sl_baud = ComboBox(); self._sl_baud.addItems(self._BAUDS)
         self._sl_baud.setCurrentIndex(4)
         self._sl_baud.setFixedWidth(90); self._sl_baud.setFixedHeight(H)
-        self._sl_search = ToolButton(FIF.SEARCH)
+        self._sl_search = fluent_tooltip(ToolButton(FIF.SEARCH), "搜索串口")
         self._sl_search.clicked.connect(self.refresh_ports)
         self._sl_search.setFixedSize(H, H)
         self._sl_conn = self._toggle_button()
         self._sl_conn.setFixedHeight(H)
         self._sl_conn.clicked.connect(self._on_toggle)
-        self._sl_status = CaptionLabel("未连接")
+        self._sl_status = fluent_tooltip(CaptionLabel("未连接"))
         self._sl_status.setTextColor(QColor("#606060"), QColor("#b0b0b0"))
         # Left: a status that has to shrink (the poller's, see _show_connected) keeps its start.
         self._sl_status.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -168,18 +170,12 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
         self.refresh_ports()
         self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
 
-    def set_serial_handler(self, handler):
-        """Attach the serial link; a CommHub is resolved to its serial handler."""
-        handler = getattr(handler, self.LINK, handler)
-        if handler is self._handler:
-            return
-        self._serial_connections.clear()
-        self._handler = handler
-        if handler is not None:
-            self._serial_connections.connect(handler.connected, self._on_serial_connected)
-            self._serial_connections.connect(handler.disconnected, self._on_serial_disconnected)
-            self._serial_connections.connect(handler.error, self._on_serial_error)
-            self.set_connected(handler.is_connected)
+    def _attach_link(self, link):
+        """Follow the card's new link (link_polling.ModbusLinkSettings.set_serial_handler)."""
+        self._serial_connections.connect(link.connected, self._on_serial_connected)
+        self._serial_connections.connect(link.disconnected, self._on_serial_disconnected)
+        self._serial_connections.connect(link.error, self._on_serial_error)
+        self.set_connected(link.is_connected)
 
     @staticmethod
     def _toggle_button():
@@ -315,7 +311,7 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
     def _on_connect(self):
         port = self.port
         baud = self.baudrate
-        if not port:
+        if not port or self._handler is None:  # no link off a hub (the designer canvas)
             return
 
         flow_map = {"无": "none", "RTS/CTS": "rtscts", "XON/XOFF": "xonxoff", "DTR/DSR": "dsrdtr"}
@@ -325,15 +321,13 @@ class SerialConfigCard(ModbusLinkSettings, CardWidget):
             btn.setEnabled(False)
         self._set_status("连接中...", "#FF9800")
 
-        if self._handler is None:
-            return
         ok = self._handler.connect(
             port, baud,
             databits=int(self._databits_combo.currentText()),
             parity=parity_map.get(self._parity_combo.currentText(), "N"),
             stopbits=float(self._stopbits_combo.currentText()),
             flowcontrol=flow_map.get(self._flow_combo.currentText(), "none"),
-            parser_type=self.parser_type, parser_config=self.parser_config,
+            parser_type=self.parser_type, parser_config=self.parser_config, slave=self.slave_device,
         )
         if not ok:
             for btn in (self._connect_btn, self._sl_conn):

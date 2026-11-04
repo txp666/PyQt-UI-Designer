@@ -8,7 +8,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget
+from qfluentwidgets import MessageBox, PushButton
 
 from app.common.signal_bus import signalBus
 from app.core.project import ProjectManager
@@ -145,6 +146,15 @@ class WindowHarness(QWidget):
         self.designer_interface = SimpleNamespace(scene=DesignScene(), app_name="test")
 
 
+def answer_unsaved(choice):
+    """Answer the unsaved-changes box with the button ``choice`` (保存, 不保存 or 取消)."""
+    def exec_(box):
+        if choice == "不保存":
+            next(b for b in box.findChildren(PushButton) if b.text() == choice).click()
+        return int(choice == "保存")
+    return patch.object(MessageBox, "exec", exec_)
+
+
 class UnsavedPromptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -156,7 +166,7 @@ class UnsavedPromptTests(unittest.TestCase):
 
     def test_cancel_open_and_new_leave_project_untouched(self):
         original = self.window._project_mgr.current
-        with patch("app.view.main_window.QMessageBox.question", return_value=QMessageBox.Cancel), \
+        with answer_unsaved("取消"), \
              patch("app.view.main_window.QFileDialog.getOpenFileName") as dialog:
             self.window._open_project()
             self.window._new_project()
@@ -166,10 +176,10 @@ class UnsavedPromptTests(unittest.TestCase):
 
     def test_save_cancel_failure_and_success_control_navigation(self):
         for saved in (False, True):
-            with patch("app.view.main_window.QMessageBox.question", return_value=QMessageBox.Save), \
+            with answer_unsaved("保存"), \
                  patch.object(self.window, "_save_project", return_value=saved):
                 self.assertEqual(self.window._confirm_unsaved_changes(), saved)
-        with patch("app.view.main_window.QMessageBox.question", return_value=QMessageBox.Discard):
+        with answer_unsaved("不保存"):
             self.assertTrue(self.window._confirm_unsaved_changes())
 
     def test_cancel_save_dialog_is_not_treated_as_success(self):
@@ -180,14 +190,14 @@ class UnsavedPromptTests(unittest.TestCase):
     def test_close_cancel_does_not_stop_preview(self):
         self.window.preview_interface = Mock()
         event = Mock()
-        with patch("app.view.main_window.QMessageBox.question", return_value=QMessageBox.Cancel):
+        with answer_unsaved("取消"):
             MainWindow.closeEvent(self.window, event)
         event.ignore.assert_called_once()
         self.window.preview_interface._stop_preview.assert_not_called()
 
     def test_new_project_resets_scene_size_and_is_clean(self):
         self.window.designer_interface.scene.set_canvas_size(500, 600)
-        with patch("app.view.main_window.QMessageBox.question", return_value=QMessageBox.Discard), \
+        with answer_unsaved("不保存"), \
              patch("app.view.main_window.InfoBar.success"):
             self.window._new_project()
         self.assertEqual(self.window.designer_interface.scene.sceneRect().width(), 1200)

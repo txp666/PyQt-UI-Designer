@@ -260,8 +260,9 @@ from PyQt5.QtWidgets import QApplication, QWidget
 app = QApplication([])
 import serial_handler as runtime
 from ui import RealtimeLineChart, SerialConfigCard, NumericDisplay
+from comm_hub import CommHub
 from data_binding import DataBinding
-handler = runtime.SerialHandler()
+hub = CommHub()
 chart = RealtimeLineChart()
 chart.configure([{"parseMode": "Modbus", "regIndex": 0}])
 value = NumericDisplay()
@@ -275,7 +276,9 @@ card._port_combo.clear()
 card._port_combo.addItem("TEST fake device")
 ui = QWidget()
 ui.widgets = {"chart": chart, "value": value, "serial": card}
-binding = DataBinding(ui, handler)
+binding = DataBinding(ui, hub)
+handler = card.link  # the card's own serial link
+assert hub.links == [handler]
 with patch.object(runtime.serial, "Serial") as port, patch.object(runtime, "SerialReaderThread"):
     port.return_value.write.side_effect = len
     card._on_connect()

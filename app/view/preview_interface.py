@@ -7,8 +7,8 @@ import sys
 
 from PyQt5.QtCore import Qt, QProcess, QTimer, QUrl, pyqtSignal
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
-    QDialog, QFileDialog, QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame,
+    QFileDialog, QSizePolicy,
 )
 from PyQt5.QtWidgets import QAbstractSpinBox, QLineEdit, QAbstractButton, QTabBar, QTabWidget
 from PyQt5.QtGui import QFontDatabase, QTextCursor, QColor, QDesktopServices
@@ -16,7 +16,7 @@ from qfluentwidgets import (
     PrimaryPushButton, PushButton, BodyLabel, InfoBar,
     InfoBarPosition, FluentIcon as FIF, CardWidget, isDarkTheme,
     SwitchButton, StrongBodyLabel, CaptionLabel, TextEdit,
-    ProgressBar,
+    ProgressBar, MessageBoxBase, ScrollArea,
 )
 
 from app.common.signal_bus import signalBus
@@ -28,7 +28,8 @@ from app.core.modbus_poller import ModbusPoller
 from app.core.signal_lifetime import SignalConnections
 from app.core.slider_release import SendOnRelease
 from app.core.command_runtime import (
-    MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, send_modbus_command,
+    MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, modbus_request,
+    send_modbus_command, slave_command_write, slave_control_write, slave_devices,
 )
 
 
@@ -42,6 +43,7 @@ class PreviewCanvas(QWidget):
         self._widgets = []
         self._asset_base_dir = None
         self._modbus_poller = None
+        self._slave_devices = []  # the slaves of the link cards in the 从站 role, in document order
         self._update_style()
 
     def _update_style(self):
@@ -60,12 +62,21 @@ class PreviewCanvas(QWidget):
         self._asset_base_dir = (Path(project.file_path).expanduser().resolve().parent
                                 if project.file_path else Path.cwd())
         # Reads what the Modbus bindings and chart curves show; the link cards, created in document
-        # order, hand it their settings and show its status.
+        # order, register their own links on the hub, hand it their settings and show its status.
         self._modbus_poller = ModbusPoller(commHub, bindingEngine.modbus_needs, self)
 
         for wd in project.widgets:
             self._create_widget_recursive(wd, self)
+        self._slave_devices = slave_devices(self._widgets)
+        for widget in self._widgets:
+            if hasattr(widget, "set_slave_device"):  # a register table shows the first slave's
+                widget.set_slave_device(self._slave_devices[0] if self._slave_devices else None)
         self._modbus_poller.start()
+
+    def start_slaves(self):
+        """The bindings are up: every slave publishes its whole data table, so bound widgets show it."""
+        for device in self._slave_devices:
+            device.publish_start()
 
     def _create_widget_recursive(self, wd: dict, parent_widget: QWidget):
         type_name = wd["type"]
@@ -103,7 +114,10 @@ class PreviewCanvas(QWidget):
                 bindingEngine.register_widget(widget_id, widget)
 
             self._wire_commands(widget, type_name, props)
-            if hasattr(widget, "set_modbus_poller"):  # a link card: its settings, the poller's status
+            self._wire_slave_writes(widget, type_name, wd.get("binding") or {})
+            if hasattr(widget, "set_modbus_poller"):  # a link card: its own link, its settings, the poller's status
+                from app.core.comm_manager import commHub
+                widget.set_serial_handler(commHub)  # registered in document order
                 widget.set_modbus_poller(self._modbus_poller)
 
             if type_name == "RealtimeChart" and hasattr(widget, "start_listening"):
@@ -131,27 +145,57 @@ class PreviewCanvas(QWidget):
     def _command_error(error):
         signalBus.showNotification.emit("提示", str(error), "错误", 2000)
 
-    @staticmethod
-    def _send_modbus_frame(props: dict, value: int = None):
+    def _send_modbus_frame(self, props: dict, value: int = None):
         """Send a Modbus request from widget properties over every connected link, framed
         for each link: RTU, or MBAP / ASCII where the link parses Modbus TCP / ASCII.
-        If value is provided, it overrides mbValue from props."""
+        If value is provided, it overrides mbValue from props. A write is carried out on the
+        data table of every link card in the 从站 role too, connected or not."""
         from app.core.comm_manager import commHub
+        fields = (
+            props.get("mbSlave", 1),
+            MODBUS_FUNCTIONS.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
+            props.get("mbAddress", 0),
+            value if value is not None else props.get("mbValue", 1),
+            props.get("mbDataType", "uint16"),
+            props.get("mbRegOrder", MODBUS_ORDERS[0]),
+        )
+        wrote = False
+        if self._slave_devices:
+            try:
+                wrote = slave_command_write(self._slave_devices, modbus_request(*fields))
+            except ValueError as exc:
+                self._command_error(exc)
+                return
         if not commHub.is_connected:
-            signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
+            if not wrote:
+                signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
         try:
-            send_modbus_command(
-                commHub,
-                props.get("mbSlave", 1),
-                MODBUS_FUNCTIONS.get(props.get("mbFunc", "06 写单寄存器"), 0x06),
-                props.get("mbAddress", 0),
-                value if value is not None else props.get("mbValue", 1),
-                props.get("mbDataType", "uint16"),
-                props.get("mbRegOrder", MODBUS_ORDERS[0]),
-            )
+            send_modbus_command(commHub, *fields)
         except ValueError as exc:
-            PreviewCanvas._command_error(exc)
+            self._command_error(exc)
+
+    def _wire_slave_writes(self, widget: QWidget, type_name: str, binding: dict):
+        """A user's change of a switch, slider or spin box with a Modbus binding goes into the data table
+        of every link card in the 从站 role, when the command would go out (sendOnChange aside). A
+        binding's own update is signal-blocked, so it never writes back; one with an expression is not
+        written, since its value cannot be worked back."""
+        if (type_name not in ("ToggleSwitch", "Slider", "SpinBox") or binding.get("parseMode") != "Modbus"
+                or binding.get("expression")):
+            return
+        write = partial(self._slave_write, binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)),
+                        binding.get("mbDataType", "uint16"), binding.get("mbRegOrder", MODBUS_ORDERS[0]))
+        if type_name == "ToggleSwitch":
+            switch = widget.findChild(SwitchButton)
+            if switch:
+                switch.checkedChanged.connect(lambda checked: write(1 if checked else 0))
+        elif type_name == "Slider":
+            SendOnRelease(widget, write)
+        else:
+            widget.valueChanged.connect(write)
+
+    def _slave_write(self, area, address, data_type, reg_order, value):
+        slave_control_write(self._slave_devices, area, address, value, data_type, reg_order)
 
     @staticmethod
     def _send_serial_bytes(raw: bytes):
@@ -161,15 +205,14 @@ class PreviewCanvas(QWidget):
             return
         commHub.send(raw)
 
-    @staticmethod
-    def _send_command(cmd: str, mode: str, newline: str, props: dict):
+    def _send_command(self, cmd: str, mode: str, newline: str, props: dict):
         from app.core.comm_manager import commHub
         if not commHub.is_connected:
             signalBus.showNotification.emit("提示", "未连接，命令未发送", "警告", 2000)
             return
 
         if mode == "Modbus":
-            PreviewCanvas._send_modbus_frame(props, cmd)
+            self._send_modbus_frame(props, cmd)
             return
         elif mode == "HEX":
             try:
@@ -190,15 +233,14 @@ class PreviewCanvas(QWidget):
         "float32": ("f", float),
     }
 
-    @staticmethod
-    def _apply_template(tpl: str, value: str, mode: str, newline: str, props: dict):
+    def _apply_template(self, tpl: str, value: str, mode: str, newline: str, props: dict):
         """Apply template and send via the appropriate mode.
 
         For HEX mode with a struct data type, packs the value as binary first,
         then applies the template to the hex representation.
         """
         if mode == "Modbus":
-            PreviewCanvas._send_modbus_frame(props, value)
+            self._send_modbus_frame(props, value)
             return
         if mode == "HEX":
             dt = props.get("dataType", "HEX字符串")
@@ -217,10 +259,9 @@ class PreviewCanvas(QWidget):
                 return
 
         cmd = tpl.replace("{value}", value) if "{value}" in tpl else tpl
-        PreviewCanvas._send_command(cmd, mode, newline, props)
+        self._send_command(cmd, mode, newline, props)
 
-    @staticmethod
-    def _wire_commands(widget: QWidget, type_name: str, props: dict):
+    def _wire_commands(self, widget: QWidget, type_name: str, props: dict):
         """Connect command properties to sending over the communication hub."""
         mode = props.get("commandMode", "文本")
         newline = props.get("commandNewline", "\\r\\n")
@@ -231,11 +272,11 @@ class PreviewCanvas(QWidget):
             if mode == "Modbus":
                 settings = {"mbFunc": "03 读保持寄存器", **props}
                 widget.clicked.connect(
-                    lambda _, p=settings: PreviewCanvas._send_modbus_frame(p))
+                    lambda _, p=settings: self._send_modbus_frame(p))
             elif cmd:
                 widget.clicked.connect(
                     lambda _, c=cmd, m=mode, n=newline, p=props, t=tpl:
-                        PreviewCanvas._apply_template(t, c, m, n, p))
+                        self._apply_template(t, c, m, n, p))
 
         elif type_name == "ToggleSwitch":
             on_cmd = props.get("onCommand", "").strip()
@@ -247,19 +288,19 @@ class PreviewCanvas(QWidget):
                                    _m=mode, _n=newline, _p=props, _t=tpl):
                         if _m == "Modbus":
                             val = 0xFF00 if checked else 0x0000
-                            PreviewCanvas._send_modbus_frame(
+                            self._send_modbus_frame(
                                 {**_p, "mbFunc": "05 写单线圈"}, val)
                         else:
                             c = _on if checked else _off
                             if c:
-                                PreviewCanvas._apply_template(_t, c, _m, _n, _p)
+                                self._apply_template(_t, c, _m, _n, _p)
                     sw.checkedChanged.connect(_on_toggle)
 
         elif type_name == "LineEdit" and (props.get("sendOnEnter") or mode == "Modbus"):
             def _on_enter(_w=widget, _m=mode, _n=newline, _p=props, _t=tpl):
                 text = _w.text().strip()
                 if text or _m == "Modbus":
-                    PreviewCanvas._apply_template(_t, text, _m, _n, _p)
+                    self._apply_template(_t, text, _m, _n, _p)
             widget.returnPressed.connect(_on_enter)
 
         elif type_name == "ComboBox" and (props.get("sendOnSelect") or mode == "Modbus"):
@@ -272,12 +313,12 @@ class PreviewCanvas(QWidget):
                     return
                 raw = _cmds[idx] if idx < len(_cmds) and _cmds[idx] else _w.currentText()
                 if raw:
-                    PreviewCanvas._apply_template(_t, raw, _m, _n, _p)
+                    self._apply_template(_t, raw, _m, _n, _p)
             widget.currentIndexChanged.connect(_on_select)
 
         elif type_name in ("Slider", "SpinBox") and (props.get("sendOnChange") or mode == "Modbus"):
             def _on_value_changed(val, _tpl=tpl, _m=mode, _n=newline, _p=props):
-                PreviewCanvas._apply_template(_tpl, str(val), _m, _n, _p)
+                self._apply_template(_tpl, str(val), _m, _n, _p)
             if type_name == "Slider":  # a drag sends once, when it lets go
                 SendOnRelease(widget, _on_value_changed)
             else:
@@ -304,21 +345,24 @@ class PreviewCanvas(QWidget):
             self._modbus_poller.stop()
             self._modbus_poller.deleteLater()
             self._modbus_poller = None
+        self._slave_devices = []
         for w in self._widgets:
             if hasattr(w, "stop_listening"):
                 w.stop_listening()
+            if hasattr(w, "set_modbus_poller"):  # a link card: its link disconnects and leaves the hub now
+                w.set_serial_handler(None)
             w.deleteLater()
         self._widgets.clear()
 
 
-class NuitkaPackDialog(QDialog):
-    """Dialog that runs Nuitka packaging with real-time terminal output."""
+class NuitkaPackDialog(MessageBoxBase):
+    """Dialog that runs Nuitka packaging with real-time terminal output.
+
+    It is a Fluent message box over ``parent``, the main window. 开始打包 starts the build, 取消 stops
+    a running one and otherwise closes the dialog; closing it in any way stops the build too."""
 
     def __init__(self, project_dir: str, app_name: str = "上位机", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Nuitka 打包")
-        self.resize(800, 560)
-        self.setMinimumSize(640, 400)
         self._project_dir = project_dir
         self._app_name = app_name
         self._process = None
@@ -326,46 +370,43 @@ class NuitkaPackDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(16, 12, 16, 12)
-        root.setSpacing(8)
-
+        self.widget.setMinimumSize(640, 400)
         hdr = QHBoxLayout()
-        self._title = StrongBodyLabel("Nuitka 打包")
-        self._status = CaptionLabel("就绪")
+        self._title = StrongBodyLabel("Nuitka 打包", self.widget)
+        self._status = CaptionLabel("就绪", self.widget)
         self._status.setStyleSheet("color:#888;")
         hdr.addWidget(self._title)
         hdr.addStretch()
         hdr.addWidget(self._status)
-        root.addLayout(hdr)
+        self.viewLayout.addLayout(hdr)
 
-        self._progress = ProgressBar()
+        self._progress = ProgressBar(self.widget)
         self._progress.setRange(0, 0)
         self._progress.hide()
-        root.addWidget(self._progress)
+        self.viewLayout.addWidget(self._progress)
 
-        self._terminal = TextEdit()
+        self._terminal = TextEdit(self.widget)
         self._terminal.setReadOnly(True)
         self._terminal.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
         self._terminal.setStyleSheet(
             "QTextEdit { background: #1e1e1e; color: #cccccc; "
             "border: 1px solid #333; border-radius: 6px; padding: 8px; }"
         )
-        root.addWidget(self._terminal, 1)
+        self.viewLayout.addWidget(self._terminal, 1)
 
-        btn_row = QHBoxLayout()
-        self._start_btn = PrimaryPushButton("开始打包")
+        # The base class accepts on yes and rejects on cancel; these buttons do their own work.
+        self._start_btn = self.yesButton
+        self._start_btn.setText("开始打包")
+        self._start_btn.clicked.disconnect()
         self._start_btn.clicked.connect(self._start_pack)
-        self._cancel_btn = PushButton("取消")
+        self._cancel_btn = self.cancelButton
+        self._cancel_btn.setText("取消")
+        self._cancel_btn.clicked.disconnect()
         self._cancel_btn.clicked.connect(self._on_cancel)
-        self._open_dir_btn = PushButton("打开输出目录")
+        self._open_dir_btn = PushButton("打开输出目录", self.buttonGroup)
         self._open_dir_btn.clicked.connect(self._open_output_dir)
         self._open_dir_btn.setEnabled(False)
-        btn_row.addWidget(self._start_btn)
-        btn_row.addWidget(self._cancel_btn)
-        btn_row.addStretch()
-        btn_row.addWidget(self._open_dir_btn)
-        root.addLayout(btn_row)
+        self.buttonLayout.addWidget(self._open_dir_btn, 1, Qt.AlignVCenter)
 
     def _append_text(self, text: str, color: str = None):
         cursor = self._terminal.textCursor()
@@ -653,19 +694,23 @@ class NuitkaPackDialog(QDialog):
             self._status.setText("进程启动失败")
             self._append_text("无法启动 Python，请检查解释器路径和执行权限。\n", "#f44")
 
-    def _on_cancel(self):
+    def _stop_processes(self) -> bool:
+        """Stop the running build, if any; whether one was running."""
         running = False
         for process in (self._pip_process, self._process):
             if process and process.state() != QProcess.NotRunning:
                 running = True
                 process.kill()
                 process.waitForFinished(3000)
-        if running:
+        return running
+
+    def _on_cancel(self):
+        if self._stop_processes():
             self._append_text("\n用户取消打包\n", "#f39c12")
             self._status.setText("已取消")
             self._status.setStyleSheet("color:#f39c12;")
         else:
-            self.close()
+            self.reject()
 
     def _open_output_dir(self):
         from pathlib import Path
@@ -675,11 +720,13 @@ class NuitkaPackDialog(QDialog):
         elif not QDesktopServices.openUrl(QUrl.fromLocalFile(str(build_dir))):
             self._append_text("无法打开输出目录\n", "#f44")
 
+    def done(self, code):
+        # Esc, reject() and accept() all end here.
+        self._stop_processes()
+        super().done(code)
+
     def closeEvent(self, event):
-        for process in (self._pip_process, self._process):
-            if process and process.state() != QProcess.NotRunning:
-                process.kill()
-                process.waitForFinished(3000)
+        self._stop_processes()
         super().closeEvent(event)
 
 
@@ -729,7 +776,7 @@ class PreviewInterface(QWidget):
         layout.addLayout(ctrl_layout)
 
         # scroll area for canvas
-        scroll = self._scroll = QScrollArea()
+        scroll = self._scroll = ScrollArea()
         scroll.setObjectName("previewScroll")
         scroll.setWidgetResizable(True)
         scroll.setAlignment(Qt.AlignCenter)
@@ -794,6 +841,7 @@ class PreviewInterface(QWidget):
 
         bindingEngine.load_bindings_from_project(self._project_data.widgets)
         bindingEngine.start()
+        self._preview_canvas.start_slaves()
 
         self._preview_canvas.setEnabled(True)
         self._placeholder.hide()
@@ -842,7 +890,7 @@ class PreviewInterface(QWidget):
             return
 
         app_name = self._project_data.app_name if self._project_data else "上位机"
-        dlg = NuitkaPackDialog(directory, app_name, self)
+        dlg = NuitkaPackDialog(directory, app_name, self.window())
         dlg.exec_()
 
     def set_mica_enabled(self, enabled: bool):

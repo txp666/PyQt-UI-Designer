@@ -7,15 +7,14 @@ from pathlib import Path
 from PyQt5.QtCore import Qt, QMimeData, QPoint, QPointF, QRectF, QSignalBlocker, QSize, QTimer, pyqtSignal
 from PyQt5.QtGui import QCursor, QIcon, QKeySequence
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QHBoxLayout, QVBoxLayout, QSplitter, QFrame, QFileDialog, QShortcut,
+    QApplication, QWidget, QHBoxLayout, QVBoxLayout, QSplitter, QFileDialog, QShortcut,
 )
 from qfluentwidgets import (
     CommandBar, Action, FluentIcon as FIF, InfoBar, InfoBarPosition,
-    BodyLabel, LineEdit, RoundMenu, ToolButton, Theme,
+    BodyLabel, LineEdit, RoundMenu, ToolButton, Theme, HorizontalSeparator,
+    ToolTipFilter, ToolTipPosition,
 )
 from qfluentwidgets.common.icon import FluentIconBase
-
-from qfluentwidgets import isDarkTheme
 
 from app.designer.canvas import DesignScene, DesignView
 from app.designer.canvas_item import CanvasItem
@@ -106,6 +105,7 @@ class DesignerInterface(QWidget):
         self._icon_button.setFixedSize(32, 32)
         self._icon_button.setIconSize(QSize(20, 20))
         self._icon_button.setToolTip("应用图标")
+        self._icon_button.installEventFilter(ToolTipFilter(self._icon_button, 300, ToolTipPosition.TOP))
         self._icon_button.clicked.connect(self._show_icon_menu)
         toolbar_row.addWidget(self._icon_button)
 
@@ -136,10 +136,7 @@ class DesignerInterface(QWidget):
         layout.addLayout(toolbar_row)
 
         # separator
-        self._sep = QFrame()
-        self._sep.setFrameShape(QFrame.HLine)
-        self._update_separator_style()
-        layout.addWidget(self._sep)
+        layout.addWidget(HorizontalSeparator())
 
         # three-column splitter
         splitter = QSplitter(Qt.Horizontal)
@@ -266,12 +263,7 @@ class DesignerInterface(QWidget):
     def _on_app_name_changed(self):
         signalBus.canvasChanged.emit()
 
-    def _update_separator_style(self):
-        color = "#444" if isDarkTheme() else "#e0e0e0"
-        self._sep.setStyleSheet(f"background: {color}; max-height: 1px;")
-
     def on_theme_changed(self):
-        self._update_separator_style()
         self._view._apply_view_style()
         self._scene.refresh_all_widgets()
         self._palette.refresh_icons()

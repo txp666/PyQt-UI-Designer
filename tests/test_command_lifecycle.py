@@ -24,8 +24,8 @@ import traceback
 from PyQt5.QtCore import QEvent, Qt
 from PyQt5.QtTest import QSignalSpy, QTest
 from PyQt5.QtWidgets import QApplication
+from app.core.comm_manager import commHub
 from app.core.project import ProjectData
-from app.core.serial_manager import serialManager
 from app.view.preview_interface import PreviewInterface
 
 errors = []
@@ -51,7 +51,8 @@ __CHECKS__
 assert not errors, errors
 window.deleteLater()
 app.sendPostedEvents(None, QEvent.DeferredDelete)
-serialManager.disconnect()
+commHub.disconnect()
+assert not commHub.links, commHub.links
 assert not errors, errors
 print("PREVIEW_LIFECYCLE_OK")
 """
@@ -77,18 +78,21 @@ class CommandLifecycleTests(unittest.TestCase):
                 app.processEvents()
                 assert window._running
                 assert not errors, errors
-                serialManager.connected.emit("TEST")
-                serialManager.rawReceived.emit(b"temperature=42\n")
-                serialManager.dataReceived.emit({"temperature": 42})
-                serialManager.error.emit("test error")
+                serial = window._preview_canvas._widgets[0].link  # the serial card's own
+                assert commHub.links == [serial]
+                serial.connected.emit("TEST")
+                serial.rawReceived.emit(b"temperature=42\n")
+                serial.dataReceived.emit({"temperature": 42})
+                serial.error.emit("test error")
                 receive, log = window._preview_canvas._widgets[1:3]
                 assert receive._output.toPlainText().count("已连接: TEST") == 1
                 assert log._output.toPlainText().count("已连接: TEST") == 1
                 QTest.mouseClick(window._stop_btn, Qt.LeftButton)
+                assert not commHub.links  # the card's link went off the hub at once
                 app.sendPostedEvents(None, QEvent.DeferredDelete)
                 assert not window._running
-                serialManager.disconnect()
-                serialManager.error.emit("after stop")
+                commHub.disconnected.emit()
+                commHub.error.emit("after stop")
                 assert not errors, errors
         """)
 
@@ -125,6 +129,9 @@ class CommandLifecycleTests(unittest.TestCase):
             for widget in widgets.values():
                 widget.deleteLater()
             app.sendPostedEvents(None, QEvent.DeferredDelete)
+            assert not hub.links  # the serial card's link went with it
+            serial = link_class(window)  # another link on the same hub
+            hub.add_link(serial)
             serial.connected.emit("RECONNECTED")
             serial.disconnected.emit()
             serial.error.emit("after deletion")
@@ -185,10 +192,11 @@ class CommandLifecycleTests(unittest.TestCase):
                 port = Port()
                 with patch.object(pyserial, "Serial", return_value=port):
                     QTest.mouseClick(card._sl_conn, Qt.LeftButton)
-                assert serialManager.is_connected, cycle
+                link = card.link
+                assert link.is_connected and commHub.connected_links == [link], cycle
                 assert card._sl_conn.isEnabled() and card._sl_conn.text() == "断开"
                 QTest.mouseClick(window._stop_btn, Qt.LeftButton)
-                assert not serialManager.is_connected
+                assert not link.is_connected and not commHub.links
                 assert not port.is_open
                 app.sendPostedEvents(None, QEvent.DeferredDelete)
                 assert not errors, errors
@@ -283,21 +291,25 @@ class CommandLifecycleTests(unittest.TestCase):
             control("log", "LogBox"),
         ], r"""
             if os.environ["APPLICATION_MODE"] == "export":
-                from serial_handler import SerialHandler
-                replacement = SerialHandler()
+                from comm_hub import CommHub
+                replacement = CommHub()
                 for widget in widgets.values():
                     widget.set_serial_handler(replacement)
                     widget.set_serial_handler(replacement)
+                # The serial card let its link go and registered a new one of its own on the new hub.
+                new = widgets["serial"].link
+                assert new is not serial and replacement.links == [new] and not hub.links
                 serial.connected.emit("OLD")
                 serial.error.emit("OLD")
                 serial.rawReceived.emit(b"OLD\n")
-                replacement.connected.emit("NEW")
-                replacement.rawReceived.emit(b"NEW\n")
+                new.connected.emit("NEW")
+                new.rawReceived.emit(b"NEW\n")
                 assert widgets["recv"]._text.toPlainText().count("已连接: NEW") == 1
                 assert widgets["log"]._text.toPlainText().count("已连接: NEW") == 1
                 assert "OLD" not in widgets["recv"]._text.toPlainText()
                 assert "OLD" not in widgets["log"]._text.toPlainText()
                 for widget in widgets.values():
                     widget.set_serial_handler(None)
+                assert not replacement.links
                 replacement.disconnect()
         """)

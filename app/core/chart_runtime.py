@@ -9,11 +9,11 @@ from pathlib import Path
 
 from PyQt5.QtCore import Qt, QTimer, QPointF, QRectF, QSize
 from PyQt5.QtGui import QColor, QFontMetricsF, QPainter, QPen
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy
 
 from qfluentwidgets import (
     LineEdit as FluentLineEdit, ToolButton as FluentToolButton, FluentIcon,
-    BodyLabel, isDarkTheme, qconfig, setCustomStyleSheet,
+    BodyLabel, CaptionLabel, ToolTipFilter, ToolTipPosition, isDarkTheme, qconfig, setCustomStyleSheet,
 )
 
 
@@ -307,7 +307,8 @@ class RealtimeLineChart(QWidget):
         self._disp_edit.editingFinished.connect(self._on_disp_changed)
         tb.addWidget(self._disp_edit)
         # 实时, the cursor's sample, or what went wrong saving, loading or recording
-        self._mode_label = QLabel("实时")
+        self._mode_label = CaptionLabel("实时")
+        self._mode_label.setTextColor(QColor("#0078d4"), QColor("#4aa3df"))
         self._mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._mode_label.setMinimumWidth(1)  # a long message is cut short rather than widening the chart
         tb.addWidget(self._mode_label)
@@ -325,6 +326,8 @@ class RealtimeLineChart(QWidget):
         self._clear_ref_btn.clicked.connect(self.clear_reference)
         self._clear_ref_btn.hide()
         tb.addWidget(self._clear_ref_btn)
+        for button in (self._save_btn, self._load_btn, self._clear_ref_btn):
+            button.installEventFilter(ToolTipFilter(button, 300, ToolTipPosition.TOP))
         self._root.addLayout(tb)
 
         self._rebuild_curves()
@@ -342,7 +345,6 @@ class RealtimeLineChart(QWidget):
         dark = isDarkTheme()
         foreground = "#e5e5e5" if dark else "#202020"
         muted = "#b0b0b0" if dark else "#606060"
-        accent = "#4aa3df" if dark else "#0078d4"
         self._header.set_foreground(foreground)
         if self._plot:
             self._plot.setBackground("#252525" if dark else "#ffffff")
@@ -362,8 +364,6 @@ class RealtimeLineChart(QWidget):
                 "FluentLabelBase { color: #606060; border: 1px dashed #ccc; background: #fafafa; }",
                 "FluentLabelBase { color: #c0c0c0; border: 1px dashed #555; background: #252525; }",
             )
-        self._mode_label.setStyleSheet(
-            f"font-size: 12px; color: {accent}; padding: 1px 0;")
         self._show_values()  # the entries in the new curve colours
         self.update()
 

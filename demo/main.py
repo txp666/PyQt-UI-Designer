@@ -29,7 +29,7 @@ from comm_hub import CommHub
 from data_binding import DataBinding
 
 window = MainUI()
-comm_hub = CommHub()  # serial, TCP and MQTT links behind one set of signals
+comm_hub = CommHub()  # every link card registers its own link here, behind one set of signals
 binding = DataBinding(window, comm_hub)
 
 if sys.platform == "win32":

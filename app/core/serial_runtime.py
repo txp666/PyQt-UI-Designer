@@ -6,6 +6,7 @@ from typing import List, Dict
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QObject
 from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding
 from .modbus_master import ModbusMaster
+from .modbus_slave import SLAVE_PARSERS
 
 try:
     import serial
@@ -109,7 +110,11 @@ class SerialReaderThread(QThread):
 
 
 class SerialHandler(QObject):
+    """The serial link. Connected with a card's slave (slave_runtime.ModbusSlaveDevice) while it parses
+    modbus or modbus_tcp, it answers the requests it reads instead of parsing replies."""
     text_encoding = "utf-8"  # of the text this link receives, for the receive log
+    slave_data = False  # True while dataReceived carries a slave message (publish_slave_data)
+    uses_port_settings = True  # the hub hands it the project's whole serial settings, not only the frame format
     dataReceived = pyqtSignal(dict)
     rawReceived = pyqtSignal(bytes)
     dataSent = pyqtSignal(bytes)
@@ -117,6 +122,7 @@ class SerialHandler(QObject):
     connected = pyqtSignal(str)
     disconnected = pyqtSignal()
     error = pyqtSignal(str)
+    slaveLog = pyqtSignal(str, str)  # a slave's log line and its level
     DEFAULT_CONFIG = {}
 
     def __init__(self, parent=None, config=None):
@@ -126,6 +132,7 @@ class SerialHandler(QObject):
         self._parser = None
         self.modbus_requests = ModbusRequests()  # names responses by register address
         self.modbus_master = ModbusMaster(self)  # one Modbus request on the wire at a time
+        self.slave_device = None  # the slave answering on this link while it is connected as one
         self.configure(config or self.DEFAULT_CONFIG)
 
     def configure(self, config):
@@ -138,12 +145,25 @@ class SerialHandler(QObject):
     def is_connected(self):
         return self._port is not None and getattr(self._port, "is_open", False)
 
+    @property
+    def slave_active(self):
+        """Answering as a Modbus slave: the poller and Modbus commands leave this link alone."""
+        return self.slave_device is not None
+
+    def publish_slave_data(self, message):
+        """A slave message, published like a parsed frame; slave_data tells the log box to leave it out."""
+        self.slave_data = True
+        try:
+            self.dataReceived.emit(message)
+        finally:
+            self.slave_data = False
+
     @staticmethod
     def list_ports():
         return _list_all_ports()
 
     def connect(self, port, baudrate=None, databits=None, parity=None, stopbits=None,
-                flowcontrol=None, parser_type=None, parser_config=None):
+                flowcontrol=None, parser_type=None, parser_config=None, slave=None):
         if not HAS_SERIAL:
             self.error.emit("pyserial 未安装，请运行 pip install pyserial")
             return False
@@ -157,7 +177,10 @@ class SerialHandler(QObject):
             selected_config = parser_config
             if selected_config is None:
                 selected_config = cfg["parserConfig"] if selected_parser == cfg["parser"] else {}
-            parser = create_parser(selected_parser, selected_config, self.modbus_requests)
+            if selected_parser not in SLAVE_PARSERS:
+                slave = None  # another mode: the card's slave settings do not count
+            parser = (slave.framer(selected_parser) if slave is not None
+                      else create_parser(selected_parser, selected_config, self.modbus_requests))
             if self._thread or self._port:
                 self.disconnect()
             port_obj = serial.Serial(
@@ -174,6 +197,9 @@ class SerialHandler(QObject):
         self._parser = parser
         self.parser_type = selected_parser
         self.text_encoding = text_encoding(selected_parser, selected_config)
+        self.slave_device = slave
+        if slave is not None:
+            slave.begin(self, selected_parser)
         self._thread = SerialReaderThread(port_obj, parser, self)
         self._thread.rawReceived.connect(self._on_raw)
         self._thread.parsedReceived.connect(self._on_parsed)
@@ -196,6 +222,9 @@ class SerialHandler(QObject):
         if self._port and self._port.is_open:
             self._port.close()
         self._port = None
+        if self.slave_device is not None:
+            self.slave_device.end()
+            self.slave_device = None
         self.disconnected.emit()
         self.connectionChanged.emit(False)
 
@@ -220,11 +249,27 @@ class SerialHandler(QObject):
     def send_text(self, text, encoding="utf-8"):
         return self.send(text.encode(encoding))
 
+    def _send_reply(self, data):
+        """A slave's reply: written like send(), but no read is noted for it."""
+        if not self.is_connected:
+            return False
+        try:
+            written = self._port.write(data)
+            if written != len(data):
+                raise OSError(f"串口仅写入 {written}/{len(data)} 字节")
+        except Exception as exc:
+            self.error.emit(f"发送失败: {exc}")
+            return False
+        self.dataSent.emit(bytes(data))
+        return True
+
     @pyqtSlot(bytes)
     def _on_raw(self, data):
         # Events already queued by a stopped reader can arrive after reconnect.
         if self._thread is not None and self.sender() is self._thread:
             self.rawReceived.emit(data)
+            if self.slave_device is not None:  # a request the slave answers
+                self.slave_device.receive(data, self._send_reply)
 
     @pyqtSlot(dict)
     def _on_parsed(self, data):

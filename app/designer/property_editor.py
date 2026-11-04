@@ -13,6 +13,7 @@ from qfluentwidgets import (
     ScrollArea, StrongBodyLabel, BodyLabel, CardWidget,
     LineEdit, SpinBox, DoubleSpinBox, SwitchButton,
     ComboBox, EditableComboBox, TextEdit, CaptionLabel, ToolButton,
+    ToolTipFilter, ToolTipPosition,
 )
 from qfluentwidgets import FluentIcon as FIF
 
@@ -31,6 +32,12 @@ from app.widgets.base import PropType, PropDef, WidgetMeta
 from app.designer.canvas_item import CanvasItem
 
 
+def _fluent_tooltip(widget, text):
+    """Give ``widget`` its tooltip, shown the Fluent way rather than as the native one."""
+    widget.setToolTip(text)
+    widget.installEventFilter(ToolTipFilter(widget, 300, ToolTipPosition.TOP))
+
+
 _MODE_VISIBILITY = {
     "文本":   {"command", "onCommand", "offCommand", "commandNewline", "commandTemplate"},
     "HEX":    {"command", "onCommand", "offCommand", "commandTemplate",
@@ -45,9 +52,13 @@ _MODE_FIELDS = {
 
 _SEND_TOGGLE_FIELDS = {"commandMode", "commands"}
 
-# A link card's Modbus polling settings, shown while its own parser is a Modbus one (they still count
-# when it uses the project's settings).
-_MODBUS_LINK_FIELDS = ("modbusPeriod", "modbusTimeout", "modbusSlave")
+# A link card's Modbus settings, shown while its own parser is a Modbus one (they still count when it
+# uses the project's settings): the role and 默认从站 always, then the settings of its role.
+_MODBUS_LINK_FIELDS = ("modbusRole", "modbusSlave")
+_MODBUS_MASTER_FIELDS = ("modbusPeriod", "modbusTimeout")
+_MODBUS_SLAVE_FIELDS = ("modbusDelay", "modbusExceptions", "slaveCoStart", "slaveCoCount", "slaveDiStart",
+                        "slaveDiCount", "slaveHrStart", "slaveHrCount", "slaveIrStart", "slaveIrCount",
+                        "slaveInit")
 
 # Chart per-curve fields visibility based on curveParseMode
 _CHART_PARSE_VIS = {
@@ -351,7 +362,7 @@ class PropertyEditor(ScrollArea):
                     label = BodyLabel(prop_def.label)
                     if BIND_PROPERTIES.get(item.type_name) == prop_def.name:
                         label.setText(f"{prop_def.label} ⚡")
-                        label.setToolTip("可绑定到串口数据")
+                        _fluent_tooltip(label, "可绑定到串口数据")
                     props_rows.add(label, editor)
                     self._editors[prop_def.name] = editor
                     self._prop_rows[prop_def.name] = (label, editor)
@@ -359,7 +370,7 @@ class PropertyEditor(ScrollArea):
             self._layout.addWidget(props_card)
 
             if item.type_name in LINK_CARD_TYPES:
-                self._apply_link_parser_visibility(item.properties.get("defaultParser", "项目设置"))
+                self._apply_link_parser_visibility()
                 self._card_frame_section = self._card_frame_format()
                 self._layout.addWidget(self._card_frame_section)
 
@@ -376,9 +387,10 @@ class PropertyEditor(ScrollArea):
 
             if item.type_name == "TabWidget":
                 self._sync_tab_editors()
-                self._editors["tabNames"].setToolTip(
-                    "每行一个标签，离开输入框后应用，按序号保留页面。减少页数时，"
-                    "超出页的控件移至最后一页；名称为空时保留“标签1”。")
+                _fluent_tooltip(
+                    self._editors["tabNames"],
+                    "每行一个标签，离开输入框后应用，按序号保留页面。\n"
+                    "减少页数时，超出页的控件移至最后一页；名称为空时保留“标签1”。")
 
             if item.type_name == "RealtimeChart":
                 self._load_curve_editors(item)
@@ -509,7 +521,7 @@ class PropertyEditor(ScrollArea):
             self._bind_mb_period_spin.valueChanged.connect(self._binding_slot("mbPeriod"))
             self._bind_mb_period_label = BodyLabel("采集周期(ms)")
             for widget in (self._bind_mb_period_label, self._bind_mb_period_spin):
-                widget.setToolTip("0 = 用默认周期（链路卡片的「默认轮询(ms)」，默认 500）")
+                _fluent_tooltip(widget, "0 = 用默认周期（链路卡片的「默认轮询(ms)」，默认 500）")
             binding_rows.add(self._bind_mb_period_label, self._bind_mb_period_spin)
 
             self._bind_expr_edit = LineEdit()
@@ -560,8 +572,8 @@ class PropertyEditor(ScrollArea):
         def add(key, text, editor, tip=""):
             label = BodyLabel(text)
             if tip:
-                label.setToolTip(tip)
-                editor.setToolTip(tip)
+                _fluent_tooltip(label, tip)
+                _fluent_tooltip(editor, tip)
             form_rows.add(label, editor)
             rows[key] = (label, editor)
 
@@ -795,11 +807,17 @@ class PropertyEditor(ScrollArea):
             if name in self._prop_rows:
                 self._show_row(self._prop_rows[name][1], name in visible)
 
-    def _apply_link_parser_visibility(self, parser: str):
-        """A link card's 默认轮询 / 响应超时 / 默认从站 rows show while it parses Modbus itself."""
-        for name in _MODBUS_LINK_FIELDS:
-            if name in self._prop_rows:
-                self._show_row(self._prop_rows[name][1], parser in MODBUS_PARSERS)
+    def _apply_link_parser_visibility(self):
+        """A link card's Modbus rows show while it parses Modbus itself: Modbus 角色 and 默认从站, then
+        默认轮询 / 响应超时 for a 主站, the slave settings for a 从站."""
+        properties = self._current_item.properties
+        modbus = properties.get("defaultParser", "项目设置") in MODBUS_PARSERS
+        slave = properties.get("modbusRole", "主站") == "从站"
+        for names, shown in ((_MODBUS_LINK_FIELDS, modbus), (_MODBUS_MASTER_FIELDS, modbus and not slave),
+                             (_MODBUS_SLAVE_FIELDS, modbus and slave)):
+            for name in names:
+                if name in self._prop_rows:
+                    self._show_row(self._prop_rows[name][1], shown)
 
     def _apply_send_toggle_visibility(self, enabled: bool):
         """Show/hide send-related fields when sendOnEnter/sendOnSelect/sendOnChange toggles.
@@ -910,9 +928,11 @@ class PropertyEditor(ScrollArea):
             self._apply_send_toggle_visibility(bool(value))
         elif prop_name == "displayMode" and self._current_item.type_name in LINK_CARD_TYPES:
             self._sync_height_editor()  # another display mode needs another least height
+        elif prop_name == "modbusRole" and self._current_item.type_name in LINK_CARD_TYPES:
+            self._apply_link_parser_visibility()
         elif (prop_name == "defaultParser" and self._card_frame_section is not None
               and self._current_item.type_name in LINK_CARD_TYPES):
-            self._apply_link_parser_visibility(value)
+            self._apply_link_parser_visibility()
             # Another mode shows other rows, and possibly the project's values.
             section = self._card_frame_format()
             self._layout.replaceWidget(self._card_frame_section, section)

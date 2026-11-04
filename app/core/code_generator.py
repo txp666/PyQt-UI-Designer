@@ -196,7 +196,7 @@ from comm_hub import CommHub
 from data_binding import DataBinding
 
 window = MainUI()
-comm_hub = CommHub()  # serial, TCP and MQTT links behind one set of signals
+comm_hub = CommHub()  # every link card registers its own link here, behind one set of signals
 binding = DataBinding(window, comm_hub)
 
 if sys.platform == "win32":
@@ -232,17 +232,17 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         'from PyQt5.QtCore import Qt, QTimer, QRectF',
         'from PyQt5.QtWidgets import (',
         '    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,',
-        '    QScrollArea, QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,',
+        '    QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,',
         '    QSizePolicy, QHeaderView, QAbstractItemView, QTableWidget, QTableWidgetItem,',
         '    QSpinBox, QPushButton, QFileDialog, QLineEdit,',
         ')',
-        'from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient, QPixmap',
+        'from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient',
         '',
         'from qfluentwidgets import (',
         '    PushButton, PrimaryPushButton, BodyLabel, StrongBodyLabel,',
         '    CaptionLabel, LineEdit, ComboBox, TextEdit, CheckBox,',
         '    SwitchButton, Slider, SpinBox, ProgressBar, ProgressRing,',
-        '    CardWidget, TableWidget, ToolButton,',
+        '    CardWidget, TableWidget, ToolButton, ScrollArea,',
         '    FluentWindow, NavigationItemPosition,',
         '    FluentIcon as FIF, InfoBar, InfoBarPosition, isDarkTheme,',
         '    qconfig, setCustomStyleSheet, themeColor,',
@@ -269,7 +269,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
     lines.append(runtime_source("signal_lifetime.py"))
     lines.append(runtime_source("qt_window_lifetime.py"))
     lines.append(runtime_source("command_runtime.py").replace(
-        "from .modbus_master import (", "from serial_handler import ("))
+        "from .modbus_master import (", "from serial_handler import (").replace(
+        "from .modbus_slave import AREA_TABLES", "from serial_handler import AREA_TABLES"))
 
     # custom widget classes needed (recursive)
     def _collect_types(items):
@@ -318,6 +319,8 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_data_send_card_class())
     if "DataRecvCard" in widget_types:
         lines.append(_data_recv_card_class())
+    if "ModbusSlaveTable" in widget_types:
+        lines.append(_slave_table_class())
 
     # MainUI class
     lines.append(f'''
@@ -335,12 +338,12 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self._theme_containers = []
         self._create_widgets()
 
-        scroll = QScrollArea()
+        scroll = ScrollArea()
+        scroll.setObjectName("scrollPage")
+        scroll.enableTransparentBackground()  # before the page is in it: it would also clear the page's
         scroll.setWidget(self._page)
         scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
-        scroll.setObjectName("scrollPage")
-        scroll.setStyleSheet("QScrollArea#scrollPage {{ background: transparent; border: none; }}")
 
         self.addSubInterface(scroll, FIF.HOME, "主界面")
         self.apply_theme()
@@ -422,7 +425,15 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send(frame)
 
     def _send_modbus(self, slave, func, address, value=1, data_type="uint16", reg_order="大端(AB CD)"):
-        # One request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
+        # A write goes into the data table of every link card in the 从站 role, connected or not; then one
+        # request per connected link, framed as it parses: RTU, MBAP (modbus_tcp) or ASCII (modbus_ascii).
+        devices = slave_devices(self.widgets.values())
+        if devices:
+            try:
+                slave_command_write(devices, modbus_request(slave, func, address, value, data_type, reg_order))
+            except ValueError as exc:
+                self._command_error(exc)
+                return
         if hasattr(self, '_comm_hub') and self._comm_hub.is_connected:
             try:
                 send_modbus_command(self._comm_hub, slave, func, address, value, data_type, reg_order)
@@ -439,7 +450,46 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
             self._comm_hub.send(frame)
 ''')
 
+    if _has_slave_writes(widgets):
+        lines.append('''
+    def _slave_write(self, area, address, value, data_type="uint16", reg_order="大端(AB CD)"):
+        # A user's change of a control with a Modbus binding, into every 从站 card's data table.
+        slave_control_write(slave_devices(self.widgets.values()), area, address, value, data_type, reg_order)
+''')
+
     return "\n".join(lines)
+
+
+def _slave_write_binding(wtype, binding):
+    """The Modbus binding a control's changes write into the slaves' data tables, or None: a switch,
+    slider or spin box bound in Modbus mode without an expression (its value cannot be worked back)."""
+    if (wtype not in ("ToggleSwitch", "Slider", "SpinBox") or not binding
+            or binding.get("parseMode") != "Modbus" or binding.get("expression")):
+        return None
+    return binding
+
+
+def _has_slave_writes(widgets):
+    return any(_slave_write_binding(w["type"], w.get("binding")) is not None
+               or _has_slave_writes(w.get("children", [])) for w in widgets)
+
+
+def _gen_slave_write_connection(wid, wtype, binding):
+    """Lines that write a control's changes into the slaves' data tables, when a command would go out."""
+    binding = _slave_write_binding(wtype, binding)
+    if binding is None:
+        return []
+    from app.core.command_runtime import MODBUS_ORDERS
+    args = (binding.get("mbArea", "保持寄存器"), int(binding.get("mbRegIndex", 0)))
+    typed = (binding.get("mbDataType", "uint16"), binding.get("mbRegOrder", MODBUS_ORDERS[0]))
+    head, tail = f"{args[0]!r}, {args[1]}", f", {typed[0]!r}, {typed[1]!r}"
+    w_ref = f"self.widgets[{wid!r}]"
+    if wtype == "ToggleSwitch":
+        return [f"        {w_ref}._switch.checkedChanged.connect("
+                f"lambda c: self._slave_write({head}, 1 if c else 0{tail}))"]
+    if wtype == "Slider":
+        return [f"        SendOnRelease({w_ref}, lambda v: self._slave_write({head}, v{tail}))"]
+    return [f"        {w_ref}.valueChanged.connect(lambda v: self._slave_write({head}, v{tail}))"]
 
 
 def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=None):
@@ -464,6 +514,7 @@ def _gen_widgets_recursive(widgets: list, lines: list, parent_var: str, tab_var=
         cmd_lines = _gen_command_connection(wid, wtype, props)
         if cmd_lines:
             lines += cmd_lines
+        lines += _gen_slave_write_connection(wid, wtype, w.get("binding"))
 
         if props.get("notify"):
             lines += _gen_notify_connection(wid, wtype, props)
@@ -770,19 +821,29 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
         return (f"self.widgets[{wid!r}] = DataRecvCard({pv}); "
                 f"self.widgets[{wid!r}].set_title({p('title', '数据接收')}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 1000)})")
+    if wtype == "ModbusSlaveTable":
+        return (f"self.widgets[{wid!r}] = ModbusSlaveTable({pv}); "
+                f"self.widgets[{wid!r}].set_area({p('mbArea', '保持寄存器')}); "
+                f"self.widgets[{wid!r}].set_display_format({p('displayFormat', '无符号')})")
 
     return f"self.widgets[{wid!r}] = QLabel('未知控件: {wtype}', {pv})"
 
 
 def _gen_serial_handler(serial_config: dict) -> str:
-    # The parsers, the Modbus master every link owns, then the serial link.
+    # The parsers, the Modbus master every link owns, the Modbus slave a serial or TCP link may answer
+    # with, then the serial link.
     master = runtime_source("modbus_master.py").replace(
         "from .protocol_parser import build_modbus_ascii_frame, build_modbus_frame, build_modbus_tcp_frame", "")
+    slave = runtime_source("modbus_slave.py").replace(
+        "from .protocol_parser import BaseParser, modbus_crc", "")
+    slave_link = runtime_source("slave_runtime.py").replace(
+        "from .modbus_slave import DEFAULT_AREA, TABLES, ModbusSlave, SlaveStore, request_framer", "")
     runtime = runtime_source("serial_runtime.py").replace(
         "from .protocol_parser import BaseParser, ModbusRequests, create_parser, text_encoding", "").replace(
-        "from .modbus_master import ModbusMaster", "")
-    return (runtime_source("protocol_parser.py") + "\n" + master + "\n" + runtime +
-            f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
+        "from .modbus_master import ModbusMaster", "").replace(
+        "from .modbus_slave import SLAVE_PARSERS", "")
+    return (runtime_source("protocol_parser.py") + "\n" + master + "\n" + slave + "\n" + slave_link + "\n"
+            + runtime + f"\nSerialHandler.DEFAULT_CONFIG = {serial_config!r}\n")
 
 
 def _link_config(serial_config: dict) -> dict:
@@ -795,7 +856,8 @@ def _gen_tcp_handler(serial_config: dict) -> str:
     runtime = runtime_source("tcp_runtime.py").replace(
         "from .protocol_parser import ModbusRequests, create_parser, text_encoding",
         "from serial_handler import ModbusRequests, create_parser, text_encoding").replace(
-        "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster")
+        "from .modbus_master import ModbusMaster", "from serial_handler import ModbusMaster").replace(
+        "from .modbus_slave import SLAVE_PARSERS", "from serial_handler import SLAVE_PARSERS")
     return runtime + f"\nTcpHandler.DEFAULT_CONFIG = {_link_config(serial_config)!r}\n"
 
 
@@ -810,13 +872,7 @@ def _gen_mqtt_handler(serial_config: dict) -> str:
 
 
 def _gen_comm_hub() -> str:
-    return runtime_source("comm_runtime.py").replace(
-        "from .serial_runtime import SerialHandler", "from serial_handler import SerialHandler",
-    ).replace(
-        "from .tcp_runtime import TcpHandler", "from tcp_handler import TcpHandler",
-    ).replace(
-        "from .mqtt_runtime import MqttHandler", "from mqtt_handler import MqttHandler",
-    )
+    return runtime_source("comm_runtime.py")
 
 
 def _link_card_ids(widgets: list) -> list:
@@ -936,18 +992,26 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         '',
         '',
         'class DataBinding:',
-        '    """Wire the hub (serial, TCP and MQTT links) to bound widgets and command senders."""',
+        '    """Wire the hub (the link cards\' links) to bound widgets and command senders."""',
         '    def __init__(self, ui, hub):',
         '        self.ui = ui',
         '        self.hub = hub',
         '        self._connections = SignalConnections(ui)',
         '        ui._comm_hub = hub',
         '        # Reads what the Modbus bindings and chart curves show; the link cards, in document',
-        '        # order, hand it their settings and show its status.',
+        '        # order, register their own links on the hub, hand it their settings and show its status.',
         '        self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)',
+    ]
+    if link_cards:
+        lines += [
+            f'        for widget_id in {list(link_cards)!r}:',
+            '            ui.widgets[widget_id].set_serial_handler(hub)',
+            '            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)',
+        ]
+    lines += [
         '        for w in ui.widgets.values():',
         '            if hasattr(w, "set_serial_handler"):',
-        '                w.set_serial_handler(hub)  # connection cards pick their own link',
+        '                w.set_serial_handler(hub)  # the receive card, log box and data table listen to it',
     ]
     if has_chart:
         lines += [
@@ -956,11 +1020,6 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
             '                w._serial_connections.connect(hub.dataReceived, w.on_parsed)',
             '                w._serial_connections.connect(hub.rawReceived, w.on_raw)',
             '                w._serial_connections.connect(hub.disconnected, w.reset_stream)',
-        ]
-    if link_cards:
-        lines += [
-            f'        for widget_id in {list(link_cards)!r}:',
-            '            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)',
         ]
 
     if has_hex:
@@ -978,6 +1037,17 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         lines.append('        self._connections.connect(self.hub.rawReceived, self._on_raw)')
         lines.append('        self._connections.connect(self.hub.disconnected, self._reset_stream)')
     lines.append('        self.modbus_poller.start()  # reads once a link that parses Modbus can send')
+    if widget_types and widget_types & {"SerialConfigCard", "TcpConfigCard", "ModbusSlaveTable"}:
+        lines += [
+            '        # The slaves of the link cards in the 从站 role: a register table shows the first one\'s, and',
+            '        # each publishes its whole data table now that the bindings are up.',
+            '        slaves = [w.slave_device for w in ui.widgets.values() if getattr(w, "slave_device", None)]',
+            '        for w in ui.widgets.values():',
+            '            if hasattr(w, "set_slave_device"):',
+            '                w.set_slave_device(slaves[0] if slaves else None)',
+            '        for device in slaves:',
+            '            device.publish_start()',
+        ]
     lines.append('')
 
     # -- _on_data for 键值匹配 / JSON路径 --
@@ -1199,19 +1269,18 @@ class NumericDisplay(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8,4,8,4); layout.setSpacing(0)
-        self._title = QLabel("标题"); self._title.setAlignment(Qt.AlignCenter)
-        self._value = QLabel("0.00"); self._value.setAlignment(Qt.AlignCenter)
-        self._unit = QLabel(""); self._unit.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self._title); layout.addWidget(self._value); layout.addWidget(self._unit)
-        self.apply_theme()
-        self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
-        self._theme_connections.connect(qconfig.themeColorChanged, self.apply_theme)
-    def apply_theme(self):
-        secondary = "#b3b3b3" if isDarkTheme() else "#606060"
-        self._title.setStyleSheet(f"color:{secondary};font-size:11px;")
-        self._unit.setStyleSheet(f"color:{secondary};font-size:12px;")
+        self._title = CaptionLabel("标题")
+        self._value = BodyLabel("0.00")
+        self._unit = CaptionLabel("")
+        for label in (self._title, self._unit):
+            label.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
+        self._unit.setMinimumHeight(self._unit.fontMetrics().height())  # an empty unit keeps its line
+        for label in (self._title, self._value, self._unit):
+            label.setAlignment(Qt.AlignCenter); layout.addWidget(label)
         self._update_value_style()
+        self._theme_connections = SignalConnections(self)
+        self._theme_connections.connect(qconfig.themeChangedFinished, self._update_value_style)
+        self._theme_connections.connect(qconfig.themeColorChanged, self._update_value_style)
     def set_title(self, t): self._title.setText(t)
     def set_value(self, v): self._value.setText(str(v))
     def set_unit(self, u): self._unit.setText(u)
@@ -1222,9 +1291,11 @@ class NumericDisplay(QWidget):
         self._val_font_size = size
         self._update_value_style()
     def _update_value_style(self):
-        color = getattr(self, "_val_color", None) or themeColor().name()
-        size = getattr(self, "_val_font_size", 28)
-        self._value.setStyleSheet(f"font-size:{size}px;font-weight:bold;color:{color};")
+        color = QColor(getattr(self, "_val_color", None) or themeColor())
+        font = self._value.font()
+        font.setPixelSize(getattr(self, "_val_font_size", 28)); font.setBold(True)
+        self._value.setFont(font)
+        self._value.setTextColor(color, color)
 '''
 
 
@@ -1314,33 +1385,55 @@ def _data_table_class() -> str:
 
 def _image_display_class() -> str:
     return '''
+from PyQt5.QtCore import QSize
+from PyQt5.QtGui import QImage
+from PyQt5.QtWidgets import QLayout
+from qfluentwidgets import ImageLabel
+
 class ImageDisplay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._label = QLabel(self); self._label.setAlignment(Qt.AlignCenter)
-        self._label.setText("图片")
-        lo = QVBoxLayout(self); lo.setContentsMargins(0,0,0,0); lo.addWidget(self._label)
         self._path = ""
-        self.apply_theme()
+        self._image = QImage()
+        self._label = ImageLabel(self); self._label.hide()
+        self._placeholder = CaptionLabel("未选择图片", self)
+        self._placeholder.setTextColor(QColor("#606060"), QColor("#b3b3b3"))
+        self._placeholder.setAlignment(Qt.AlignCenter)
+        lo = QVBoxLayout(self); lo.setContentsMargins(0,0,0,0)
+        lo.setSizeConstraint(QLayout.SetNoConstraint)  # the picture's size never pins the minimum
+        lo.addWidget(self._label, 0, Qt.AlignCenter); lo.addWidget(self._placeholder, 0, Qt.AlignCenter)
         self._theme_connections = SignalConnections(self)
-        self._theme_connections.connect(qconfig.themeChangedFinished, self.apply_theme)
-    def apply_theme(self):
-        dark = isDarkTheme()
-        background = "#292929" if dark else "#f5f5f5"
-        foreground = "#f3f3f3" if dark else "#3c3c3c"
-        border = "#606060" if dark else "#c8c8c8"
-        self._label.setStyleSheet(f"background:{background};color:{foreground};border:1px dashed {border};")
+        self._theme_connections.connect(qconfig.themeChangedFinished, self.update)
     def set_image_path(self, path):
         self._path = path
-        if path:
-            pm = QPixmap(path)
-            if not pm.isNull():
-                self._label.setPixmap(pm.scaled(self._label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                return
-        self._label.setText("图片")
+        self._image = QImage(path) if path else QImage()
+        if self._image.isNull():
+            self._label.hide()
+            self._placeholder.setText("无法加载图片" if path else "未选择图片")
+            self._placeholder.show()
+        else:
+            self._placeholder.hide()
+            self._label.setImage(self._image)
+            self._fit_image()
+            self._label.show()
+        self.update()
+    def _fit_image(self):
+        if not self._image.isNull():
+            self._label.setScaledSize(self._image.size().scaled(self.size(), Qt.KeepAspectRatio))
+    def sizeHint(self): return QSize(200, 150)
+    def minimumSizeHint(self): return QSize(1, 1)
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._path: self.set_image_path(self._path)
+        self._fit_image()
+    def paintEvent(self, event):
+        if not self._image.isNull():
+            return
+        dark = isDarkTheme()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(QColor("#606060" if dark else "#c8c8c8"), 1, Qt.DashLine))
+        painter.setBrush(QColor("#292929" if dark else "#f5f5f5"))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
 '''
 
 
@@ -1370,14 +1463,22 @@ def _log_display_class() -> str:
 
 def _serial_config_card_class() -> str:
     return runtime_source("serial_card.py").replace(
-        "from .serial_runtime import _list_all_ports", "from serial_handler import _list_all_ports"
+        "from .serial_runtime import SerialHandler, _list_all_ports",
+        "from serial_handler import SerialHandler, _list_all_ports"
     ).replace("from .signal_lifetime import SignalConnections", "").replace(
-        "from .link_polling import ModbusLinkSettings, status_label", "")
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings, fluent_tooltip, status_label", "")
 
 
 def _link_polling_source() -> str:
     return runtime_source("link_polling.py").replace(
-        "from .signal_lifetime import SignalConnections", "")
+        "from .signal_lifetime import SignalConnections", "").replace(
+        "from .slave_runtime import ModbusSlaveDevice", "from serial_handler import ModbusSlaveDevice").replace(
+        "from .modbus_slave import SLAVE_ROLE", "from serial_handler import SLAVE_ROLE")
+
+
+def _slave_table_class() -> str:
+    return runtime_source("slave_table.py").replace(
+        "from .modbus_slave import AREA_TABLES", "from serial_handler import AREA_TABLES")
 
 
 def _link_card_class() -> str:
@@ -1388,12 +1489,15 @@ def _link_card_class() -> str:
 
 def _tcp_config_card_class() -> str:
     return runtime_source("tcp_card.py").replace(
-        "from .link_card import LinkConfigCard", "")
+        "from .link_card import LinkConfigCard", "").replace(
+        "from .link_polling import SLAVE_PROPERTY_SETTERS, ModbusSlaveSettings", "").replace(
+        "from .tcp_runtime import TcpHandler", "from tcp_handler import TcpHandler")
 
 
 def _mqtt_config_card_class() -> str:
     return runtime_source("mqtt_card.py").replace(
-        "from .link_card import LinkConfigCard", "")
+        "from .link_card import LinkConfigCard", "").replace(
+        "from .mqtt_runtime import MqttHandler", "from mqtt_handler import MqttHandler")
 
 
 def _data_send_card_class() -> str:
