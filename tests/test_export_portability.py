@@ -15,6 +15,7 @@ from PyQt5.QtGui import QColor, QImage
 
 from app.core.code_generator import generate_project
 from app.core.project import ProjectData
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 def image_widget(widget_id, path):
@@ -37,7 +38,7 @@ def write_image(path, color):
 class ExportPortabilityTests(unittest.TestCase):
     def run_standalone(self, output, code, cwd):
         result = subprocess.run(
-            [sys.executable, "-X", "faulthandler", "-c", code, str(output)],
+            [sys.executable, "-X", "faulthandler", "-c", CHILD_PRELUDE + code, str(output)],
             cwd=cwd,
             env={**os.environ, "PYTHONPATH": "", "QT_QPA_PLATFORM": "offscreen"},
             capture_output=True, text=True, timeout=30,

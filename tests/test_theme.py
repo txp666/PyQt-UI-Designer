@@ -23,6 +23,7 @@ from app.widgets.basic import create_widget
 from app.widgets.composite import DataRecvCard, LogDisplayBox
 from app.widgets.display import NumericDisplay
 from app.widgets.layout import HBoxContainer, GroupBoxContainer, TabContainer
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 class ThemeTests(unittest.TestCase):
@@ -332,7 +333,7 @@ with patch.object(QApplication, "exec", staticmethod(report)):
         with tempfile.TemporaryDirectory() as folder:
             generate_project(ProjectData(), folder, theme_mode="Light", language="zh_CN")
             result = subprocess.run(
-                [sys.executable, "-c", code], cwd=folder,
+                [sys.executable, "-c", CHILD_PRELUDE + code], cwd=folder,
                 env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
                 text=True, capture_output=True, timeout=30,
             )
@@ -442,7 +443,7 @@ with ExitStack() as stack:
                 expected_mode = mode or "Dark"
                 script = f"EXPECTED_MODE = {expected_mode!r}\n" + code
                 result = subprocess.run(
-                    [sys.executable, "-c", script], cwd=folder,
+                    [sys.executable, "-c", CHILD_PRELUDE + script], cwd=folder,
                     env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
                     text=True, capture_output=True, timeout=30,
                 )

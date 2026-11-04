@@ -26,6 +26,7 @@ from app.widgets.chart import register_chart_widgets
 from app.widgets.display import register_display_widgets
 from app.widgets.layout import register_layout_widgets
 from tests import test_preview_export_parity as parity
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 def item(name, kind, properties=None, geometry=(20, 20, 180, 40), **extra):
@@ -67,7 +68,7 @@ class ProjectRuntimeGeometryTests(unittest.TestCase):
         for mode in ("preview", "export"):
             with self.subTest(mode=mode):
                 result = subprocess.run(
-                    [sys.executable, "-c", script], cwd=moved,
+                    [sys.executable, "-c", CHILD_PRELUDE + script], cwd=moved,
                     env={**os.environ, "PYTHONPATH": "", "QT_QPA_PLATFORM": "offscreen",
                          "APPLICATION_MODE": mode, "DESIGNER_ROOT": str(parity._ROOT),
                          "PROJECT_WIDGETS": json.dumps(project.widgets),

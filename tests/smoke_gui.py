@@ -21,6 +21,7 @@ from app.core.theme_runtime import ThemeController
 from app.core.widget_registry import registry
 from app.view.main_window import MainWindow
 from app.view.preview_interface import NuitkaPackDialog
+from tests.orderly_exit import CHILD_PRELUDE
 
 app = QApplication([])
 theme_controller = ThemeController(app, qconfig.get(qconfig.themeMode))
@@ -93,7 +94,7 @@ with tempfile.TemporaryDirectory() as fixture_folder:
     app.processEvents()
     preview = window.preview_interface
     expected_ids = {item["id"] for item in project.widgets}
-    assert len(project.widgets) == len(registry.all()) == 29
+    assert len(project.widgets) == len(registry.all()) == 30
     assert preview._running
     assert len(preview._preview_canvas._widgets) == len(expected_ids)
     assert set(bindingEngine._widget_map) == expected_ids
@@ -127,7 +128,7 @@ with tempfile.TemporaryDirectory() as folder:
     generate_project(project, folder, language="zh_CN")
     for source in Path(folder).glob("*.py"):
         compile(source.read_text(encoding="utf-8"), str(source), "exec")
-    subprocess.run([sys.executable, "-c", """
+    subprocess.run([sys.executable, "-c", CHILD_PRELUDE + """
 import runpy
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication

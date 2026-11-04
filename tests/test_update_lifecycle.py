@@ -6,6 +6,8 @@ import sys
 import textwrap
 import unittest
 
+from tests.orderly_exit import CHILD_PRELUDE
+
 
 ROOT = Path(__file__).resolve().parents[1]
 _SETUP = '''
@@ -65,7 +67,7 @@ class UpdateLifecycleTests(unittest.TestCase):
     def run_script(self, checks):
         script = _SETUP.replace('__CHECKS__', textwrap.indent(textwrap.dedent(checks), '    '))
         result = subprocess.run(
-            [sys.executable, '-X', 'faulthandler', '-c', script], cwd=ROOT,
+            [sys.executable, '-X', 'faulthandler', '-c', CHILD_PRELUDE + script], cwd=ROOT,
             env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen'}, capture_output=True,
             text=True, encoding='utf-8', timeout=15,
         )

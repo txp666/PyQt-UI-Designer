@@ -26,7 +26,7 @@ def terminal_scroll_bar(edit):
 
 class LogDisplayBox(QWidget):
     """Scrolling, time-stamped log in a dark terminal look: every parsed frame, and the connect,
-    disconnect and error events of every link (serial, TCP, MQTT). Of a link answering as a Modbus slave it
+    disconnect and error events of every link (serial, TCP, UDP, MQTT). Of a link answering as a Modbus slave it
     shows the requests and replies (slaveLog), not the slave messages."""
 
     def __init__(self, parent=None):

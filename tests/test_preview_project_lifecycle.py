@@ -6,6 +6,8 @@ import sys
 import textwrap
 import unittest
 
+from tests.orderly_exit import CHILD_PRELUDE
+
 
 _ROOT = Path(__file__).resolve().parents[1]
 _RUN_WINDOW = r"""
@@ -90,7 +92,7 @@ class PreviewProjectLifecycleTests(unittest.TestCase):
         script = _RUN_WINDOW.replace(
             "__CHECKS__", textwrap.indent(textwrap.dedent(checks).strip(), "    "))
         result = subprocess.run(
-            [sys.executable, "-c", script], cwd=_ROOT,
+            [sys.executable, "-c", CHILD_PRELUDE + script], cwd=_ROOT,
             env={**os.environ, "QT_QPA_PLATFORM": "offscreen",
                  "PYTHONFAULTHANDLER": "1"},
             capture_output=True, text=True, encoding="utf-8", timeout=30,

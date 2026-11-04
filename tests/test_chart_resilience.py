@@ -18,6 +18,7 @@ from app.common.signal_bus import signalBus
 from app.core.code_generator import generate_project
 from app.core.project import ProjectData
 from app.widgets.chart import RealtimeLineChart
+from tests.orderly_exit import CHILD_PRELUDE
 
 
 _EXPORT_RUNNER = """
@@ -95,7 +96,7 @@ class ChartResilienceTests(unittest.TestCase):
             runner = _EXPORT_RUNNER.replace(
                 "__CHECKS__", textwrap.indent(checks.strip(), "    "))
             result = subprocess.run(
-                [sys.executable, "-c", runner], cwd=folder,
+                [sys.executable, "-c", CHILD_PRELUDE + runner], cwd=folder,
                 env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
                 capture_output=True, text=True, encoding="utf-8", timeout=30,
             )

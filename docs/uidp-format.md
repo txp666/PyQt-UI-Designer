@@ -115,22 +115,24 @@ python tools/check_uidp.py motor.uidp
 | --- | --- |
 | `SerialConfigCard` 串口 | `defaultBaud`（如 `"115200"`）、`defaultDatabits`、`defaultParity`、`defaultStopbits`；串口号运行时选 |
 | `TcpConfigCard` TCP | `defaultMode`（`"客户端"` / `"服务端"`）、`defaultHost`、`defaultPort` |
+| `UdpConfigCard` UDP | `defaultLocalPort`（`0` 由系统选端口）、`defaultHost`（远程地址）、`defaultPort` |
 | `MqttConfigCard` MQTT | `defaultHost`、`defaultPort`、`defaultSubscribe`（可用 `+` `#` 通配）、`defaultPublish`、`defaultUsername`、`defaultPassword`、`defaultQos`（`"0"` `"1"` `"2"`） |
 
-- `displayMode` 是 `"完整"`（默认）时，卡片不要比默认尺寸矮：串口 360×320、TCP 360×250、MQTT 380×390。写得比字段需要的高度矮时，卡片按字段需要的高度显示（Studio 打开时也会把它抬高），地方不够就设成 `"简洁"`。控件参考里的「最小」尺寸是串口单行模式用的下限。
+- `displayMode` 是 `"完整"`（默认）时，卡片不要比默认尺寸矮：串口 360×320、TCP 360×250、UDP 360×220、MQTT 380×390。写得比字段需要的高度矮时，卡片按字段需要的高度显示（Studio 打开时也会把它抬高），地方不够就设成 `"简洁"`。控件参考里的「最小」尺寸是串口单行模式用的下限。
 - 每张卡片都有 `defaultParser`：`"项目设置"`（默认，用工程的 `serial.parser`）、`"line"`、`"hex"`、`"modbus"`、`"modbus_tcp"`、`"modbus_ascii"`。不同设备帧格式不同时，在卡片上分别设置。
 - 卡片的 `parserConfig` 是这张卡片自己的帧格式（对象，键和 `serial.parserConfig` 一样），`defaultParser` 不是 `"项目设置"` 时生效；不写或写 `{}` 时，卡片的解析模式和工程相同就沿用工程的 `parserConfig`，不同就用默认值。
 - MQTT 每条消息算一帧，按这条链路的解析模式解析；用 `line` 解析时消息末尾不需要行结束符。消息只有一个数值时（比如主题 `sensor/temp` 收到 `25.3`），还可以直接用主题名 `sensor/temp` 当键绑定。
+- UDP 每个数据报算一帧（同 MQTT，`line` 不需要行结束符）。`defaultHost` 留空时命令发给最后的发送方（收到数据报前不发），这时 `defaultLocalPort` 不能是 `0`；远程地址填广播地址即广播。
 - MQTT 发命令时，编码后的整条命令就是消息内容，**包括 `commandNewline` 加的换行**。设备要的是不带换行的 `RESET` 时，把发命令控件的 `commandNewline` 设成 `"无"`。
 - 订阅主题如果也包含了发布主题（比如订阅 `workshop/#`、发布到 `workshop/cmd`），上位机会收到自己发出的命令；只要没有控件绑定同名的键，就没有影响。
 - 发送命令时，命令会发到**所有已连接的链路**（MQTT 发到 `defaultPublish` 主题）。
-- 接 PLC 只要两步：链路卡片的 `defaultParser` 选 `modbus`、`modbus_tcp` 或 `modbus_ascii`（或用 `"项目设置"`，工程的 `serial.parser` 是其中之一），再给控件绑定寄存器地址（见下文"绑定数据"）。程序按工程里的 Modbus 绑定和实时曲线的 Modbus 曲线自己决定读哪些地址，链路能发送（TCP 服务端要有设备连入）就自动开始轮询，不用点按钮。同一从站、同一功能码里相近的地址合并成一块读：寄存器间隔不超过 8 个、一块最多 120 个，线圈和离散输入间隔不超过 64 个、一块最多 1000 个。每块按成员里最小的 `mbPeriod` 读，`0` 用默认周期；只读界面上看得见的控件，选项卡其他页上的不读，曲线一直读。写命令和读请求在同一条链路上排队，一次只发一条，写命令排在读请求前面。默认周期、响应超时和备用从站（`mbSlaveFilter` 不过滤的绑定读这个从站）来自链路卡片的 `modbusPeriod`（默认轮询(ms)，默认 `500`）、`modbusTimeout`（响应超时(ms)，默认 `1000`）和 `modbusSlave`（默认从站，默认 `1`）：用链路已连上并解析 Modbus 的卡片，有几张时用文档里的第一张，没有时用这三个默认值。链路已连上、解析 Modbus 并且能发送（TCP 服务端要有设备连入）的卡片，在状态栏的连接信息后面加上轮询状态（`没有 Modbus 绑定`、`N 块 · 轮询中`、`N 块 · 正常`、`第 k 块无响应（从站 S 功能码 F 地址 A）`、`第 k 块异常 02 非法数据地址`），鼠标悬停列出各块；串口卡片 `"单行"` 时状态显示在按钮右边。手动读写寄存器用发命令控件的 Modbus 模式（见下文"发送命令"）。`modbusRole` 为 `"从站"` 的卡片不参与轮询；从站地址等于某张从站卡片 `modbusSlave` 的绑定和曲线由那张卡片的数据表供数，也不轮询，见下一节。
+- 接 PLC 只要两步：链路卡片的 `defaultParser` 选 `modbus`、`modbus_tcp` 或 `modbus_ascii`（或用 `"项目设置"`，工程的 `serial.parser` 是其中之一），再给控件绑定寄存器地址（见下文"绑定数据"）。程序按工程里的 Modbus 绑定和实时曲线的 Modbus 曲线自己决定读哪些地址，链路能发送（TCP 服务端要有设备连入，无远程地址的 UDP 要先收到数据报）就自动开始轮询，不用点按钮。同一从站、同一功能码里相近的地址合并成一块读：寄存器间隔不超过 8 个、一块最多 120 个，线圈和离散输入间隔不超过 64 个、一块最多 1000 个。每块按成员里最小的 `mbPeriod` 读，`0` 用默认周期；只读界面上看得见的控件，选项卡其他页上的不读，曲线一直读。写命令和读请求在同一条链路上排队，一次只发一条，写命令排在读请求前面。默认周期、响应超时和备用从站（`mbSlaveFilter` 不过滤的绑定读这个从站）来自链路卡片的 `modbusPeriod`（默认轮询(ms)，默认 `500`）、`modbusTimeout`（响应超时(ms)，默认 `1000`）和 `modbusSlave`（默认从站，默认 `1`）：用链路已连上并解析 Modbus 的卡片，有几张时用文档里的第一张，没有时用这三个默认值。链路已连上、解析 Modbus 并且能发送的卡片，在状态栏的连接信息后面加上轮询状态（`没有 Modbus 绑定`、`N 块 · 轮询中`、`N 块 · 正常`、`第 k 块无响应（从站 S 功能码 F 地址 A）`、`第 k 块异常 02 非法数据地址`），鼠标悬停列出各块；串口卡片 `"单行"` 时状态显示在按钮右边。手动读写寄存器用发命令控件的 Modbus 模式（见下文"发送命令"）。`modbusRole` 为 `"从站"` 的卡片不参与轮询；从站地址等于某张从站卡片 `modbusSlave` 的绑定和曲线由那张卡片的数据表供数，也不轮询，见下一节。
 
 ## 当从站
 
-串口、TCP 卡片的 `modbusRole` 设成 `"从站"`，并且卡片的解析模式是 `modbus`（RTU）或 `modbus_tcp` 时，这条链路不轮询，改为应答外部主站（`modbus_ascii` 和 MQTT 不能当从站）：
+串口、TCP、UDP 卡片的 `modbusRole` 设成 `"从站"`，并且卡片的解析模式是 `modbus`（RTU）或 `modbus_tcp` 时，这条链路不轮询，改为应答外部主站（`modbus_ascii` 和 MQTT 不能当从站）：
 
-- 本机从站地址是 `modbusSlave`。RTU 只应答发给本机的请求，地址 0 是广播（写照做、不应答）；TCP 应答单元标识为本机、0 或 255 的请求。支持功能码 01–06、0F、10。`modbusDelay` 是收到请求后等多久再应答（毫秒）；`modbusExceptions` 为 `false` 时出错的请求不应答。
+- 本机从站地址是 `modbusSlave`。RTU 只应答发给本机的请求，地址 0 是广播（写照做、不应答）；TCP 应答单元标识为本机、0 或 255 的请求。支持功能码 01–06、0F、10。`modbusDelay` 是收到请求后等多久再应答（毫秒）；`modbusExceptions` 为 `false` 时出错的请求不应答。UDP 的应答发回提问方，不发往 `defaultHost`。
 - 数据表有线圈、离散输入、保持寄存器、输入寄存器四个区，起始地址和数量是 `slaveCoStart` / `slaveCoCount`、`slaveDiStart` / `slaveDiCount`、`slaveHrStart` / `slaveHrCount`、`slaveIrStart` / `slaveIrCount`（默认 `0` 和 `100`，数量 `0` 表示没有这个区）。初值全为 0，`slaveInit` 每行改一个：`hr100=1234`、`co3=1`。程序运行期间数据表一直在，断开、重连不清空。
 - 现有的 Modbus 绑定反过来用：控件显示数据表里的值，外部主站写入后立刻刷新；用户拨动带 Modbus 绑定的开关、滑块、数值框，值写进数据表（绑定写了 `expression` 的不写）。`commandMode` 为 `"Modbus"` 的写命令（05、06、16）也写进数据表，不在从站链路上发。
 - `ModbusSlaveTable`（从站寄存器表）列出文档里第一张从站卡片一个区（`mbArea`）的全部地址，运行时双击「值」可以改。
@@ -233,4 +235,4 @@ python tools/check_uidp.py motor.uidp
 - 布局容器：`HBoxLayout` 水平布局（300×80）、`VBoxLayout` 垂直布局（200×200）、`FlexLayout` 弹性布局（400×200）、`GroupBox` 分组框（280×180）、`TabWidget` 选项卡（350×250）、`Separator` 分割线（200×2）、`CardContainer` 卡片容器（300×200）
 - 显示控件：`LEDIndicator` LED指示灯（140×30）、`NumericDisplay` 数值显示（160×90）、`ProgressBar` 进度条（250×20）、`ProgressRingDisplay` 进度环（120×130）、`ImageDisplay` 图片显示（200×150）
 - 图表控件：`RealtimeChart` 实时曲线（400×280）、`GaugeMeter` 仪表盘（180×180）、`DataTable` 数据表格（350×250）
-- 通信控件：`SerialConfigCard` 串口配置卡片（360×320）、`TcpConfigCard` TCP 配置卡片（360×250）、`MqttConfigCard` MQTT 配置卡片（380×390）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ModbusSlaveTable` 从站寄存器表（260×300）
+- 通信控件：`SerialConfigCard` 串口配置卡片（360×320）、`TcpConfigCard` TCP 配置卡片（360×250）、`UdpConfigCard` UDP 配置卡片（360×220）、`MqttConfigCard` MQTT 配置卡片（380×390）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ModbusSlaveTable` 从站寄存器表（260×300）

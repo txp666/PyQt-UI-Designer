@@ -1317,7 +1317,7 @@ AREA_PROPERTIES = {"co": "slaveCo", "di": "slaveDi", "hr": "slaveHr", "ir": "sla
 
 
 def store_from_properties(properties):
-    """The data table a serial or TCP card's properties describe, as the card builds it at the start."""
+    """The data table a serial, TCP or UDP card's properties describe, as the card builds it at the start."""
     def whole(name, default):
         try:
             return int(properties.get(name, default))
@@ -1554,7 +1554,7 @@ def request_framer(parser_type):
 
 """The Modbus slave of a link card in the slave role, on its link: shared by the designer preview and exports.
 
-A serial or TCP card whose Modbus role is slave owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
+A serial, TCP or UDP card whose Modbus role is slave owns a ModbusSlaveDevice: the data table (modbus_slave.SlaveStore),
 built from the card's areas and initial values when it is first needed and kept while the program runs, whether the
 link is connected or not. Every write to it (an external master's, a control's, a command's, the register
 table's) gives a slave message on ``written``, which the card publishes on its link like a parsed frame.

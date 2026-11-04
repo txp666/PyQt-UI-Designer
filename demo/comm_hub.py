@@ -1,11 +1,11 @@
 """One hub for every communication link, shared by the designer and standalone exports.
 
-The hub owns no link: every link card (serial, TCP, MQTT) owns its own and registers it here
+The hub owns no link: every link card (serial, TCP, UDP, MQTT) owns its own and registers it here
 (``add_link``), in document order, and takes it off again (``remove_link``) when the card lets it
 go; a link that is destroyed leaves by itself. A project may hold any number of cards of one kind,
 each with a link of its own. The links expose the same signals and the hub forwards all of them on
 one surface, so bindings, charts, tables and log boxes never need to know which link a frame came
-from, and a command goes out over every link that is currently connected. A serial or TCP link
+from, and a command goes out over every link that is currently connected. A serial, TCP or UDP link
 answering as a Modbus slave adds its log lines (slaveLog) and publishes its slave messages on
 dataReceived like parsed frames, with slave_data set meanwhile.
 """
@@ -109,7 +109,7 @@ class CommHub(QObject):
             self._configure_link(link)
 
     def _configure_link(self, link):
-        # A serial link takes the port settings too; TCP and MQTT only the frame format.
+        # A serial link takes the port settings too; TCP, UDP and MQTT only the frame format.
         port_settings = getattr(link, "uses_port_settings", False)
         link.configure(self._config if port_settings else shared_link_config(self._config))
 

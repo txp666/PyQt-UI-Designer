@@ -185,7 +185,7 @@ the default period; one that falls due between two ticks goes out then, not a ti
 go only to the links that parse Modbus, through their ModbusMaster, one request on the wire at a
 time, so a control's write goes out between two reads.
 
-Its settings are the link cards' (serial, TCP, MQTT; link_card.ModbusLinkSettings): the first
+Its settings are the link cards' (serial, TCP, UDP, MQTT; link_card.ModbusLinkSettings): the first
 card in document order whose link is connected and parses Modbus hands it its default polling
 period (``modbusPeriod``), response timeout (``modbusTimeout``) and default slave (``modbusSlave``, read by the
 bindings that filter no slave). A link answering as a Modbus slave (modbus_slave.py) is not read over, and
@@ -231,7 +231,7 @@ def _forget_card(cards, card_id, *_):
 
 
 def _can_send(link):
-    """Connected, and with someone to send to (a TCP server needs a client)."""
+    """Connected, and with someone to send to (a TCP server needs a client, a UDP link with no remote a sender)."""
     return getattr(link, "can_send", link.is_connected)
 
 
@@ -358,13 +358,15 @@ class ModbusPoller(QObject):
         self._tick()
 
     def _watch_links(self):
-        """Tick when a link connects or disconnects, a TCP server's clients change, or the hub's links do."""
+        """Tick when a link connects or disconnects, a TCP server's clients change, a UDP link without a remote
+        hears its first sender, or the hub's links do."""
         self._link_connections.clear()
         links_changed = getattr(self._hub, "linksChanged", None)
         if links_changed is not None:  # a card registered its link, or took it off
             self._link_connections.connect(links_changed, self._on_links_changed)
         for link in self._links():
-            for signal in (link.connected, link.disconnected, getattr(link, "peersChanged", None)):
+            for signal in (link.connected, link.disconnected, getattr(link, "peersChanged", None),
+                           getattr(link, "canSendChanged", None)):
                 if signal is not None:
                     self._link_connections.connect(signal, self._on_link_changed)
 

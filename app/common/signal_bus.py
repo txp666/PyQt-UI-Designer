@@ -17,7 +17,7 @@ class SignalBus(QObject):
     projectSaved = pyqtSignal(str)
     projectNew = pyqtSignal()
 
-    # communication signals, shared by the serial, TCP and MQTT links
+    # communication signals, shared by the serial, TCP, UDP and MQTT links
     serialConnected = pyqtSignal(str)         # port_name
     serialDisconnected = pyqtSignal()
     serialDataReceived = pyqtSignal(dict)     # parsed data dict

@@ -1,4 +1,4 @@
-"""Shared frame of the TCP and MQTT configuration cards.
+"""Shared frame of the TCP, UDP and MQTT configuration cards.
 
 The frame provides the title and status row, labelled option rows, one button that
 connects, disconnects or cancels an attempt (at the end of the last row shown), and the

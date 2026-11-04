@@ -7,6 +7,8 @@ import tempfile
 import textwrap
 import unittest
 
+from tests.orderly_exit import CHILD_PRELUDE
+
 
 _ROOT = Path(__file__).resolve().parents[1]
 _SETUP = r"""
@@ -101,7 +103,7 @@ class WindowSignalLifetimeTests(unittest.TestCase):
         script = _SETUP.replace(
             "__CHECKS__", textwrap.indent(textwrap.dedent(checks).strip(), "    "))
         result = subprocess.run(
-            [sys.executable, "-X", "faulthandler", "-c", script],
+            [sys.executable, "-X", "faulthandler", "-c", CHILD_PRELUDE + script],
             cwd=cwd, env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": ""},
             capture_output=True, text=True, timeout=30,
         )
