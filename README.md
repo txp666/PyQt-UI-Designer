@@ -182,6 +182,10 @@ https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.
 
 This is the raw text of [docs/uidp-format.md](docs/uidp-format.md), which an AI can read in one go without opening a web page or cloning the repository. The guide is written in Chinese, and AI assistants can read it as it is. It has the rules, a complete example and a list of widgets; every property of every widget is in [docs/uidp-widgets.md](docs/uidp-widgets.md), which is generated from the widget definitions and linked from the guide for when it's needed. When the file is written, check it with `python tools/check_uidp.py project.uidp` (it also points out misspelt property names and options, which opening the file doesn't report), then open, preview and export it in the designer.
 
+### Open projects in the browser
+
+[The Custom device page on modusignal.cn](https://modusignal.cn/#custom) opens, edits and runs the same `.uidp` with nothing to install: serial cards use the browser's serial support (Chrome, Edge), MQTT cards connect to the broker's WebSocket address and TCP cards connect over WebSocket. UDP, the image widget and the Modbus slave role work only in the designer, and code export and packaging are done there too.
+
 ## Supported protocols
 
 | Protocol | Status | Notes |

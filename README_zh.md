@@ -180,6 +180,10 @@ https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.
 
 这是 [docs/uidp-format.md](docs/uidp-format.md) 的原始文本，AI 一次就能读完，不用打开网页或克隆仓库。说明里有规则、一个完整的例子和控件一览；每个控件的全部属性在 [docs/uidp-widgets.md](docs/uidp-widgets.md)，由控件定义生成，说明里有它的链接，用到时再读。写完用 `python tools/check_uidp.py 工程.uidp` 检查（属性名、选项写错这种打开时不报错的问题也会指出来），再用设计器打开、预览和导出。
 
+### 在浏览器里打开工程
+
+[modusignal.cn 的“自定义设备”](https://modusignal.cn/#custom)能打开、编辑和运行同一个 `.uidp`，不用安装：串口卡片用浏览器的串口功能（Chrome、Edge），MQTT 卡片连 Broker 的 WebSocket 地址，TCP 卡片经 WebSocket 连接。UDP、图片控件和 Modbus 从站只能在设计器里用，导出和打包也在设计器里做。
+
 ## 通信协议支持
 
 | 协议 | 状态 | 说明 |
