@@ -8,7 +8,7 @@
     <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey?style=flat-square" alt="Platform">
     <a href="https://www.bilibili.com/video/BV13KHG6VEvL"><img src="https://img.shields.io/badge/Video-Bilibili-00A1D6?style=flat-square&logo=bilibili&logoColor=white" alt="Video"></a>
-    <a href="https://modusignal.cn/pyqt-ui-designer/"><img src="https://img.shields.io/badge/Website-modusignal.cn-2ea44f?style=flat-square" alt="Website"></a>
+    <a href="https://hmi.modusignal.cn/#python"><img src="https://img.shields.io/badge/Website-hmi.modusignal.cn-2ea44f?style=flat-square" alt="Website"></a>
   </p>
   <p align="center">
     <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows" alt="Download"></a>
@@ -16,8 +16,8 @@
   <p align="center">
     <a href="README.md">English</a> •
     简体中文 •
-    <a href="https://modusignal.cn/pyqt-ui-designer/">官网</a> •
-    <a href="https://modusignal.cn/pyqt-ui-designer/guide/">使用说明</a> •
+    <a href="https://hmi.modusignal.cn/#python">官网</a> •
+    <a href="https://hmi.modusignal.cn/guide/">使用说明</a> •
     <a href="#演示视频">演示视频</a> •
     <a href="#快速开始">快速开始</a> •
     <a href="#功能特性">功能特性</a> •
@@ -69,7 +69,7 @@
 
 ### 下载即用
 
-从 [Releases](https://github.com/txp666/PyQt-UI-Designer/releases/latest) 或[官网](https://modusignal.cn/pyqt-ui-designer/#downloads)下载对应平台的压缩包。压缩包内已包含 Python 和 Qt，不需要另外安装。
+从 [Releases](https://github.com/txp666/PyQt-UI-Designer/releases/latest) 或[官网](https://hmi.modusignal.cn/#download-py)下载对应平台的压缩包。压缩包内已包含 Python 和 Qt，不需要另外安装。
 
 | 平台 | 文件 | 运行方式 |
 | --- | --- | --- |
@@ -193,7 +193,7 @@ https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.
 
 ## 使用说明
 
-完整的图文说明见[官网使用说明](https://modusignal.cn/pyqt-ui-designer/guide/)，协议格式见 [docs/protocol.md](docs/protocol.md)。
+完整的图文说明见[官网使用说明](https://hmi.modusignal.cn/guide/)，协议格式见 [docs/protocol.md](docs/protocol.md)。
 
 1. **设计界面**：从左侧控件面板把控件拖到画布上，在右侧属性编辑器里配置属性。
 2. **绑定数据**：选中显示类控件（数值显示、LED、进度条等），设置"绑定键"（设备数据中的字段名）和"解析模式"（键值匹配、JSON 路径、HEX 字节提取或 Modbus）。
@@ -272,7 +272,7 @@ Modbus 按钮只使用当前可见的协议设置，非法地址、数量或数�
 
 **macOS 提示无法验证开发者**：`.app` 没有做 Apple Developer ID 签名和公证。第一次打开被拦截后，到"系统设置 → 隐私与安全性"中点击"仍要打开"。
 
-更多问题（找不到串口、控件不刷新、曲线数据保存等）见[官网常见问题](https://modusignal.cn/pyqt-ui-designer/guide/#faq)。
+更多问题（找不到串口、控件不刷新、曲线数据保存等）见[官网常见问题](https://hmi.modusignal.cn/guide/#faq)。
 
 ## 开发
 

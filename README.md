@@ -8,7 +8,7 @@
     <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey?style=flat-square" alt="Platform">
     <a href="https://www.bilibili.com/video/BV13KHG6VEvL"><img src="https://img.shields.io/badge/Video-Bilibili-00A1D6?style=flat-square&logo=bilibili&logoColor=white" alt="Video"></a>
-    <a href="https://modusignal.cn/pyqt-ui-designer/"><img src="https://img.shields.io/badge/Website-modusignal.cn-2ea44f?style=flat-square" alt="Website"></a>
+    <a href="https://hmi.modusignal.cn/#python"><img src="https://img.shields.io/badge/Website-hmi.modusignal.cn-2ea44f?style=flat-square" alt="Website"></a>
   </p>
   <p align="center">
     <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows" alt="Download"></a>
@@ -16,8 +16,8 @@
   <p align="center">
     English •
     <a href="README_zh.md">简体中文</a> •
-    <a href="https://modusignal.cn/pyqt-ui-designer/">Website</a> •
-    <a href="https://modusignal.cn/pyqt-ui-designer/guide/">User guide</a> •
+    <a href="https://hmi.modusignal.cn/#python">Website</a> •
+    <a href="https://hmi.modusignal.cn/guide/">User guide</a> •
     <a href="#demo-video">Demo video</a> •
     <a href="#quick-start">Quick start</a> •
     <a href="#features">Features</a> •
@@ -71,7 +71,7 @@ What it doesn't have yet: exporting a source project you can keep editing, and t
 
 ### Download and run
 
-Download the archive for your platform from [Releases](https://github.com/txp666/PyQt-UI-Designer/releases/latest) or the [website](https://modusignal.cn/pyqt-ui-designer/#downloads). The archives include Python and Qt, so there is nothing else to install.
+Download the archive for your platform from [Releases](https://github.com/txp666/PyQt-UI-Designer/releases/latest) or the [website](https://hmi.modusignal.cn/#download-py). The archives include Python and Qt, so there is nothing else to install.
 
 | Platform | File | How to run |
 | --- | --- | --- |
@@ -195,7 +195,7 @@ The communication layer is modular: every link implements the same set of signal
 
 ## How to use it
 
-The full illustrated guide is on the [website](https://modusignal.cn/pyqt-ui-designer/guide/), and the protocol formats are in [docs/protocol.md](docs/protocol.md). The interface is in Chinese, so the names of buttons and fields below are followed by their Chinese labels.
+The full illustrated guide is on the [website](https://hmi.modusignal.cn/guide/), and the protocol formats are in [docs/protocol.md](docs/protocol.md). The interface is in Chinese, so the names of buttons and fields below are followed by their Chinese labels.
 
 1. **Design the UI**: drag widgets from the widget panel on the left onto the canvas, and set their properties in the property editor on the right.
 2. **Bind data**: select a display widget (numeric display, LED, progress bar and so on) and set its binding key (绑定键, the field name in the device's data) and parse mode (解析模式: key-value matching, JSON path, HEX byte extraction or Modbus).
@@ -274,7 +274,7 @@ Widget IDs in imported projects may contain spaces, quotes and Chinese character
 
 **macOS says the developer can't be verified**: the `.app` isn't signed with an Apple Developer ID or notarized. After it's blocked the first time, go to System Settings → Privacy & Security and click "Open Anyway".
 
-For more questions (no serial port found, widgets not updating, saving chart data and so on), see the [FAQ on the website](https://modusignal.cn/pyqt-ui-designer/guide/#faq).
+For more questions (no serial port found, widgets not updating, saving chart data and so on), see the [FAQ on the website](https://hmi.modusignal.cn/guide/#faq).
 
 ## Development
 
