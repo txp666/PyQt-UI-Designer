@@ -4,10 +4,10 @@ import json
 import sys
 from typing import Optional, List, Dict
 
-from PyQt5.QtCore import Qt, QEvent, QRectF, QPointF, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QObject, QRectF, QPointF, QTimer, pyqtSignal
 from PyQt5.QtGui import QPen, QColor, QPainter, QBrush, QTransform
 from PyQt5.QtWidgets import (
-    QGraphicsScene, QGraphicsView, QGraphicsItem, QWidget,
+    QApplication, QGraphicsScene, QGraphicsView, QGraphicsItem, QWidget,
 )
 from qfluentwidgets import SmoothScrollDelegate, isDarkTheme
 
@@ -18,6 +18,82 @@ from app.core.signal_lifetime import SignalConnections
 from app.designer.canvas_item import CanvasItem
 
 MIME_WIDGET_TYPE = "application/x-widget-type"
+
+
+class MiddlePan:
+    """Middle-button drag panning over a pair of scroll bars: the content follows the mouse 1:1 in
+    screen pixels. The caller feeds it the middle press, move and release."""
+
+    def __init__(self, hbar, vbar):
+        self._bars = (hbar, vbar)
+        self._origin = None  # (global mouse pos, h value, v value) while panning
+        self._cursor_set = False
+
+    @property
+    def active(self) -> bool:
+        return self._origin is not None
+
+    def start(self, global_pos):
+        self.end()
+        hbar, vbar = self._bars
+        self._origin = (global_pos, hbar.value(), vbar.value())
+        QApplication.setOverrideCursor(Qt.ClosedHandCursor)
+        self._cursor_set = True
+
+    def move(self, global_pos):
+        if self._origin is None:
+            return
+        origin, h, v = self._origin
+        hbar, vbar = self._bars
+        hbar.setValue(h - (global_pos.x() - origin.x()))
+        vbar.setValue(v - (global_pos.y() - origin.y()))
+
+    def end(self):
+        self._origin = None
+        if self._cursor_set:
+            self._cursor_set = False
+            QApplication.restoreOverrideCursor()
+
+
+class ScrollAreaMiddlePan(QObject):
+    """Middle-button panning for a QScrollArea whose content is made of live child widgets. Watches
+    the whole application and swallows the middle events that land inside the area, so no child
+    widget (a line edit pasting the X11 selection, say) ever sees them."""
+
+    def __init__(self, area):
+        super().__init__(area)
+        self._area = area
+        self._pan = MiddlePan(area.horizontalScrollBar(), area.verticalScrollBar())
+        QApplication.instance().installEventFilter(self)
+        area.destroyed.connect(self._pan.end)
+
+    def eventFilter(self, obj, event):
+        t = event.type()
+        if t not in (QEvent.MouseButtonPress, QEvent.MouseMove, QEvent.MouseButtonRelease,
+                     QEvent.MouseButtonDblClick):
+            return False
+        if t == QEvent.MouseMove:
+            if self._pan.active:
+                if event.buttons() & Qt.MiddleButton:
+                    self._pan.move(event.globalPos())
+                else:
+                    self._pan.end()
+                return True
+            return False
+        if event.button() != Qt.MiddleButton:
+            return False
+        inside = isinstance(obj, QWidget) and (
+            obj is self._area or self._area.isAncestorOf(obj)) and obj.isVisible()
+        if t == QEvent.MouseButtonRelease:
+            if self._pan.active:
+                self._pan.end()
+                return True
+            return inside
+        if inside:
+            if t == QEvent.MouseButtonPress and event.buttons() == Qt.MiddleButton:
+                self._pan.start(event.globalPos())
+            return True
+        return False
 
 
 class DesignScene(QGraphicsScene):
@@ -193,6 +269,7 @@ class DesignView(QGraphicsView):
         # delegate's, sees each wheel event first and keeps the zooming ones for wheelEvent.
         self._scroll_delegate = SmoothScrollDelegate(self)
         self.viewport().installEventFilter(self)
+        self._pan = MiddlePan(self.horizontalScrollBar(), self.verticalScrollBar())
 
         self._scene_connections = SignalConnections(self)
         self._scene_connections.connect(
@@ -237,6 +314,44 @@ class DesignView(QGraphicsView):
             self.wheelEvent(event)
             return True
         return super().eventFilter(obj, event)
+
+    # Middle-button drag pans the view. Items never take part: the press is handled here, before the
+    # scene sees it, so selection, moves, resizes and the rubber band stay untouched.
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MiddleButton:
+            # Not in the middle of a left drag, which would lose its moves to the pan.
+            if event.buttons() == Qt.MiddleButton:
+                self._pan.start(event.globalPos())
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._pan.active:
+            if event.buttons() & Qt.MiddleButton:
+                self._pan.move(event.globalPos())
+            else:
+                self._pan.end()
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MiddleButton:
+            self._pan.end()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MiddleButton:
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def hideEvent(self, event):
+        self._pan.end()
+        super().hideEvent(event)
 
     def wheelEvent(self, event):
         if not self._wheel_zooms(event):
