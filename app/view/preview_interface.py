@@ -28,6 +28,7 @@ from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
 from app.core.modbus_poller import ModbusPoller
 from app.core.signal_lifetime import SignalConnections
+from app.core.slider_limits import slider_of
 from app.core.slider_release import SendOnRelease
 from app.core.command_runtime import (
     MODBUS_FUNCTIONS, MODBUS_ORDERS, command_hex_frame, command_packed_frame, json_command, modbus_request,
@@ -192,7 +193,7 @@ class PreviewCanvas(QWidget):
             if switch:
                 switch.checkedChanged.connect(lambda checked: write(1 if checked else 0))
         elif type_name == "Slider":
-            SendOnRelease(widget, write)
+            SendOnRelease(slider_of(widget), write)
         else:
             widget.valueChanged.connect(write)
 
@@ -330,7 +331,7 @@ class PreviewCanvas(QWidget):
             def _on_value_changed(val, _tpl=tpl, _m=mode, _n=newline, _p=props):
                 self._apply_template(_tpl, str(val), _m, _n, _p)
             if type_name == "Slider":  # a drag sends once, when it lets go
-                SendOnRelease(widget, _on_value_changed)
+                SendOnRelease(slider_of(widget), _on_value_changed)
             else:
                 widget.valueChanged.connect(_on_value_changed)
 

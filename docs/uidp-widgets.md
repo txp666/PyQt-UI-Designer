@@ -120,6 +120,7 @@
 - `minimum`（最小值，整数）默认 `0`，范围 -99999–99999
 - `maximum`（最大值，整数）默认 `100`，范围 -99999–99999
 - `value`（默认值，整数）默认 `50`，范围 -99999–99999
+- `showRange`（显示上下限，true/false）默认 `false`，在滑块两端显示最小值和最大值
 - `sendOnChange`（变化发送，true/false）默认 `false`
 - `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`

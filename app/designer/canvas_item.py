@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 
 from app.widgets.basic import create_widget, apply_property
 from app.widgets.base import normalized_range_properties
+from app.core.slider_limits import slider_of
 from app.widgets.layout import clamp_tab_index, tab_names
 from app.core.widget_registry import registry
 
@@ -394,6 +395,16 @@ class CanvasItem(QGraphicsRectItem):
         if self._container_children:
             self.relayout_children()
 
+    def _rebuild_inner_widget(self):
+        """A slider's showRange decides its widget's class (the bare slider, or a row holding it with its
+        limits), so the widget is built again in the same proxy at the same size."""
+        old = self._inner_widget
+        self._inner_widget = create_widget(self.type_name, self.properties)
+        self._inner_widget.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._proxy.setWidget(self._inner_widget)
+        self._sync_proxy_size()
+        old.deleteLater()
+
     def _sync_proxy_size(self):
         r = self.rect()
         w, h = int(r.width()), int(r.height())
@@ -421,6 +432,9 @@ class CanvasItem(QGraphicsRectItem):
         if self.type_name == "TabWidget" and name == "currentTab":
             value = clamp_tab_index(value, self._inner_widget.count())
         self.properties[name] = value
+        if self.type_name == "Slider" and name == "showRange":
+            self._rebuild_inner_widget()
+            return
         if self.type_name in ("Slider", "SpinBox", "GaugeMeter") and name in (
                 "minimum", "maximum", "value"):
             self.properties = normalized_range_properties(
@@ -430,9 +444,10 @@ class CanvasItem(QGraphicsRectItem):
                     self.properties["minimum"], self.properties["maximum"])
                 self._inner_widget.set_value(self.properties["value"])
             else:
-                self._inner_widget.setRange(
+                control = slider_of(self._inner_widget)
+                control.setRange(
                     self.properties["minimum"], self.properties["maximum"])
-                self._inner_widget.setValue(self.properties["value"])
+                control.setValue(self.properties["value"])
             return
         if self.type_name == "TabWidget" and name == "tabLayout":
             ct = self.properties.get("currentTab", 0)

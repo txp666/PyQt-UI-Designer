@@ -3,6 +3,7 @@
 import struct
 from PyQt5.QtCore import QSignalBlocker
 from ui import RealtimeLineChart
+from ui import slider_of
 
 """Conversions shared by live bindings and standalone exported applications."""
 import math
@@ -619,10 +620,10 @@ class DataBinding:
                 w = self.ui.widgets.get('setpoint_slider')
                 if w:
                     value = binding_integer(value)
-                    with QSignalBlocker(w):
-                        w.setValue(value)
+                    with QSignalBlocker(slider_of(w)):
+                        slider_of(w).setValue(value)
                     # Fluent normally moves its handle in the blocked valueChanged signal.
-                    w._adjustHandlePos()
+                    slider_of(w)._adjustHandlePos()
 
         except (TypeError, ValueError, OverflowError, struct.error):
             pass

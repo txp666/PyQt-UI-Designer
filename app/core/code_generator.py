@@ -323,6 +323,7 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_runtime("tab_geometry.py"))
     if "Slider" in widget_types:
         lines.append(_runtime("slider_release.py"))
+        lines.append(_runtime("slider_limits.py"))
     if "LEDIndicator" in widget_types:
         lines.append(_led_class())
     if "NumericDisplay" in widget_types:
@@ -537,7 +538,7 @@ def _gen_slave_write_connection(wid, wtype, binding):
         return [f"        {w_ref}._switch.checkedChanged.connect("
                 f"lambda c: self._slave_write({head}, 1 if c else 0{tail}))"]
     if wtype == "Slider":
-        return [f"        SendOnRelease({w_ref}, lambda v: self._slave_write({head}, v{tail}))"]
+        return [f"        SendOnRelease(slider_of({w_ref}), lambda v: self._slave_write({head}, v{tail}))"]
     return [f"        {w_ref}.valueChanged.connect(lambda v: self._slave_write({head}, v{tail}))"]
 
 
@@ -689,7 +690,7 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
     elif wtype in ("Slider", "SpinBox") and (props.get("sendOnChange") or mode == "Modbus"):
         send = _modbus_send('v') if mode == "Modbus" else _tpl_send('v')
         if wtype == "Slider":  # a drag sends once, when it lets go (slider_release.py)
-            result.append(f"        SendOnRelease({w_ref}, lambda v: {send})")
+            result.append(f"        SendOnRelease(slider_of({w_ref}), lambda v: {send})")
         else:
             result.append(f"        {w_ref}.valueChanged.connect(lambda v: {send})")
 
@@ -758,6 +759,12 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
                 f"_tl.addWidget(BodyLabel({repr(lbl)})); _tl.addStretch(); _tl.addWidget(_sw); "
                 f"_tw._switch = _sw; self.widgets[{wid!r}] = _tw")
     if wtype == "Slider":
+        # Without the limits the widget is the Slider itself, as it always was.
+        if props.get("showRange"):
+            return (f"self.widgets[{wid!r}] = SliderWithLimits({pv}); "
+                    f"self.widgets[{wid!r}].set_show_range(True); "
+                    f"slider_of(self.widgets[{wid!r}]).setRange({props.get('minimum', 0)}, {props.get('maximum', 100)}); "
+                    f"slider_of(self.widgets[{wid!r}]).setValue({props.get('value', 50)})")
         return (f"self.widgets[{wid!r}] = Slider(Qt.Horizontal, {pv}); "
                 f"self.widgets[{wid!r}].setRange({props.get('minimum', 0)}, {props.get('maximum', 100)}); "
                 f"self.widgets[{wid!r}].setValue({props.get('value', 50)})")
@@ -1028,6 +1035,8 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
     ]
     if has_chart:
         lines.append('from ui import RealtimeLineChart')
+    if widget_types and "Slider" in widget_types:
+        lines.append('from ui import slider_of')
     if has_hex:
         lines.append('from serial_handler import RawFrameBuffer')
     lines.append('')
@@ -1286,12 +1295,14 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     elif wtype == "GaugeMeter":
         lines.append(f"{indent}    w.set_value(binding_float(value))")
     elif wtype in ("Slider", "SpinBox"):
+        # A slider may sit in a row with its limits; the Slider inside is the one that is bound.
+        control = "slider_of(w)" if wtype == "Slider" else "w"
         lines.append(f"{indent}    value = binding_integer(value)")
-        lines.append(f"{indent}    with QSignalBlocker(w):")
-        lines.append(f"{indent}        w.setValue(value)")
+        lines.append(f"{indent}    with QSignalBlocker({control}):")
+        lines.append(f"{indent}        {control}.setValue(value)")
         if wtype == "Slider":
             lines.append(f"{indent}    # Fluent normally moves its handle in the blocked valueChanged signal.")
-            lines.append(f"{indent}    w._adjustHandlePos()")
+            lines.append(f"{indent}    {control}._adjustHandlePos()")
     elif wtype == "ToggleSwitch":
         lines.append(f"{indent}    value = binding_boolean(value)")
         lines.append(f"{indent}    with QSignalBlocker(w._switch):")
