@@ -22,6 +22,7 @@ from qfluentwidgets import (
 from app.common.signal_bus import signalBus
 from app.core.i18n import tr
 from app.common.build_support import archive_build, build_environment, build_nuitka_command
+from app.designer.canvas import ScrollAreaMiddlePan
 from app.widgets.basic import create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
@@ -787,6 +788,7 @@ class PreviewInterface(QWidget):
         scroll.setObjectName("previewScroll")
         scroll.setWidgetResizable(True)
         scroll.setAlignment(Qt.AlignCenter)
+        self._middle_pan = ScrollAreaMiddlePan(scroll)
 
         self._preview_canvas = PreviewCanvas()
         scroll.setWidget(self._preview_canvas)
