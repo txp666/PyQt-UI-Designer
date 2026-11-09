@@ -45,13 +45,13 @@
 
 拖拽控件到画布，在右侧编辑属性和数据绑定：
 
-![设计器界面](images/designer.jpg)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/designer-zh-dark.jpg"><img src="images/designer-zh-light.jpg" alt="设计器界面"></picture>
 
 ### 预览运行
 
 同一份工程连上设备即可实时运行（图中为 MQTT 模拟设备的数据）：
 
-![预览运行](images/preview.jpg)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/preview-zh-dark.jpg"><img src="images/preview-zh-light.jpg" alt="预览运行"></picture>
 
 ## C++ 版 FluentHMI Studio
 

@@ -47,13 +47,13 @@ Click the image to watch it on Bilibili (narrated in Chinese). The video walks t
 
 Drag widgets onto the canvas, and edit their properties and data bindings on the right:
 
-![Designer](images/designer.jpg)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/designer-en-dark.jpg"><img src="images/designer-en-light.jpg" alt="Designer"></picture>
 
 ### Live preview
 
 The same project runs live once it is connected to a device (the data in the screenshot comes from a simulated MQTT device):
 
-![Live preview](images/preview.jpg)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/preview-en-dark.jpg"><img src="images/preview-en-light.jpg" alt="Live preview"></picture>
 
 ## C++ version: FluentHMI Studio
 
