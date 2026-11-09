@@ -15,6 +15,7 @@ from PyQt5.QtCore import QObject, QSignalBlocker
 
 from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
+from app.core.slider_limits import slider_of
 from app.core.binding_values import (
     binding_boolean, binding_decimals, binding_float, binding_integer, binding_led,
     modbus_need, modbus_value,
@@ -384,12 +385,13 @@ class DataBindingEngine(QObject):
             return
         if binding.type_name in ("Slider", "SpinBox") and prop == "value":
             value = binding_integer(value)
-            with QSignalBlocker(widget):
-                widget.setValue(value)
+            control = slider_of(widget)  # the Slider itself, even inside a row with its limits
+            with QSignalBlocker(control):
+                control.setValue(value)
             if binding.type_name == "Slider":
                 # Fluent's separate handle normally moves in valueChanged,
                 # which is blocked to prevent a device-to-command feedback loop.
-                widget._adjustHandlePos()
+                control._adjustHandlePos()
             return
 
         if prop == "__append__":

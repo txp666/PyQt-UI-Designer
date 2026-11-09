@@ -13,6 +13,7 @@ from app.widgets.base import (
 from app.core.widget_registry import registry
 from app.core.i18n import N_
 from app.core.command_runtime import MODBUS_DATA_TYPES, MODBUS_FUNCTIONS, MODBUS_ORDERS
+from app.core.slider_limits import SliderWithLimits, slider_of
 
 
 def _modbus_functions(*codes):
@@ -208,6 +209,8 @@ SLIDER_META = WidgetMeta(
         PropDef("minimum", N_("最小值"), PropType.INT, 0, min_val=-99999, max_val=99999),
         PropDef("maximum", N_("最大值"), PropType.INT, 100, min_val=-99999, max_val=99999),
         PropDef("value", N_("默认值"), PropType.INT, 50, min_val=-99999, max_val=99999),
+        PropDef("showRange", N_("显示上下限"), PropType.BOOL, False,
+                description="在滑块两端显示最小值和最大值"),  # i18n: ignore
         PropDef("sendOnChange", N_("变化发送"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
                 options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
@@ -343,9 +346,15 @@ def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidge
         return container
 
     if type_name == "Slider":
-        w = Slider(Qt.Horizontal, parent)
-        w.setRange(props["minimum"], props["maximum"])
-        w.setValue(props.get("value", 50))
+        # With the limits shown the widget is a row holding the slider; otherwise it is the slider itself.
+        if props.get("showRange"):
+            w = SliderWithLimits(parent)
+            w.set_show_range(True)
+        else:
+            w = Slider(Qt.Horizontal, parent)
+        slider = slider_of(w)
+        slider.setRange(props["minimum"], props["maximum"])
+        slider.setValue(props.get("value", 50))
         return w
 
     if type_name == "SpinBox":
@@ -419,12 +428,14 @@ def apply_property(widget: QWidget, type_name: str, prop_name: str, value):
             widget._switch.setChecked(value)
 
     elif type_name == "Slider":
+        # showRange changes the widget's class, so the canvas rebuilds the widget for it (see canvas_item).
+        slider = slider_of(widget)
         if prop_name == "minimum":
-            widget.setMinimum(value)
+            slider.setMinimum(value)
         elif prop_name == "maximum":
-            widget.setMaximum(value)
+            slider.setMaximum(value)
         elif prop_name == "value":
-            widget.setValue(value)
+            slider.setValue(value)
 
     elif type_name == "SpinBox":
         if prop_name == "minimum":
