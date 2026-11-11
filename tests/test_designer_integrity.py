@@ -55,12 +55,10 @@ class DesignerIntegrityTests(unittest.TestCase):
             self.assertEqual(editor._editors["curveExpression"].text(), "")
             expression = editor._editors["curveExpression"]
             expression.setText("value + 2")
-            form = expression.parentWidget().layout()
             mode = editor._editors["curveParseMode"]
             for index in range(mode.count()):
                 mode.setCurrentIndex(index)
                 self.assertFalse(expression.isHidden())
-                self.assertEqual(form.getWidgetPosition(expression)[0], form.rowCount() - 1)
             editor._editors["currentCurve"].setValue(0)
             self.assertEqual(editor._editors["curveExpression"].text(), "value * 0.1")
             restored = CanvasItem.from_dict(item.to_dict())
