@@ -643,7 +643,8 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
     if wtype == "PushButton":
         cmd = props.get("command", "").strip()
         if mode == "Modbus":
-            send = _modbus_send(int(props.get("mbValue", 1)), "03 读保持寄存器")  # i18n: value
+            from app.widgets.basic import button_modbus_value
+            send = _modbus_send(repr(button_modbus_value(props)), "03 读保持寄存器")  # i18n: value
             result.append(f"        {w_ref}.clicked.connect(lambda: {send})")
         elif cmd:
             result.append(

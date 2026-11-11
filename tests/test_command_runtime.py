@@ -95,6 +95,31 @@ class CommandRuntimeTests(unittest.TestCase):
                             bytes.fromhex("02030007000275f9")])
         """)
 
+    def test_modbus_button_writes_single_coil(self):
+        coil = {"commandMode": "Modbus", "mbFunc": "05 写单线圈"}
+        buttons = (
+            ("default", {}), ("on", {"mbValue": 1}), ("text", {"mbValue": "1"}), ("legacy", {"mbValue": 65280}),
+            ("off", {"mbValue": 0}), ("invalid", {"mbValue": 2}), ("fraction", {"mbValue": 1.5}),
+            ("read", {"mbFunc": "01 读线圈", "mbValue": 1}),
+            ("register", {"mbFunc": "06 写单寄存器", "mbValue": 1}),
+        )
+        self.run_both([
+            parity.control(name, "PushButton", {**coil, **props}, row)
+            for row, (name, props) in enumerate(buttons)
+        ], r"""
+            on = bytes.fromhex("01050000ff008c3a")
+            off = bytes.fromhex("010500000000cdca")
+            read = bytes.fromhex("010100000001fdca")
+            frames = []
+            for name, expected in (("default", on), ("on", on), ("text", on), ("legacy", on), ("off", off),
+                                   ("invalid", None), ("fraction", None), ("read", read),
+                                   ("register", bytes.fromhex("010600000001480a"))):
+                QTest.mouseClick(widgets[name], Qt.LeftButton)
+                if expected is not None:
+                    frames.append(expected)
+                check_payloads(frames)
+        """)
+
     def test_modbus_numeric_controls_reject_negative_and_preserve_valid_commands(self):
         self.run_both([
             parity.control(kind, kind, {

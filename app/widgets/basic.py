@@ -21,6 +21,20 @@ def _modbus_functions(*codes):
     return [name for name, code in MODBUS_FUNCTIONS.items() if code in codes]
 
 
+def button_modbus_value(props):
+    """Encode a button's logical 1 as the FC05 wire value when sending or exporting."""
+    value = props.get("mbValue", 1)
+    if MODBUS_FUNCTIONS.get(props.get("mbFunc")) == 0x05:
+        if isinstance(value, str):
+            try:
+                value = int(value)
+            except ValueError:
+                return value
+        if type(value) in (int, float) and value == 1:
+            return 0xFF00
+    return value
+
+
 # ---------------------------------------------------------------------------
 # Widget metadata definitions
 # ---------------------------------------------------------------------------
