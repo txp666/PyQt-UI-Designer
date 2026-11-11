@@ -45,6 +45,62 @@ class ChartTests(unittest.TestCase):
         self.addCleanup(lambda: sip.delete(chart) if not sip.isdeleted(chart) else None)
         return chart
 
+    def test_curve_expressions_all_modes_and_fallback_in_both_runtimes(self):
+        for cls in self.chart_classes:
+            chart = self.make_chart(cls)
+            chart.configure([
+                {"key": "v", "expression": "value * 0.1 + 2"},
+                {"parseMode": "JSON路径", "jsonPath": "sensor.v", "expression": "value > 5"},
+                {"parseMode": "HEX字节提取", "dataType": "uint8", "expression": "(value >> 1) & 1"},
+                {"parseMode": "Modbus", "regIndex": 0, "mbFcFilter": 3,
+                 "expression": "value * 2"},
+                {"key": "v", "expression": "value / 0"},
+                {"key": "v"},
+                {"key": "v", "expression": "value.__class__"},
+                {"key": "v", "expression": "__import__('os')"},
+            ])
+            chart.on_parsed({"v": 10, "sensor": {"v": 6}, "fc": 3, "hr0": 7})
+            chart.on_raw(bytes([6]))
+            self.assertEqual([list(h) for h in chart._data],
+                             [[3.0], [1.0], [1.0], [14.0], [10.0], [10.0], [10.0], [10.0]])
+
+    def test_numeric_text_is_converted_before_expression_and_invalid_text_is_rejected(self):
+        for cls in self.chart_classes:
+            chart = self.make_chart(cls)
+            chart.configure([{"key": "v", "expression": "value * 0.1"},
+                             {"key": "v", "expression": "42"},
+                             {"key": "v", "expression": "value / 0"}])
+            chart.on_parsed({"v": "125"})
+            self.assertEqual([list(h) for h in chart._data], [[12.5], [42.0], [125.0]])
+            for value in ("bad", "nan", "inf"):
+                chart.on_parsed({"v": value})
+            self.assertEqual([h.count for h in chart._data], [1, 1, 1])
+
+    def test_curve_expression_overflow_complex_and_expensive_integer_fallback(self):
+        expressions = ["value * 1e308", "(-value) ** 0.5", "2 ** 1000000000",
+                       "1 << 1000000000", "(2 ** 62) * 4", "1e309", "value.__class__"]
+        for cls in self.chart_classes:
+            chart = self.make_chart(cls)
+            chart.configure([{"key": "v", "expression": expression} for expression in expressions])
+            chart.on_parsed({"v": 10.0})
+            self.assertEqual([list(h) for h in chart._data], [[10.0]] * len(expressions))
+        from app.core.binding_values import _curve_expression_code, curve_expression
+        _curve_expression_code.cache_clear()
+        for _ in range(2):
+            self.assertEqual(curve_expression(5, "invalid("), 5)
+        self.assertEqual(_curve_expression_code.cache_info().hits, 1)
+        for expression, expected in [("-1 >> 1000000000", -1), ("0 << 1000000000", 0),
+                                     ("(-1) ** 1000000001", -1), ("2 ** 62", 2 ** 62),
+                                     ("False and (1 / 0)", False), ("1 < value < 6", True)]:
+            self.assertEqual(curve_expression(5, expression), expected)
+
+    def test_curve_expression_accepts_surrounding_whitespace_in_both_runtimes(self):
+        for cls in self.chart_classes:
+            chart = self.make_chart(cls)
+            chart.configure([{"key": "v", "expression": "  value / 2  "}])
+            chart.on_parsed({"v": 125})
+            self.assertEqual(list(chart._data[0]), [62.5])
+
     def test_rendering_is_batched_and_idle_does_not_redraw(self):
         for cls in self.chart_classes:
             chart = self.make_chart(cls)

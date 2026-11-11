@@ -1394,7 +1394,7 @@ class NumericDisplay(QWidget):
 def _realtime_chart_class() -> str:
     runtime = _runtime("chart_runtime.py").replace(
         "from .chart_history import ChartHistory", "").replace(
-        "from .binding_values import modbus_need, modbus_value", "").replace(
+        "from .binding_values import modbus_need, modbus_value, curve_expression", "").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
         "from .protocol_parser import RawFrameBuffer",
         "from serial_handler import RawFrameBuffer")
