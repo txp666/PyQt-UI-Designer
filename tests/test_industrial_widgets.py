@@ -201,7 +201,7 @@ class IndustrialTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "bits.uidp"
             manager.save_from_scene(editor.scene, str(path))
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(set(data["bitProfiles"]), {"plc"})
             self.assertEqual(data["bitProfiles"]["plc"]["width"], 16)
             self.assertEqual(data["bitProfiles"]["plc"]["bits"][3], {"name": "Ready & fault", "color": "#12aBcD"})

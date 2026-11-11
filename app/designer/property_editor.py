@@ -210,11 +210,11 @@ def _int_setting(value, default):
 
 class _TabNamesEdit(TextEdit):
     """Commit a complete list of page names, not each transient keystroke."""
-    editingFinished = pyqtSignal()
+    editingFinished = pyqtSignal(object)
 
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
-        self.editingFinished.emit()
+        self.editingFinished.emit(self)
 
 
 class PropertyEditor(ScrollArea):
@@ -860,8 +860,7 @@ class PropertyEditor(ScrollArea):
             editor.setMaximumHeight(80)
             if prop_def.name == "tabNames":
                 editor.textChanged.connect(self._on_pending_tab_names_changed)
-                editor.editingFinished.connect(
-                    lambda: self.commit_pending_edits(editor))
+                editor.editingFinished.connect(self.commit_pending_edits)
             else:
                 editor.textChanged.connect(
                     lambda n=prop_def.name: self._on_text_prop_changed(n, editor))
