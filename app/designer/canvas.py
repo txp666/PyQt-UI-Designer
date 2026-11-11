@@ -104,11 +104,19 @@ class DesignScene(QGraphicsScene):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.bit_profiles = {}
         self._grid_size = cfg.get(cfg.gridSize)
         self._show_grid = cfg.get(cfg.showGrid)
         w = cfg.get(cfg.canvasWidth)
         h = cfg.get(cfg.canvasHeight)
         self.setSceneRect(0, 0, w, h)
+
+    def set_bit_profiles(self, profiles):
+        from app.core.bit_profiles import normalize_bit_profiles
+        self.bit_profiles = normalize_bit_profiles(profiles)
+        for item in self.all_canvas_items():
+            if hasattr(item._inner_widget, "set_bit_profiles"):
+                item._inner_widget.set_bit_profiles(self.bit_profiles)
 
     @property
     def grid_size(self) -> int:
@@ -184,6 +192,8 @@ class DesignScene(QGraphicsScene):
     def add_canvas_item(self, item: CanvasItem):
         item.set_scene_ref(self)
         item.set_grid_size(self._grid_size)
+        if hasattr(item._inner_widget, "set_bit_profiles"):
+            item._inner_widget.set_bit_profiles(self.bit_profiles)
         self.addItem(item)
         signalBus.widgetAdded.emit(item.widget_id)
         self._setup_children(item)
@@ -193,6 +203,8 @@ class DesignScene(QGraphicsScene):
         for child in item._container_children:
             child.set_scene_ref(self)
             child.set_grid_size(self._grid_size)
+            if hasattr(child._inner_widget, "set_bit_profiles"):
+                child._inner_widget.set_bit_profiles(self.bit_profiles)
             signalBus.widgetAdded.emit(child.widget_id)
             self._setup_children(child)
 
@@ -224,6 +236,7 @@ class DesignScene(QGraphicsScene):
         signalBus.canvasChanged.emit()
 
     def clear_all(self):
+        self.bit_profiles = {}
         self._asset_base_dir = None
         for it in self.top_level_canvas_items():
             self.removeItem(it)

@@ -683,6 +683,7 @@ class DataBinding:
         # Reads what the Modbus bindings and chart curves show; the link cards, in document
         # order, register their own links on the hub, hand it their settings and show its status.
         self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)
+        ui._modbus_poller = self.modbus_poller
         for widget_id in ['serial']:
             ui.widgets[widget_id].set_serial_handler(hub)
             ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)

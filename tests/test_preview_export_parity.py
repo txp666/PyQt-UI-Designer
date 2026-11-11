@@ -82,6 +82,7 @@ if os.environ["APPLICATION_MODE"] == "preview":
     app = QApplication([])
     project = ProjectData()
     project.widgets = json.loads(os.environ["PROJECT_WIDGETS"])
+    project.bit_profiles = json.loads(os.environ.get("PROJECT_BIT_PROFILES", "{}"))
     window = PreviewCanvas()
     window.build_from_project(project)
     window.show()
@@ -120,9 +121,10 @@ def control(name, kind, properties, row=0):
 
 
 class PreviewExportParityTests(unittest.TestCase):
-    def run_both(self, widgets, checks):
+    def run_both(self, widgets, checks, bit_profiles=None):
         project = ProjectData()
         project.widgets = widgets
+        project.bit_profiles = bit_profiles or {}
         script = _RUN_APPLICATION.replace(
             "__CHECKS__", textwrap.indent(textwrap.dedent(checks).strip(), "    "))
         with tempfile.TemporaryDirectory() as folder:
@@ -136,6 +138,7 @@ class PreviewExportParityTests(unittest.TestCase):
                             "QT_QPA_PLATFORM": "offscreen",
                             "APPLICATION_MODE": mode, "DESIGNER_ROOT": str(_ROOT),
                             "PROJECT_WIDGETS": json.dumps(widgets),
+                            "PROJECT_BIT_PROFILES": json.dumps(project.bit_profiles),
                         },
                         capture_output=True, text=True, encoding="utf-8", timeout=30,
                     )

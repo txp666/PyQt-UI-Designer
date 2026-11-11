@@ -23,6 +23,8 @@ from app.core.signal_lifetime import SignalConnections
 from app.core.widget_registry import registry
 from app.core.binding_values import DEFAULT_MODBUS_AREA, MODBUS_AREAS
 from app.core.chart_runtime import default_curve_name
+from app.core.bit_profiles import BIT_PROFILE_TYPES
+from app.designer.bit_profile_editor import BitProfileEditor
 from app.core.command_runtime import MODBUS_ORDERS
 from app.core.link_polling import PROJECT_PARSER
 from app.core.modbus_slave import MASTER_ROLE, SLAVE_ROLE
@@ -328,6 +330,7 @@ class PropertyEditor(ScrollArea):
                 config if isinstance(config, dict) else {},
                 self._write_project_frame, with_mode=True)
             self._layout.addWidget(section)
+            self._add_bit_profile_editor()
 
     def _load_item(self, item: CanvasItem):
         self.commit_pending_edits()
@@ -428,6 +431,9 @@ class PropertyEditor(ScrollArea):
                     f"_curve_{int(item.properties.get('currentCurve', 0))}_parseMode",
                     "键值匹配")  # i18n: value
                 self._apply_chart_parse_visibility(pm)
+
+        if item.type_name in BIT_PROFILE_TYPES:
+            self._add_bit_profile_editor(item.properties.get("bitProfile", "default"))
 
         # binding card — for the widgets the runtime binds (data_binding.BIND_PROPERTIES)
         if item.type_name in BIND_PROPERTIES:
@@ -549,6 +555,49 @@ class PropertyEditor(ScrollArea):
             self._apply_bind_mode_visibility(cur_pm)
 
         self._layout.addStretch()
+
+    def _add_bit_profile_editor(self, name="default"):
+        project = self._project()
+        if project is None:
+            return
+        self._bit_profile_editor = BitProfileEditor(project.bit_profiles, name)
+        self._bit_profile_editor.changed.connect(self._write_bit_profiles)
+        self._bit_profile_editor.selector.currentTextChanged.connect(self._select_bit_profile)
+        self._layout.addWidget(self._bit_profile_editor)
+
+    def _select_bit_profile(self, name):
+        if not self._bit_profile_editor._loading and self._current_item is not None and self._current_item.type_name in BIT_PROFILE_TYPES:
+            self._on_prop_changed("bitProfile", name)
+
+    def _sync_bit_profile_property(self):
+        editor = self._editors.get("bitProfile")
+        if editor is None or self._current_item is None:
+            return
+        self._updating = True
+        current = self._current_item.properties.get("bitProfile", "default")
+        editor.clear()
+        editor.addItems(list(dict.fromkeys(["default", *self._project().bit_profiles, current])))
+        editor.setCurrentText(current)
+        self._updating = False
+
+    def _write_bit_profiles(self, profiles, rename):
+        project = self._project()
+        if project is None:
+            return
+        if rename and hasattr(self, "_scene"):
+            old, new = rename
+            self._scene.set_bit_profiles({**profiles, old: profiles[new]})
+            for item in self._scene.all_canvas_items():
+                if item.type_name in BIT_PROFILE_TYPES and item.properties.get("bitProfile", "default") == old:
+                    item.set_property("bitProfile", new)
+        project.bit_profiles = profiles
+        if hasattr(self, "_scene"):
+            self._scene.set_bit_profiles(profiles)
+            if not rename and self._current_item is not None and self._current_item.type_name in BIT_PROFILE_TYPES:
+                self._current_item.set_property("bitProfile", self._bit_profile_editor.current)
+        self._sync_bit_profile_property()
+        self.edited.emit(("project", "bitProfiles"))
+        signalBus.canvasChanged.emit()
 
     # ---- frame format: the project's 默认帧格式 and a link card's 帧格式 ----
 
@@ -747,6 +796,25 @@ class PropertyEditor(ScrollArea):
         return container
 
     def _create_editor(self, prop_def: PropDef, current_value) -> Optional[QWidget]:
+        if prop_def.name == "pulsesPerTurn" or (prop_def.name == "value" and self._current_item is not None and self._current_item.type_name == "RotaryEncoder"):
+            editor = LineEdit()
+            editor.setText(str(current_value))
+            def integer_changed(text):
+                try:
+                    number = int(text)
+                except ValueError:
+                    return
+                if prop_def.min_val <= number <= prop_def.max_val:
+                    self._on_prop_changed(prop_def.name, number)
+            editor.textChanged.connect(integer_changed)
+            return editor
+        if prop_def.name == "bitProfile":
+            editor = ComboBox()
+            profiles = self._project().bit_profiles if self._project() is not None else {}
+            editor.addItems(list(dict.fromkeys(["default", *profiles, str(current_value)])))
+            editor.setCurrentText(str(current_value))
+            editor.currentTextChanged.connect(lambda name: self._on_prop_changed("bitProfile", name))
+            return editor
         if prop_def.name == "imagePath":
             return self._create_file_picker(prop_def, current_value)
 
@@ -873,6 +941,9 @@ class PropertyEditor(ScrollArea):
             signalBus.canvasChanged.emit()
 
     def commit_pending_edits(self, editor=None):
+        profile_editor = getattr(self, "_bit_profile_editor", None)
+        if not self._updating and profile_editor is not None and not sip.isdeleted(profile_editor):
+            profile_editor._rename()
         current = self._editors.get("tabNames")
         if (self._updating or current is None or not self._current_item
                 or sip.isdeleted(self._current_item)
@@ -926,6 +997,9 @@ class PropertyEditor(ScrollArea):
                 if name in self._editors:
                     self._editors[name].setValue(self._current_item.properties[name])
             self._updating = False
+        elif prop_name == "bitProfile" and hasattr(self, "_bit_profile_editor"):
+            self._bit_profile_editor.current = str(value)
+            self._bit_profile_editor._reload_names()
         elif prop_name == "commandMode":
             self._apply_mode_visibility(value)
             toggles = [name for name in ("sendOnEnter", "sendOnSelect", "sendOnChange") if name in self._prop_rows]

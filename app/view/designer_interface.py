@@ -344,6 +344,7 @@ class DesignerInterface(QWidget):
             "canvas": {"width": int(rect.width()), "height": int(rect.height()),
                        "gridSize": self._scene.grid_size},
             "widgets": [item.to_dict() for item in self._scene.top_level_canvas_items()],
+            "bitProfiles": self._scene.bit_profiles,
             "serial": project.serial if project is not None else {},
             "icon": project.icon if project is not None else "",
         })
@@ -420,6 +421,7 @@ class DesignerInterface(QWidget):
                 scene.removeItem(item)
             scene.set_canvas_size(canvas["width"], canvas["height"])
             scene.set_grid_size(canvas["gridSize"])
+            scene.set_bit_profiles(document.get("bitProfiles", {}))
             for data in document["widgets"]:
                 scene.add_canvas_item(CanvasItem.from_dict(data, asset_base_dir=base))
             self.app_name = document["appName"]
@@ -428,6 +430,7 @@ class DesignerInterface(QWidget):
             if project is not None:
                 project.serial = document["serial"]
                 project.icon = document["icon"]
+                project.bit_profiles = scene.bit_profiles
             self._update_icon_button()
             for wid in selected:
                 item = scene.get_item_by_id(wid)

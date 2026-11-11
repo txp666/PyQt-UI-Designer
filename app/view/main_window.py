@@ -27,6 +27,7 @@ from app.widgets.display import register_display_widgets
 from app.widgets.chart import register_chart_widgets
 from app.widgets.comm import register_comm_widgets
 from app.widgets.composite import register_composite_widgets
+from app.widgets.industrial import register_industrial_widgets
 
 
 def _project_name(path):
@@ -45,6 +46,7 @@ class MainWindow(TitleBarLifecycleMixin, FluentWindow):
         register_chart_widgets()
         register_comm_widgets()
         register_composite_widgets()
+        register_industrial_widgets()
 
         self._project_mgr = ProjectManager()
         self._init_window()

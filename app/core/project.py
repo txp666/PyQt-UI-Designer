@@ -14,6 +14,7 @@ from app.common.signal_bus import signalBus
 from app.core.widget_registry import registry
 from app.core.i18n import tr
 from app.core.link_polling import PROJECT_PARSER
+from app.core.bit_profiles import normalize_bit_profiles
 from PyQt5.QtCore import QSignalBlocker
 
 PROJECT_VERSION = "1.0"
@@ -54,6 +55,7 @@ class ProjectData:
         self.grid_size: int = 10
         self.icon: str = ""  # the exported application's icon; empty for the default one
         self.widgets: List[Dict[str, Any]] = []
+        self.bit_profiles = {}
         self.serial: Dict[str, Any] = {
             "baudRate": 115200,
             "dataBits": 8,
@@ -76,6 +78,8 @@ class ProjectData:
             "widgets": self.widgets,
             "serial": self.serial,
         }
+        if self.bit_profiles:
+            document["bitProfiles"] = normalize_bit_profiles(self.bit_profiles)
         if self.icon:
             document["icon"] = self.icon
         return document
@@ -101,6 +105,7 @@ class ProjectData:
         proj.grid_size = canvas.get("gridSize", 10)
         proj.icon = data.get("icon", "")
         proj.widgets = data.get("widgets", [])
+        proj.bit_profiles = normalize_bit_profiles(data.get("bitProfiles", {}))
         proj.serial.update(data.get("serial", {}))
         return proj
 
@@ -109,6 +114,7 @@ class ProjectData:
         """Reject invalid documents before touching the current scene."""
         if not isinstance(data, dict):
             raise ValueError(tr("项目根节点必须是对象"))
+        normalize_bit_profiles(data.get("bitProfiles", {}))
         if data.get("version", PROJECT_VERSION) != PROJECT_VERSION:
             raise ValueError(tr("不支持的项目版本"))
         if not isinstance(data.get("appName", ""), str):
@@ -158,6 +164,10 @@ class ProjectData:
                 props = item.get("properties", {})
                 if not isinstance(props, dict):
                     raise ValueError(tr("控件属性必须是对象"))
+                if item["type"] == "RotaryEncoder":
+                    ppr = props.get("pulsesPerTurn", 1024)
+                    if type(ppr) not in (int, float) or not math.isfinite(ppr) or ppr <= 0 or int(ppr) != ppr:
+                        raise ValueError(tr("每圈脉冲数必须为正整数"))
                 if item["type"] in LINK_CARD_TYPES and "parserConfig" in props:
                     check_card_parser(item, props)
                 if item.get("binding") is not None and not isinstance(item["binding"], dict):
@@ -217,6 +227,7 @@ class ProjectManager:
         candidate.widgets = [
             item.to_dict() for item in scene.top_level_canvas_items()
         ]
+        candidate.bit_profiles = copy.deepcopy(scene.bit_profiles)
         old_base = self._current.base_dir()
         new_base = Path(path).expanduser().resolve().parent
         if old_base != new_base:
@@ -282,9 +293,11 @@ class ProjectManager:
                       for wd in candidate.widgets]
             old_items = scene.top_level_canvas_items()
             old_rect, old_grid = scene.sceneRect(), scene.grid_size
+            old_profiles = copy.deepcopy(scene.bit_profiles)
             old_base = getattr(scene, "_asset_base_dir", None)
             try:
                 scene.clear_all()
+                scene.set_bit_profiles(candidate.bit_profiles)
                 scene._asset_base_dir = base_dir
                 scene.set_canvas_size(candidate.canvas_width, candidate.canvas_height)
                 scene.set_grid_size(candidate.grid_size)
@@ -292,6 +305,7 @@ class ProjectManager:
                     scene.add_canvas_item(item)
             except Exception:
                 scene.clear_all()
+                scene.set_bit_profiles(old_profiles)
                 scene._asset_base_dir = old_base
                 scene.set_canvas_size(old_rect.width(), old_rect.height())
                 scene.set_grid_size(old_grid)
@@ -318,4 +332,5 @@ class ProjectManager:
         self._current.widgets = [
             item.to_dict() for item in scene.top_level_canvas_items()
         ]
+        self._current.bit_profiles = copy.deepcopy(scene.bit_profiles)
         return self._current

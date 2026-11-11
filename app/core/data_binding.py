@@ -21,6 +21,8 @@ from app.core.binding_values import (
     modbus_need, modbus_value,
 )
 
+from app.core.industrial_runtime import INDUSTRIAL_TYPES, binding_has_path
+
 # The property a binding writes into, per widget type (docs/uidp-format.md lists it with each widget).
 BIND_PROPERTIES = {
     "Label": "text",
@@ -33,6 +35,8 @@ BIND_PROPERTIES = {
     "Slider": "value",
     "SpinBox": "value",
 }
+
+BIND_PROPERTIES.update({name: "value" for name in INDUSTRIAL_TYPES})
 
 _STRUCT_FMT = {
     "uint8": ("B", 1), "int8": ("b", 1),
@@ -265,6 +269,10 @@ class DataBindingEngine(QObject):
     def load_bindings_from_project(self, widgets_data: list):
         self._bindings.clear()
         self._walk_bindings(widgets_data)
+        for entry in self._bindings:
+            widget = self._widget_map.get(entry.widget_id)
+            if widget is not None and entry.type_name in INDUSTRIAL_TYPES:
+                widget.set_bound(True)
 
     def _walk_bindings(self, items: list):
         for wd in items:
@@ -347,7 +355,10 @@ class DataBindingEngine(QObject):
                 continue
             try:
                 value = b.extract_from_parsed(data)
-                if value is not None:
+                explicit_null = b.type_name in ("StatusWordPanel", "DigitalTimingChart", "RotaryEncoder", "BmsCellMatrix", "DcPowerSupply") and (
+                    (b.parse_mode == "键值匹配" and b.key in data) or  # i18n: value
+                    (b.parse_mode == "JSON路径" and binding_has_path(data, b.json_path)))  # i18n: value
+                if value is not None or explicit_null:
                     self._push_value(b, value)
             except (TypeError, ValueError, OverflowError, struct.error):
                 # A malformed device field must not stop the other bindings.
@@ -368,7 +379,8 @@ class DataBindingEngine(QObject):
 
     def _push_value(self, b: BindingEntry, raw_value):
         value = b.evaluate(raw_value)
-        value = b.format_value(value)
+        if b.type_name not in INDUSTRIAL_TYPES:
+            value = b.format_value(value)
         widget = self._widget_map.get(b.widget_id)
         if widget:
             self._apply_to_widget(widget, b, value)
