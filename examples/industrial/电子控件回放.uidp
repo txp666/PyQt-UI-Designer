@@ -1,0 +1,604 @@
+{
+  "version": "1.0",
+  "appName": "电子控件回放",
+  "canvas": {
+    "width": 940,
+    "height": 679,
+    "gridSize": 10
+  },
+  "serial": {
+    "parser": "line",
+    "parserConfig": {}
+  },
+  "widgets": [
+    {
+      "type": "Label",
+      "id": "heading",
+      "geometry": {
+        "x": 20,
+        "y": 10,
+        "w": 890,
+        "h": 32
+      },
+      "properties": {
+        "text": "电子控件 · 模拟反馈",
+        "fontSize": 20,
+        "bold": true
+      }
+    },
+    {
+      "type": "TcpConfigCard",
+      "id": "replay_link",
+      "geometry": {
+        "x": 20,
+        "y": 50,
+        "w": 900,
+        "h": 174
+      },
+      "properties": {
+        "title": "本机回放",
+        "defaultHost": "127.0.0.1",
+        "defaultPort": 8765,
+        "defaultParser": "line",
+        "displayMode": "简洁"
+      }
+    },
+    {
+      "type": "TabWidget",
+      "id": "gallery",
+      "geometry": {
+        "x": 20,
+        "y": 240,
+        "w": 900,
+        "h": 419
+      },
+      "properties": {
+        "tabNames": "汽车电子\n电子 DIY\n嵌入式\n车身与充电\n传感与显示\n固件诊断",
+        "currentTab": 0,
+        "tabLayout": "自由"
+      },
+      "children": [
+        {
+          "type": "VehicleSpeed",
+          "id": "vehicle_speed",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "vehicle_speed"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "GearPosition",
+          "id": "gear_position",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "gear_position"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "SteeringAngle",
+          "id": "steering_angle",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "steering_angle"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "TractionBattery",
+          "id": "traction_battery",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "traction_battery"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "TurnIndicators",
+          "id": "turn_indicators",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "turn_indicators"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "PedalPosition",
+          "id": "pedal_position",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "pedal_position"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "ServoPosition",
+          "id": "servo_position",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "servo_position"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "Potentiometer",
+          "id": "potentiometer",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "potentiometer"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "RelayModule",
+          "id": "relay_module",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "relay_module"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "RgbLed",
+          "id": "rgb_led",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "rgb_led"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "UltrasonicDistance",
+          "id": "ultrasonic_distance",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "ultrasonic_distance"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "Illuminance",
+          "id": "illuminance",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "illuminance"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "GpioBank",
+          "id": "gpio_bank",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "gpio_bank"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "AdcChannel",
+          "id": "adc_channel",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "adc_channel"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "PwmDuty",
+          "id": "pwm_duty",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "pwm_duty"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "CpuLoad",
+          "id": "cpu_load",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "cpu_load"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "MemoryUsage",
+          "id": "memory_usage",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "memory_usage"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "BusStatus",
+          "id": "bus_status",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "bus_status"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "DoorStatus",
+          "id": "door_status",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "door_status"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "TirePressure",
+          "id": "tire_pressure",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "tire_pressure"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "FuelLevel",
+          "id": "fuel_level",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "fuel_level"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "CoolantTemperature",
+          "id": "coolant_temperature",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "coolant_temperature"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "HeadlightMode",
+          "id": "headlight_mode",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "headlight_mode"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "ChargeState",
+          "id": "charge_state",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "charge_state"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "SevenSegmentDisplay",
+          "id": "seven_segment_display",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "seven_segment_display"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "Buzzer",
+          "id": "buzzer",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "buzzer"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "TouchPad",
+          "id": "touch_pad",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "touch_pad"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "AirHumidity",
+          "id": "air_humidity",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "air_humidity"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "LoadCellScale",
+          "id": "load_cell_scale",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "load_cell_scale"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "IrBeam",
+          "id": "ir_beam",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "ir_beam"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "ResetCause",
+          "id": "reset_cause",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "reset_cause"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "UartRxBuffer",
+          "id": "uart_rx_buffer",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "uart_rx_buffer"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "UartErrors",
+          "id": "uart_errors",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "uart_errors"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "WirelessRssi",
+          "id": "wireless_rssi",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "wireless_rssi"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "RtosTaskState",
+          "id": "rtos_task_state",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "rtos_task_state"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "I2cAddress",
+          "id": "i2c_address",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "i2c_address"
+          },
+          "tabIndex": 5
+        }
+      ]
+    }
+  ]
+}

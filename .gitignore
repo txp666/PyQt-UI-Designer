@@ -41,6 +41,7 @@ output/
 *.uidp
 !demo/project.uidp
 !examples/tutorials/*.uidp
+!examples/industrial/*.uidp
 
 # Cursor
 .cursor/

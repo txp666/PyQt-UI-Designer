@@ -1,0 +1,214 @@
+{
+  "version": "1.0",
+  "appName": "恒压供水泵站",
+  "canvas": {
+    "width": 940,
+    "height": 672,
+    "gridSize": 10
+  },
+  "serial": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "parser": "line",
+    "parserConfig": {
+      "separator": ","
+    }
+  },
+  "widgets": [
+    {
+      "type": "Label",
+      "id": "heading",
+      "geometry": {
+        "x": 20,
+        "y": 12,
+        "w": 910,
+        "h": 33
+      },
+      "properties": {
+        "text": "恒压供水泵站",
+        "fontSize": 20,
+        "bold": true
+      }
+    },
+    {
+      "type": "TcpConfigCard",
+      "id": "plc",
+      "geometry": {
+        "x": 20,
+        "y": 53,
+        "w": 900,
+        "h": 174
+      },
+      "properties": {
+        "title": "PLC 连接",
+        "defaultHost": "127.0.0.1",
+        "defaultPort": 1502,
+        "defaultParser": "modbus_tcp",
+        "displayMode": "简洁"
+      }
+    },
+    {
+      "type": "PressureGauge",
+      "id": "pressure",
+      "geometry": {
+        "x": 20,
+        "y": 244,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "出水压力"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 100,
+        "mbDataType": "float32"
+      }
+    },
+    {
+      "type": "FlowMeter",
+      "id": "flow",
+      "geometry": {
+        "x": 248,
+        "y": 244,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "瞬时流量"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 102,
+        "mbDataType": "float32"
+      }
+    },
+    {
+      "type": "Tank",
+      "id": "level",
+      "geometry": {
+        "x": 476,
+        "y": 244,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "水箱液位"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 105
+      }
+    },
+    {
+      "type": "VFD",
+      "id": "vfd",
+      "geometry": {
+        "x": 704,
+        "y": 244,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "水泵频率"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 104,
+        "expression": "value * 0.1"
+      }
+    },
+    {
+      "type": "Pump",
+      "id": "pump1",
+      "geometry": {
+        "x": 20,
+        "y": 446,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "1 号泵"
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "线圈",
+        "mbRegIndex": 0
+      }
+    },
+    {
+      "type": "Pump",
+      "id": "pump2",
+      "geometry": {
+        "x": 248,
+        "y": 446,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "2 号泵",
+        "value": 0
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "线圈",
+        "mbRegIndex": 1
+      }
+    },
+    {
+      "type": "FlowPipe",
+      "id": "outlet",
+      "geometry": {
+        "x": 476,
+        "y": 446,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "出水管流向",
+        "value": 32.5,
+        "decimals": 1
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "保持寄存器",
+        "mbRegIndex": 102,
+        "mbDataType": "float32"
+      }
+    },
+    {
+      "type": "StackLight",
+      "id": "station_fault",
+      "geometry": {
+        "x": 704,
+        "y": 446,
+        "w": 215,
+        "h": 185
+      },
+      "properties": {
+        "title": "整站故障",
+        "value": 0
+      },
+      "binding": {
+        "parseMode": "Modbus",
+        "mbSlaveFilter": 1,
+        "mbArea": "线圈",
+        "mbRegIndex": 2,
+        "expression": "value * 4"
+      }
+    }
+  ]
+}
