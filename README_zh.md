@@ -128,7 +128,7 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 - 简体中文 / 英文界面：设置页的「语言」可选跟随系统、简体中文或 English，重启后生效
 - 工程文件 `.uidp` 保存与加载
 
-### 28 种控件
+### 控件库
 
 | 分类 | 控件 |
 | --- | --- |
@@ -137,6 +137,13 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 | **显示控件** | LED 指示灯、数值显示、进度条、进度环、图片显示 |
 | **图表控件** | 实时曲线（多通道、游标、数据保存 / 加载）、仪表盘、数据表格 |
 | **通信控件** | 串口配置卡片、TCP 配置卡片、UDP 配置卡片、MQTT 配置卡片、数据发送卡片、数据接收卡片、日志显示框 |
+| **工业仪表** | 压力、流量、温度、液位及电量等 12 种仪表 |
+| **工业设备** | 泵阀、储罐、输送、热工、执行机构和配电等 25 种设备 |
+| **汽车电子** | 车载反馈、BMS 单体矩阵等 13 种控件 |
+| **电子 DIY** | 旋转编码器、直流电源等 14 种控件 |
+| **嵌入式** | 共享位配置的状态字、按真实采样绘制的数字时序等 14 种控件 |
+
+[恒压供水泵站与模拟回放工程](examples/industrial)
 
 ### 数据接收与绑定
 
@@ -178,7 +185,7 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.md
 ```
 
-这是 [docs/uidp-format.md](docs/uidp-format.md) 的原始文本，AI 一次就能读完，不用打开网页或克隆仓库。说明里有规则、一个完整的例子和控件一览；每个控件的全部属性在 [docs/uidp-widgets.md](docs/uidp-widgets.md)，由控件定义生成，说明里有它的链接，用到时再读。写完用 `python tools/check_uidp.py 工程.uidp` 检查（属性名、选项写错这种打开时不报错的问题也会指出来），再用设计器打开、预览和导出。
+[Python .uidp 入口](docs/uidp-format.md) 按任务链接公共格式、专题规则和可复制模板，并提供 Python 检查、导出步骤及本地教程工程。Python 的精确控件属性见生成的[控件参考](docs/uidp-widgets.md)。写完用 `python tools/check_uidp.py 工程.uidp` 检查，再用设计器打开、预览和导出。
 
 ### 在浏览器里打开工程
 

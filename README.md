@@ -130,7 +130,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - English and Simplified Chinese interface: Language on the Settings page follows the system or is set to 简体中文 or English, and takes effect after a restart
 - Projects saved and loaded as `.uidp` files
 
-### 28 widgets
+### Widget library
 
 | Category | Widgets |
 | --- | --- |
@@ -139,6 +139,13 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 | **Display** | LED indicator, numeric display, progress bar, progress ring, image |
 | **Charts** | Live chart (multiple channels, cursor, data save / load), gauge, data table |
 | **Communication** | Serial config card, TCP config card, UDP config card, MQTT config card, send card, receive card, log box |
+| **Industrial instruments** | 12 instruments including pressure, flow, temperature, level and electrical meters |
+| **Industrial equipment** | 25 devices including pumps, tanks, directional valves, conveyors, drives and stack lights |
+| **Automotive electronics** | 13 controls including vehicle and BMS cell feedback |
+| **Electronics DIY** | 14 controls including rotary encoders and DC supplies |
+| **Embedded systems** | 14 controls including shared-profile status words and sample-order digital timing charts |
+
+[Pump station and feedback replay projects](examples/industrial)
 
 ### Receiving and binding data
 
@@ -180,7 +187,7 @@ A `.uidp` file is JSON. Give Claude, Codex or another AI your requirements toget
 https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.md
 ```
 
-This is the raw text of [docs/uidp-format.md](docs/uidp-format.md), which an AI can read in one go without opening a web page or cloning the repository. The guide is written in Chinese, and AI assistants can read it as it is. It has the rules, a complete example and a list of widgets; every property of every widget is in [docs/uidp-widgets.md](docs/uidp-widgets.md), which is generated from the widget definitions and linked from the guide for when it's needed. When the file is written, check it with `python tools/check_uidp.py project.uidp` (it also points out misspelt property names and options, which opening the file doesn't report), then open, preview and export it in the designer.
+The [Python .uidp entry](docs/uidp-format.md) links the shared format, task-specific rules and reusable templates, then lists Python checks, export steps and local tutorial projects. Exact Python widget properties live in the generated [widget reference](docs/uidp-widgets.md). Check a project with `python tools/check_uidp.py project.uidp`, then open, preview and export it in the designer.
 
 ### Open projects in the browser
 
