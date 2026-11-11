@@ -42,6 +42,35 @@ class DesignerIntegrityTests(unittest.TestCase):
         self.scene.add_canvas_item(item)
         return item
 
+    def test_curve_expression_switching_visibility_and_project_roundtrip(self):
+        from app.core.chart_runtime import build_cfgs_from_props
+        from app.widgets.chart import register_chart_widgets
+        register_chart_widgets()
+        editor = PropertyEditor()
+        item = self.make_item("RealtimeChart", curveCount=2)
+        try:
+            editor._load_item(item)
+            editor._editors["curveExpression"].setText("value * 0.1")
+            editor._editors["currentCurve"].setValue(1)
+            self.assertEqual(editor._editors["curveExpression"].text(), "")
+            expression = editor._editors["curveExpression"]
+            expression.setText("value + 2")
+            form = expression.parentWidget().layout()
+            mode = editor._editors["curveParseMode"]
+            for index in range(mode.count()):
+                mode.setCurrentIndex(index)
+                self.assertFalse(expression.isHidden())
+                self.assertEqual(form.getWidgetPosition(expression)[0], form.rowCount() - 1)
+            editor._editors["currentCurve"].setValue(0)
+            self.assertEqual(editor._editors["curveExpression"].text(), "value * 0.1")
+            restored = CanvasItem.from_dict(item.to_dict())
+            self.scene.add_canvas_item(restored)
+            cfgs = build_cfgs_from_props(restored.properties)
+            self.assertEqual([cfg["expression"] for cfg in cfgs], ["value * 0.1", "value + 2"])
+            self.assertEqual(build_cfgs_from_props({})[0]["expression"], "")
+        finally:
+            editor.deleteLater()
+
     def test_dimension_editors_enforce_widget_minimums_and_roundtrip(self):
         editor = PropertyEditor()
         try:

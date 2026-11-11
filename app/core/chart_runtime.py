@@ -19,7 +19,7 @@ from qfluentwidgets import (
 
 from .chart_history import ChartHistory
 from .protocol_parser import RawFrameBuffer
-from .binding_values import modbus_need, modbus_value
+from .binding_values import modbus_need, modbus_value, curve_expression
 from .signal_lifetime import SignalConnections
 from .i18n import tr
 
@@ -53,7 +53,7 @@ _STRUCT_FMT = {
 
 _DEFAULT_CURVE_CFG = {
     "name": "曲线1", "parseMode": "键值匹配",  # i18n: value
-    "key": "", "jsonPath": "",
+    "key": "", "jsonPath": "", "expression": "",
     "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",  # i18n: value
     "frameHeader": "", "frameTail": "",
     "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",  # i18n: value
@@ -63,6 +63,7 @@ _DEFAULT_CURVE_CFG = {
 # Virtual prop name -> per-curve storage suffix
 _CURVE_FIELD_MAP = {
     "curveName": "name", "curveParseMode": "parseMode",
+    "curveExpression": "expression",
     "curveKey": "key", "curveJsonPath": "jsonPath",
     "curveByteOffset": "byteOffset", "curveDataType": "dataType",
     "curveByteOrder": "byteOrder", "curveFrameHeader": "frameHeader",
@@ -737,7 +738,7 @@ class RealtimeLineChart(QWidget):
                 elif pm == "Modbus":
                     val = self._extract_modbus(cfg, data)
                 if val is not None:
-                    self.append_value(i, val)
+                    self.append_value(i, curve_expression(val, cfg.get("expression")))
             except (ValueError, TypeError, OverflowError, struct.error):
                 # Reject a bad sample without losing the other channels in this frame.
                 continue
@@ -757,7 +758,7 @@ class RealtimeLineChart(QWidget):
                 if payload is not None and off >= 0 and off + sz <= len(payload):
                     try:
                         val = struct.unpack(bo + fmt_c, payload[off:off + sz])[0]
-                        self.append_value(i, float(val))
+                        self.append_value(i, curve_expression(val, cfg.get("expression")))
                     except (ValueError, TypeError, OverflowError, struct.error):
                         pass
 

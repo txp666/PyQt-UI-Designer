@@ -81,6 +81,7 @@ REALTIME_CHART_META = WidgetMeta(
                 min_val=-1, max_val=255),
         PropDef("curveMbSlaveFilter", N_("从站过滤"), PropType.INT, -1,
                 min_val=-1, max_val=255),
+        PropDef("curveExpression", N_("转换表达式"), PropType.STRING, ""),
     ],
 )
 

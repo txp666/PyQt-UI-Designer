@@ -11,6 +11,7 @@ from typing import Dict, List, Any
 from app.core.project import LINK_CARD_TYPES, ProjectData
 from app.common.runtime_sources import runtime_source
 from app.core.i18n import tr
+from app.core.industrial_runtime import INDUSTRIAL_CATALOG, INDUSTRIAL_TYPES
 
 
 def _runtime(name):
@@ -60,7 +61,7 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None, the
                              + _runtime("theme_runtime.py").replace(
                                  "from .signal_lifetime import SignalConnections", "")),
         "ui.py": _gen_ui(widgets, project.canvas_width, project.canvas_height,
-                        project.app_name),
+                        project.app_name, project.bit_profiles),
         "serial_handler.py": _gen_serial_handler(project.serial),
         "tcp_handler.py": _gen_tcp_handler(project.serial),
         "udp_handler.py": _gen_udp_handler(project.serial),
@@ -255,7 +256,7 @@ sys.exit(exit_code)
         "_LANGUAGE_", repr(language))
 
 
-def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "上位机") -> str:  # i18n: value
+def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "上位机", bit_profiles=None) -> str:  # i18n: value
     lines = [
         '# coding: utf-8',
         '"""Auto-generated UI module."""',
@@ -330,6 +331,16 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         lines.append(_numeric_display_class())
     if "RealtimeChart" in widget_types:
         lines.append(_realtime_chart_class())
+    if widget_types & INDUSTRIAL_TYPES:
+        used_symbols = [entry for entry in INDUSTRIAL_CATALOG if entry["type"] in widget_types]
+        source = _runtime("industrial_runtime.py").replace(
+            "from app.common.runtime_sources import runtime_source", "").replace(
+            'INDUSTRIAL_CATALOG = json.loads(runtime_source("industrial_catalog.json"))',
+            'INDUSTRIAL_CATALOG = ' + repr(used_symbols)).replace(
+            "from .signal_lifetime import SignalConnections", "")
+        lines.append(_runtime("bit_profiles.py"))
+        source = source.replace("from .bit_profiles import BIT_PROFILE_TYPES, normalize_bit_profiles, resolve_bit_profile", "")
+        lines.append(source)
     if "GaugeMeter" in widget_types:
         lines.append(_gauge_class())
     if "SerialTerminal" in widget_types:
@@ -432,6 +443,8 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
 ''')
 
     _gen_widgets_recursive(widgets, lines, "self._page")
+    if widget_types & {"StatusWordPanel", "DigitalTimingChart"}:
+        lines.append(f"        for widget in self.widgets.values():\n            if hasattr(widget, 'set_bit_profiles'):\n                widget.set_bit_profiles({bit_profiles or {}!r})")
     if not widgets:
         lines.append("        pass")
 
@@ -643,7 +656,8 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
     if wtype == "PushButton":
         cmd = props.get("command", "").strip()
         if mode == "Modbus":
-            send = _modbus_send(int(props.get("mbValue", 1)), "03 读保持寄存器")  # i18n: value
+            from app.widgets.basic import button_modbus_value
+            send = _modbus_send(repr(button_modbus_value(props)), "03 读保持寄存器")  # i18n: value
             result.append(f"        {w_ref}.clicked.connect(lambda: {send})")
         elif cmd:
             result.append(
@@ -800,6 +814,9 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
         return (f"self.widgets[{wid!r}] = RealtimeLineChart({pv}); "
                 f"self.widgets[{wid!r}].configure({json.dumps(cfgs, ensure_ascii=False)!r}, {disp_pts}); "
                 f"self.widgets[{wid!r}].set_title({title})")
+    if wtype in INDUSTRIAL_TYPES:
+        return (f"self.widgets[{wid!r}] = IndustrialWidget({wtype!r}, {props!r}, {pv}); "
+                f"self.widgets[{wid!r}].set_bound(True)")
     if wtype == "GaugeMeter":
         title = p("title", "仪表")  # i18n: value
         return (f"self.widgets[{wid!r}] = GaugeMeter({pv}); "
@@ -1033,6 +1050,8 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         'import struct',
         'from PyQt5.QtCore import QSignalBlocker',
     ]
+    if any(binding["type"] in ("StatusWordPanel", "DigitalTimingChart", "RotaryEncoder", "BmsCellMatrix", "DcPowerSupply") for binding in bindings):
+        lines.append('from ui import binding_has_path')
     if has_chart:
         lines.append('from ui import RealtimeLineChart')
     if widget_types and "Slider" in widget_types:
@@ -1090,7 +1109,11 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         '        # Reads what the Modbus bindings and chart curves show; the link cards, in document',
         '        # order, register their own links on the hub, hand it their settings and show its status.',
         '        self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)',
+        '        ui._modbus_poller = self.modbus_poller',
     ]
+    for binding in bindings:
+        if binding["type"] in INDUSTRIAL_TYPES:
+            lines.append(f'        ui.widgets[{binding["widget_id"]!r}].set_bound(True)')
     if link_cards:
         lines += [
             f'        for widget_id in {list(link_cards)!r}:',
@@ -1215,16 +1238,19 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     expr = b.get("expression")
     dfmt = b.get("displayFormat", "自动")  # i18n: value
     pm = b["parseMode"]
+    strict_sample = wtype in ("StatusWordPanel", "DigitalTimingChart", "RotaryEncoder", "BmsCellMatrix", "DcPowerSupply")
 
     if source == "parsed":
         if pm == "键值匹配":  # i18n: value
             key = b["key"]
-            lines.append(f"        if {key!r} in data and data[{key!r}] is not None:")
+            condition = f"{key!r} in data" if strict_sample else f"{key!r} in data and data[{key!r}] is not None"
+            lines.append(f"        if {condition}:")
             lines.append(f"            value = data[{key!r}]")
         elif pm == "JSON路径":  # i18n: value
             jp = b["jsonPath"]
             lines.append(f"        value = _resolve_path(data, {repr(jp)})")
-            lines.append(f"        if value is not None:")
+            condition = f"binding_has_path(data, {jp!r})" if strict_sample else "value is not None"
+            lines.append(f"        if {condition}:")
         elif pm == "Modbus":
             args = (b.get("mbRegIndex", 0), b.get("mbDataType", "uint16"),
                     b.get("mbRegOrder", "大端(AB CD)"), b.get("mbFcFilter", -1),  # i18n: value
@@ -1292,6 +1318,8 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
         lines.append(f"{indent}    w.setValue(binding_integer(value))")
     elif wtype == "ProgressRingDisplay":
         lines.append(f"{indent}    w.set_value(binding_integer(value))")
+    elif wtype in INDUSTRIAL_TYPES:
+        lines.append(f"{indent}    w.set_value(value)")
     elif wtype == "GaugeMeter":
         lines.append(f"{indent}    w.set_value(binding_float(value))")
     elif wtype in ("Slider", "SpinBox"):
@@ -1393,7 +1421,7 @@ class NumericDisplay(QWidget):
 def _realtime_chart_class() -> str:
     runtime = _runtime("chart_runtime.py").replace(
         "from .chart_history import ChartHistory", "").replace(
-        "from .binding_values import modbus_need, modbus_value", "").replace(
+        "from .binding_values import modbus_need, modbus_value, curve_expression", "").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
         "from .protocol_parser import RawFrameBuffer",
         "from serial_handler import RawFrameBuffer")

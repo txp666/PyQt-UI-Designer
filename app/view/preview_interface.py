@@ -23,7 +23,7 @@ from app.common.signal_bus import signalBus
 from app.core.i18n import tr
 from app.common.build_support import archive_build, build_environment, build_nuitka_command
 from app.designer.canvas import ScrollAreaMiddlePan
-from app.widgets.basic import create_widget
+from app.widgets.basic import button_modbus_value, create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
 from app.core.modbus_poller import ModbusPoller
@@ -62,6 +62,7 @@ class PreviewCanvas(QWidget):
         commHub.configure(project.serial)
         self._update_style()
         self.setFixedSize(project.canvas_width, project.canvas_height)
+        self._bit_profiles = project.bit_profiles
         self._asset_base_dir = (Path(project.file_path).expanduser().resolve().parent
                                 if project.file_path else Path.cwd())
         # Reads what the Modbus bindings and chart curves show; the link cards, created in document
@@ -99,6 +100,10 @@ class PreviewCanvas(QWidget):
                     actual_parent = page
 
             widget = create_widget(type_name, props, actual_parent)
+            if hasattr(widget, "set_bit_profiles"):
+                widget.set_bit_profiles(self._bit_profiles)
+            if hasattr(widget, "set_bound"):
+                widget.set_bound(True)  # Preview needs live feedback; designer samples remain static.
             self._enable_interaction(widget)
             geometry = (
                 int(geo.get("x", 0)), int(geo.get("y", 0)),
@@ -282,8 +287,7 @@ class PreviewCanvas(QWidget):
             cmd = props.get("command", "").strip()
             if mode == "Modbus":
                 settings = {"mbFunc": "03 读保持寄存器", **props}  # i18n: value
-                widget.clicked.connect(
-                    lambda _, p=settings: self._send_modbus_frame(p))
+                widget.clicked.connect(lambda: self._send_modbus_frame(settings, button_modbus_value(settings)))
             elif cmd:
                 widget.clicked.connect(
                     lambda _, c=cmd, m=mode, n=newline, p=props, t=tpl:

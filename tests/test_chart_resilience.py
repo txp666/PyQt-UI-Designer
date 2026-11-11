@@ -103,6 +103,20 @@ class ChartResilienceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("STANDALONE_CHART_RESILIENCE_OK", result.stdout)
 
+    def test_curve_expression_in_live_and_standalone_signal_paths(self):
+        self.run_both("""
+            chart.load_from_props({"curveCount": 4,
+                "_curve_0_key": "v", "_curve_0_expression": "  value * 0.1  ",
+                "_curve_1_parseMode": "JSON路径", "_curve_1_jsonPath": "sensor.v",
+                "_curve_1_expression": "value + 2",
+                "_curve_2_parseMode": "Modbus", "_curve_2_expression": "value * 3",
+                "_curve_3_parseMode": "HEX字节提取", "_curve_3_dataType": "uint8",
+                "_curve_3_expression": "(value >> 1) & 1"})
+            serial.dataReceived.emit({"v": 10, "sensor": {"v": 6}, "fc": 3, "hr0": 7})
+            serial.rawReceived.emit(bytes([6]))
+            assert [list(h) for h in chart._data] == [[1.0], [8.0], [21.0], [1.0]]
+        """)
+
     def test_bad_samples_are_isolated_per_channel_and_per_raw_frame(self):
         self.run_both("""
             chart.configure([

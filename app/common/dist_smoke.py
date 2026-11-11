@@ -159,10 +159,11 @@ class DistributionSmokeTest:
         self.preview = self.window.preview_interface
 
     def _load_registry(self):
+        from app.core.industrial_runtime import INDUSTRIAL_TYPES
         from app.core.project import ProjectData
         from app.core.widget_registry import registry
         project = ProjectData()
-        project.canvas_height = 1600
+        project.canvas_height = max(1600, ((len(registry.all()) + 3) // 4) * 200 + 20)
         for index, meta in enumerate(registry.all()):
             project.widgets.append({
                 "id": f"all_{meta.type_name}", "type": meta.type_name,
@@ -171,7 +172,7 @@ class DistributionSmokeTest:
                              "w": 260, "h": 180},
             })
         self.result["widget_types"] = sorted(meta.type_name for meta in registry.all())
-        assert len(self.result["widget_types"]) == 30
+        assert len(self.result["widget_types"]) == 30 + len(INDUSTRIAL_TYPES)
         path = self.report.with_suffix(".uidp")
         path.write_text(json.dumps(project.to_dict(), ensure_ascii=False), encoding="utf-8")
         self.window._project_mgr.load_to_scene(self.window.designer_interface.scene, str(path))

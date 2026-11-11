@@ -4,24 +4,45 @@
 
 <!-- 以下由 tools/uidp_reference.py 从控件定义生成，不要手改 -->
 
+<a id="command-common"></a>
+
+### 命令控件共有属性
+
+适用于 `PushButton`、`LineEdit`、`ComboBox`、`ToggleSwitch`、`Slider`、`SpinBox`。
+
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
+- `commandTemplate`（发送模板，文本）默认 `"{value}"`
+- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
+- `frameHeader`（帧头(HEX)，文本）默认 `""`
+- `frameTail`（帧尾(HEX)，文本）默认 `""`
+- `byteOrder`（字节序，选项）默认 `"大端(BE)"`，可选 `"大端(BE)"` `"小端(LE)"`
+- `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
+- `mbSlave`（从站地址，整数）默认 `1`，范围 1–247
+
+<a id="link-common"></a>
+
+### 链路卡片共有属性
+
+适用于 `SerialConfigCard`、`TcpConfigCard`、`UdpConfigCard`、`MqttConfigCard`。
+
+- `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
+- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
+- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
+- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
+- `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
+
 ### 基础控件
 
 #### `PushButton` 按钮
 
 默认尺寸 120×36，最小 30×20
 
+另见[命令控件共有属性](#command-common)。
+
 - `text`（文本，文本）默认 `"按钮"`
 - `enabled`（启用，true/false）默认 `true`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `command`（发送内容，命令）默认 `""`
-- `commandTemplate`（发送模板，文本）默认 `"{value}"`
-- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `frameHeader`（帧头(HEX)，文本）默认 `""`
-- `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `byteOrder`（字节序，选项）默认 `"大端(BE)"`，可选 `"大端(BE)"` `"小端(LE)"`
-- `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `mbSlave`（从站地址，整数）默认 `1`，范围 1–247
 - `mbFunc`（功能码，选项）默认 `"03 读保持寄存器"`，可选 `"01 读线圈"` `"02 读离散输入"` `"03 读保持寄存器"` `"04 读输入寄存器"` `"05 写单线圈"` `"06 写单寄存器"` `"16 写多个寄存器"`
 - `mbAddress`（寄存器地址，整数）默认 `0`，范围 0–65535
 - `mbDataType`（数据类型，选项）默认 `"uint16"`，可选 `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -48,19 +69,13 @@
 
 默认尺寸 200×36，最小 30×20
 
+另见[命令控件共有属性](#command-common)。
+
 - `placeholderText`（占位文本，文本）默认 `"请输入..."`
 - `text`（默认值，文本）默认 `""`
 - `readOnly`（只读，true/false）默认 `false`
 - `sendOnEnter`（回车发送，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
-- `commandTemplate`（发送模板，文本）默认 `"{value}"`
-- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `frameHeader`（帧头(HEX)，文本）默认 `""`
-- `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `byteOrder`（字节序，选项）默认 `"大端(BE)"`，可选 `"大端(BE)"` `"小端(LE)"`
-- `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `mbSlave`（从站地址，整数）默认 `1`，范围 1–247
 - `mbFunc`（功能码，选项）默认 `"06 写单寄存器"`，可选 `"03 读保持寄存器"` `"04 读输入寄存器"` `"05 写单线圈"` `"06 写单寄存器"` `"16 写多个寄存器"`
 - `mbAddress`（寄存器地址，整数）默认 `0`，范围 0–65535
 - `mbDataType`（数据类型，选项）默认 `"uint16"`，可选 `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -70,19 +85,13 @@
 
 默认尺寸 160×36，最小 30×20
 
+另见[命令控件共有属性](#command-common)。
+
 - `items`（选项，多行文本）默认 `"选项1\n选项2\n选项3"`
 - `currentIndex`（默认选项，整数）默认 `0`，范围 0–99
 - `sendOnSelect`（选中发送，true/false）默认 `false`
 - `commands`（发送命令表，多行文本）默认 `""`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
-- `commandTemplate`（发送模板，文本）默认 `"{value}"`
-- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `frameHeader`（帧头(HEX)，文本）默认 `""`
-- `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `byteOrder`（字节序，选项）默认 `"大端(BE)"`，可选 `"大端(BE)"` `"小端(LE)"`
-- `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `mbSlave`（从站地址，整数）默认 `1`，范围 1–247
 - `mbFunc`（功能码，选项）默认 `"06 写单寄存器"`，可选 `"03 读保持寄存器"` `"04 读输入寄存器"` `"05 写单线圈"` `"06 写单寄存器"` `"16 写多个寄存器"`
 - `mbAddress`（寄存器地址，整数）默认 `0`，范围 0–65535
 - `mbDataType`（数据类型，选项）默认 `"uint16"`，可选 `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -93,19 +102,13 @@
 
 默认尺寸 140×30，最小 30×20；绑定数据时写入 `checked`
 
+另见[命令控件共有属性](#command-common)。
+
 - `label`（标签，文本）默认 `"开关"`
 - `checked`（默认开启，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
 - `onCommand`（开启命令，命令）默认 `""`
 - `offCommand`（关闭命令，命令）默认 `""`
-- `commandTemplate`（发送模板，文本）默认 `"{value}"`
-- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `frameHeader`（帧头(HEX)，文本）默认 `""`
-- `frameTail`（帧尾(HEX)，文本）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `byteOrder`（字节序，选项）默认 `"大端(BE)"`，可选 `"大端(BE)"` `"小端(LE)"`
-- `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `mbSlave`（从站地址，整数）默认 `1`，范围 1–247
 - `mbAddress`（线圈地址，整数）默认 `0`，范围 0–65535
 - `notify`（切换通知，true/false）默认 `false`
 - `notifyTitle`（通知标题，文本）默认 `"提示"`
@@ -117,20 +120,14 @@
 
 默认尺寸 200×30，最小 30×20；绑定数据时写入 `value`
 
+另见[命令控件共有属性](#command-common)。
+
 - `minimum`（最小值，整数）默认 `0`，范围 -99999–99999
 - `maximum`（最大值，整数）默认 `100`，范围 -99999–99999
 - `value`（默认值，整数）默认 `50`，范围 -99999–99999
 - `showRange`（显示上下限，true/false）默认 `false`，在滑块两端显示最小值和最大值
 - `sendOnChange`（变化发送，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
-- `commandTemplate`（发送模板，文本）默认 `"{value}"`
-- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `frameHeader`（帧头(HEX)，文本）默认 `""`
-- `frameTail`（帧尾(HEX)，文本）默认 `""`
-- `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `dataType`（数据类型，选项）默认 `"uint16"`，可选 `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `byteOrder`（字节序，选项）默认 `"大端(BE)"`，可选 `"大端(BE)"` `"小端(LE)"`
-- `mbSlave`（从站地址，整数）默认 `1`，范围 1–247
 - `mbFunc`（功能码，选项）默认 `"06 写单寄存器"`，可选 `"05 写单线圈"` `"06 写单寄存器"` `"16 写多个寄存器"`
 - `mbAddress`（寄存器地址，整数）默认 `0`，范围 0–65535
 - `mbDataType`（数据类型，选项）默认 `"uint16"`，可选 `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -140,20 +137,14 @@
 
 默认尺寸 140×36，最小 30×20；绑定数据时写入 `value`
 
+另见[命令控件共有属性](#command-common)。
+
 - `minimum`（最小值，整数）默认 `0`，范围 -99999–99999
 - `maximum`（最大值，整数）默认 `100`，范围 -99999–99999
 - `value`（默认值，整数）默认 `0`，范围 -99999–99999
 - `suffix`（后缀，文本）默认 `""`
 - `sendOnChange`（变化发送，true/false）默认 `false`
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
-- `commandTemplate`（发送模板，文本）默认 `"{value}"`
-- `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
-- `frameHeader`（帧头(HEX)，文本）默认 `""`
-- `frameTail`（帧尾(HEX)，文本）默认 `""`
-- `commandNewline`（换行符，选项）默认 `"\\r\\n"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `dataType`（数据类型，选项）默认 `"uint16"`，可选 `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `byteOrder`（字节序，选项）默认 `"大端(BE)"`，可选 `"大端(BE)"` `"小端(LE)"`
-- `mbSlave`（从站地址，整数）默认 `1`，范围 1–247
 - `mbFunc`（功能码，选项）默认 `"06 写单寄存器"`，可选 `"05 写单线圈"` `"06 写单寄存器"` `"16 写多个寄存器"`
 - `mbAddress`（寄存器地址，整数）默认 `0`，范围 0–65535
 - `mbDataType`（数据类型，选项）默认 `"uint16"`，可选 `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
@@ -284,6 +275,7 @@
 - `curveMbRegOrder`（寄存器序(MB)，选项）默认 `"大端(AB CD)"`，可选 `"大端(AB CD)"` `"小端(CD AB)"`
 - `curveMbFcFilter`（功能码过滤，整数）默认 `-1`，范围 -1–255
 - `curveMbSlaveFilter`（从站过滤，整数）默认 `-1`，范围 -1–255
+- `curveExpression`（转换表达式，文本）默认 `""`
 
 #### `GaugeMeter` 仪表盘
 
@@ -309,13 +301,11 @@
 
 默认尺寸 360×320，最小 200×50
 
+另见[链路卡片共有属性](#link-common)。
+
 - `title`（标题，文本）默认 `"串口配置"`
 - `displayMode`（显示模式，选项）默认 `"完整"`，可选 `"完整"` `"简洁"` `"单行"`
-- `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
 - `modbusRole`（Modbus 角色，选项）默认 `"主站"`，可选 `"主站"` `"从站"`，从站：解析模式为 modbus 或 modbus_tcp 时应答外部主站
-- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
-- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
-- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
 - `modbusDelay`（响应延时(ms)，整数）默认 `0`，范围 0–5000
 - `modbusExceptions`（异常响应，true/false）默认 `true`，关掉后出错的请求不应答
 - `slaveCoStart`（线圈起始，整数）默认 `0`，范围 0–65535
@@ -327,7 +317,6 @@
 - `slaveIrStart`（输入寄存器起始，整数）默认 `0`，范围 0–65535
 - `slaveIrCount`（输入寄存器数量，整数）默认 `100`，范围 0–10000
 - `slaveInit`（初始值，多行文本）默认 `""`，每行一条 `区地址=值`，如 `hr100=1234`、`co3=1`；寄存器 −32768–65535，线圈、离散输入 0 或 1
-- `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
 - `defaultBaud`（默认波特率，选项）默认 `"115200"`，可选 `"9600"` `"19200"` `"38400"` `"57600"` `"115200"` `"230400"` `"460800"` `"921600"`
 - `defaultDatabits`（默认数据位，选项）默认 `"8"`，可选 `"5"` `"6"` `"7"` `"8"`
 - `defaultParity`（默认校验位，选项）默认 `"None"`，可选 `"None"` `"Even"` `"Odd"` `"Mark"` `"Space"`
@@ -338,16 +327,14 @@
 
 默认尺寸 360×250，最小 240×50
 
+另见[链路卡片共有属性](#link-common)。
+
 - `title`（标题，文本）默认 `"TCP 配置"`
 - `displayMode`（显示模式，选项）默认 `"完整"`，可选 `"完整"` `"简洁"`
 - `defaultMode`（默认模式，选项）默认 `"客户端"`，可选 `"客户端"` `"服务端"`
 - `defaultHost`（默认地址，文本）默认 `"127.0.0.1"`
 - `defaultPort`（默认端口，整数）默认 `8080`，范围 1–65535
-- `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
 - `modbusRole`（Modbus 角色，选项）默认 `"主站"`，可选 `"主站"` `"从站"`，从站：解析模式为 modbus 或 modbus_tcp 时应答外部主站
-- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
-- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
-- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
 - `modbusDelay`（响应延时(ms)，整数）默认 `0`，范围 0–5000
 - `modbusExceptions`（异常响应，true/false）默认 `true`，关掉后出错的请求不应答
 - `slaveCoStart`（线圈起始，整数）默认 `0`，范围 0–65535
@@ -359,22 +346,19 @@
 - `slaveIrStart`（输入寄存器起始，整数）默认 `0`，范围 0–65535
 - `slaveIrCount`（输入寄存器数量，整数）默认 `100`，范围 0–10000
 - `slaveInit`（初始值，多行文本）默认 `""`，每行一条 `区地址=值`，如 `hr100=1234`、`co3=1`；寄存器 −32768–65535，线圈、离散输入 0 或 1
-- `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
 
 #### `UdpConfigCard` UDP 配置卡片
 
 默认尺寸 360×220，最小 240×50
+
+另见[链路卡片共有属性](#link-common)。
 
 - `title`（标题，文本）默认 `"UDP 配置"`
 - `displayMode`（显示模式，选项）默认 `"完整"`，可选 `"完整"` `"简洁"`
 - `defaultLocalPort`（默认本地端口，整数）默认 `0`，范围 0–65535，0 表示由系统选一个空闲端口
 - `defaultHost`（默认远程地址，文本）默认 `"127.0.0.1"`，留空则回复最后发送方
 - `defaultPort`（默认远程端口，整数）默认 `8080`，范围 1–65535
-- `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
 - `modbusRole`（Modbus 角色，选项）默认 `"主站"`，可选 `"主站"` `"从站"`，从站：解析模式为 modbus 或 modbus_tcp 时应答外部主站
-- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
-- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
-- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
 - `modbusDelay`（响应延时(ms)，整数）默认 `0`，范围 0–5000
 - `modbusExceptions`（异常响应，true/false）默认 `true`，关掉后出错的请求不应答
 - `slaveCoStart`（线圈起始，整数）默认 `0`，范围 0–65535
@@ -386,11 +370,12 @@
 - `slaveIrStart`（输入寄存器起始，整数）默认 `0`，范围 0–65535
 - `slaveIrCount`（输入寄存器数量，整数）默认 `100`，范围 0–10000
 - `slaveInit`（初始值，多行文本）默认 `""`，每行一条 `区地址=值`，如 `hr100=1234`、`co3=1`；寄存器 −32768–65535，线圈、离散输入 0 或 1
-- `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
 
 #### `MqttConfigCard` MQTT 配置卡片
 
 默认尺寸 380×390，最小 260×50
+
+另见[链路卡片共有属性](#link-common)。
 
 - `title`（标题，文本）默认 `"MQTT 配置"`
 - `displayMode`（显示模式，选项）默认 `"完整"`，可选 `"完整"` `"简洁"`
@@ -403,11 +388,6 @@
 - `defaultPublish`（默认发布主题，文本）默认 `"device/cmd"`
 - `defaultQos`（默认 QoS，选项）默认 `"0"`，可选 `"0"` `"1"` `"2"`
 - `defaultTls`（默认启用 TLS，true/false）默认 `false`
-- `defaultParser`（默认解析模式，选项）默认 `"项目设置"`，可选 `"项目设置"` `"line"` `"hex"` `"modbus"` `"modbus_tcp"` `"modbus_ascii"`
-- `modbusPeriod`（默认轮询(ms)，整数）默认 `500`，范围 10–60000
-- `modbusTimeout`（响应超时(ms)，整数）默认 `1000`，范围 10–60000
-- `modbusSlave`（默认从站，整数）默认 `1`，范围 1–247
-- `parserConfig`（帧格式，对象）默认 `{}`，帧格式设置，键同工程的 serial.parserConfig；默认解析模式不是「项目设置」时生效，空对象表示沿用工程设置（模式相同时）或默认值
 
 #### `DataSendCard` 数据发送卡片
 
@@ -435,3 +415,11 @@
 
 - `mbArea`（区，选项）默认 `"保持寄存器"`，可选 `"保持寄存器"` `"输入寄存器"` `"线圈"` `"离散输入"`
 - `displayFormat`（显示格式，选项）默认 `"无符号"`，可选 `"无符号"` `"有符号"` `"十六进制"`，线圈和离散输入总是显示 0/1
+
+### 工业设备与仪表
+
+共用属性、各类型默认值和设备特有选项见[工业控件参考](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/industrial.md)。
+
+### 汽车电子、电子 DIY 与嵌入式
+
+类型、默认值和反馈规则见[电子控件参考](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/electronics.md)；共用属性仍见[工业控件参考](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/industrial.md)。

@@ -24,13 +24,17 @@ with contextlib.redirect_stdout(io.StringIO()):  # qfluentwidgets prints an adve
     from app.widgets.composite import ALL_COMPOSITE
     from app.widgets.display import ALL_DISPLAY
     from app.widgets.layout import ALL_LAYOUT
+    from app.widgets.industrial import ALL_INDUSTRIAL
 
 # The line in docs/uidp-format.md and docs/uidp-widgets.md after which the generated part starts.
 MARKER = "<!-- 以下由 tools/uidp_reference.py 从控件定义生成，不要手改 -->"
 
 # In the order the main window registers them, which is the palette's order. Walking these lists rather than
 # the registry keeps the output the same whichever module a test happened to register first.
-WIDGETS = ALL_BASIC + ALL_LAYOUT + ALL_DISPLAY + ALL_CHART + ALL_COMM + ALL_COMPOSITE
+WIDGETS = ALL_BASIC + ALL_LAYOUT + ALL_DISPLAY + ALL_CHART + ALL_COMM + ALL_COMPOSITE + ALL_INDUSTRIAL
+INDUSTRIAL_TYPES = {meta.type_name for meta in ALL_INDUSTRIAL}
+INDUSTRIAL_REFERENCE = "https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/industrial.md"
+ELECTRONICS_REFERENCE = "https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/electronics.md"
 
 TYPE_TEXT = {
     PropType.STRING: "文本", PropType.INT: "整数", PropType.FLOAT: "小数", PropType.BOOL: "true/false",
@@ -53,17 +57,51 @@ def widget_index() -> str:
     its name and default size."""
     lines = {}
     for meta in WIDGETS:
+        if meta.type_name in INDUSTRIAL_TYPES:
+            continue
         lines.setdefault(meta.category.value, []).append(
             f"`{meta.type_name}` {meta.display_name}（{meta.default_width}×{meta.default_height}）")
-    return "\n" + "".join(f"- {category}：{'、'.join(entries)}\n" for category, entries in lines.items())
+    return ("\n" + "".join(f"- {category}：{'、'.join(entries)}\n" for category, entries in lines.items())
+            + f"- [工业设备与工业仪表的类型和默认值]({INDUSTRIAL_REFERENCE})\n"
+            + f"- [汽车电子、电子 DIY 与嵌入式的类型和默认值]({ELECTRONICS_REFERENCE})\n")
+
+
+SHARED_GROUPS = (
+    ("command-common", "命令控件共有属性", ("PushButton", "LineEdit", "ComboBox", "ToggleSwitch", "Slider", "SpinBox")),
+    ("link-common", "链路卡片共有属性", ("SerialConfigCard", "TcpConfigCard", "UdpConfigCard", "MqttConfigCard")),
+)
+
+
+def shared_properties(members):
+    """Only properties whose complete definitions match in every member are shared."""
+    metas = {meta.type_name: meta for meta in WIDGETS}
+    return [prop for prop in metas[members[0]].properties
+            if all(any(other == prop for other in metas[name].properties) for name in members[1:])]
+
+
+def property_line(prop):
+    line = f"- `{prop.name}`（{prop.label}，{TYPE_TEXT[prop.prop_type]}）默认 {_json(prop.default)}"
+    if prop.min_val is not None and prop.max_val is not None:
+        line += f"，范围 {_number(prop.min_val)}–{_number(prop.max_val)}"
+    if prop.options:
+        line += "，可选 " + " ".join(_json(option) for option in prop.options)
+    if prop.description:
+        line += "，" + prop.description
+    return line + "\n"
 
 
 def widget_reference() -> str:
     """Every widget type with its default size, the property a binding writes and each property's default,
     range and options, as Markdown."""
     out = []
+    for anchor, title, members in SHARED_GROUPS:
+        out.append(f'\n<a id="{anchor}"></a>\n\n### {title}\n\n')
+        out.append("适用于 " + "、".join(f"`{member}`" for member in members) + "。\n\n")
+        out.extend(property_line(prop) for prop in shared_properties(members))
     category = None
     for meta in WIDGETS:
+        if meta.type_name in INDUSTRIAL_TYPES:
+            continue
         if meta.category != category:
             out.append(f"\n### {meta.category.value}\n")
             category = meta.category
@@ -74,15 +112,16 @@ def widget_reference() -> str:
         if meta.type_name in BIND_PROPERTIES:
             line += f"；绑定数据时写入 `{BIND_PROPERTIES[meta.type_name]}`"
         out.append(line + "\n\n")
+        common = []
+        for anchor, title, members in SHARED_GROUPS:
+            if meta.type_name in members:
+                common.extend(shared_properties(members))
+                out.append(f"另见[{title}](#{anchor})。\n\n")
         for prop in meta.properties:
-            line = f"- `{prop.name}`（{prop.label}，{TYPE_TEXT[prop.prop_type]}）默认 {_json(prop.default)}"
-            if prop.min_val is not None and prop.max_val is not None:
-                line += f"，范围 {_number(prop.min_val)}–{_number(prop.max_val)}"
-            if prop.options:
-                line += "，可选 " + " ".join(_json(option) for option in prop.options)
-            if prop.description:
-                line += "，" + prop.description
-            out.append(line + "\n")
+            if prop not in common:
+                out.append(property_line(prop))
+    out.append(f"\n### 工业设备与仪表\n\n共用属性、各类型默认值和设备特有选项见[工业控件参考]({INDUSTRIAL_REFERENCE})。\n")
+    out.append(f"\n### 汽车电子、电子 DIY 与嵌入式\n\n类型、默认值和反馈规则见[电子控件参考]({ELECTRONICS_REFERENCE})；共用属性仍见[工业控件参考]({INDUSTRIAL_REFERENCE})。\n")
     return "".join(out)
 
 

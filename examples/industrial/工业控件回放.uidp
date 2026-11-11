@@ -1,0 +1,604 @@
+{
+  "version": "1.0",
+  "appName": "工业控件回放",
+  "canvas": {
+    "width": 940,
+    "height": 679,
+    "gridSize": 10
+  },
+  "serial": {
+    "parser": "line",
+    "parserConfig": {}
+  },
+  "widgets": [
+    {
+      "type": "Label",
+      "id": "heading",
+      "geometry": {
+        "x": 20,
+        "y": 10,
+        "w": 890,
+        "h": 32
+      },
+      "properties": {
+        "text": "工业设备与仪表 · 模拟反馈",
+        "fontSize": 20,
+        "bold": true
+      }
+    },
+    {
+      "type": "TcpConfigCard",
+      "id": "replay_link",
+      "geometry": {
+        "x": 20,
+        "y": 50,
+        "w": 900,
+        "h": 174
+      },
+      "properties": {
+        "title": "本机回放",
+        "defaultHost": "127.0.0.1",
+        "defaultPort": 8765,
+        "defaultParser": "line",
+        "displayMode": "简洁"
+      }
+    },
+    {
+      "type": "TabWidget",
+      "id": "gallery",
+      "geometry": {
+        "x": 20,
+        "y": 240,
+        "w": 900,
+        "h": 419
+      },
+      "properties": {
+        "tabNames": "过程仪表\n电量与专用仪表\n泵阀与储料\n执行与输送\n热工与配电\n工位设备",
+        "currentTab": 0,
+        "tabLayout": "自由"
+      },
+      "children": [
+        {
+          "type": "PressureGauge",
+          "id": "pressure_gauge",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "pressure_gauge"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "FlowMeter",
+          "id": "flow_meter",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "flow_meter"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "Thermometer",
+          "id": "thermometer",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "thermometer"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "MagneticLevelGauge",
+          "id": "magnetic_level_gauge",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "magnetic_level_gauge"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "DifferentialPressureGauge",
+          "id": "differential_pressure_gauge",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "differential_pressure_gauge"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "VacuumGauge",
+          "id": "vacuum_gauge",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "vacuum_gauge"
+          },
+          "tabIndex": 0
+        },
+        {
+          "type": "Rotameter",
+          "id": "rotameter",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "rotameter"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "FlowTotalizer",
+          "id": "flow_totalizer",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "flow_totalizer"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "Tachometer",
+          "id": "tachometer",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "tachometer"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "Ammeter",
+          "id": "ammeter",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "ammeter"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "Voltmeter",
+          "id": "voltmeter",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "voltmeter"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "PowerMeter",
+          "id": "power_meter",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "power_meter"
+          },
+          "tabIndex": 1
+        },
+        {
+          "type": "Pump",
+          "id": "pump",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "pump"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "OnOffValve",
+          "id": "on_off_valve",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "on_off_valve"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "ControlValve",
+          "id": "control_valve",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "control_valve"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "FlowPipe",
+          "id": "flow_pipe",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "flow_pipe"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "Tank",
+          "id": "tank",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "tank"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "Silo",
+          "id": "silo",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "silo"
+          },
+          "tabIndex": 2
+        },
+        {
+          "type": "Motor",
+          "id": "motor",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "motor"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "Fan",
+          "id": "fan",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "fan"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "BeltConveyor",
+          "id": "belt_conveyor",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "belt_conveyor"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "ScrewConveyor",
+          "id": "screw_conveyor",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "screw_conveyor"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "Cylinder",
+          "id": "cylinder",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "cylinder"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "LinearAxis",
+          "id": "linear_axis",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "linear_axis"
+          },
+          "tabIndex": 3
+        },
+        {
+          "type": "Heater",
+          "id": "heater",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "heater"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "HeatExchanger",
+          "id": "heat_exchanger",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "heat_exchanger"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "CoolingTower",
+          "id": "cooling_tower",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "cooling_tower"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "Boiler",
+          "id": "boiler",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "boiler"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "VFD",
+          "id": "vfd",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "vfd"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "StackLight",
+          "id": "stack_light",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "stack_light"
+          },
+          "tabIndex": 4
+        },
+        {
+          "type": "WeighHopper",
+          "id": "weigh_hopper",
+          "geometry": {
+            "x": 14,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "weigh_hopper"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "Mixer",
+          "id": "mixer",
+          "geometry": {
+            "x": 306,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "mixer"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "AirCompressor",
+          "id": "air_compressor",
+          "geometry": {
+            "x": 598,
+            "y": 47,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "air_compressor"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "Gripper",
+          "id": "gripper",
+          "geometry": {
+            "x": 14,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "gripper"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "CircuitBreaker",
+          "id": "circuit_breaker",
+          "geometry": {
+            "x": 306,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "circuit_breaker"
+          },
+          "tabIndex": 5
+        },
+        {
+          "type": "Contactor",
+          "id": "contactor",
+          "geometry": {
+            "x": 598,
+            "y": 225,
+            "w": 278,
+            "h": 162
+          },
+          "binding": {
+            "parseMode": "键值匹配",
+            "key": "contactor"
+          },
+          "tabIndex": 5
+        }
+      ]
+    }
+  ]
+}

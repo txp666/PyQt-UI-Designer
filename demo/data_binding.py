@@ -6,10 +6,138 @@ from ui import RealtimeLineChart
 from ui import slider_of
 
 """Conversions shared by live bindings and standalone exported applications."""
+import ast
+from functools import lru_cache
 import math
+import operator
 import struct
 
 from i18n import tr
+
+
+_EXPRESSION_NODES = (
+    ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.Name,
+    ast.Load, ast.Constant, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
+    ast.Mod, ast.Pow, ast.LShift, ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd,
+    ast.Invert, ast.Not, ast.UAdd, ast.USub, ast.And, ast.Or, ast.Eq, ast.NotEq,
+    ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+)
+
+
+@lru_cache(maxsize=256)
+def _curve_expression_code(expression):
+    # Cache rejected expressions too: malformed project text is received on every sample.
+    try:
+        if len(expression) > 4096:
+            return None
+        tree = ast.parse(expression.strip(), mode="eval")
+        nodes = list(ast.walk(tree))
+        if len(nodes) > 512:
+            return None
+        for node in nodes:
+            if not isinstance(node, _EXPRESSION_NODES):
+                return None
+            if isinstance(node, ast.Name) and node.id != "value":
+                return None
+            if isinstance(node, ast.Constant) and type(node.value) not in (int, float, bool):
+                return None
+        return tree.body
+    except (SyntaxError, ValueError, TypeError, RecursionError):
+        return None
+
+
+def _expression_number(value):
+    if type(value) not in (int, float, bool):
+        raise ValueError("Expression requires a real number")
+    if isinstance(value, int):
+        if not -(1 << 63) <= value < (1 << 63):
+            raise OverflowError("Expression integer exceeds 64 bits")
+    elif not math.isfinite(value):
+        raise ValueError("Expression requires a finite number")
+    return value
+
+
+_EXPRESSION_BINARY = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+    ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod,
+    ast.BitAnd: operator.and_, ast.BitOr: operator.or_, ast.BitXor: operator.xor,
+}
+_EXPRESSION_COMPARE = {
+    ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
+    ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge,
+}
+
+
+def _expression_eval(node, value):
+    if isinstance(node, ast.Constant):
+        return _expression_number(node.value)
+    if isinstance(node, ast.Name):
+        return _expression_number(value)
+    if isinstance(node, ast.BoolOp):
+        for child in node.values:
+            result = _expression_eval(child, value)
+            if isinstance(node.op, ast.And) and not result:
+                return result
+            if isinstance(node.op, ast.Or) and result:
+                return result
+        return result
+    if isinstance(node, ast.Compare):
+        left = _expression_eval(node.left, value)
+        for op, child in zip(node.ops, node.comparators):
+            right = _expression_eval(child, value)
+            if not _EXPRESSION_COMPARE[type(op)](left, right):
+                return False
+            left = right
+        return True
+    if isinstance(node, ast.UnaryOp):
+        operand = _expression_eval(node.operand, value)
+        operation = {ast.UAdd: operator.pos, ast.USub: operator.neg,
+                     ast.Not: operator.not_, ast.Invert: operator.invert}[type(node.op)]
+        return _expression_number(operation(operand))
+    left = _expression_eval(node.left, value)
+    right = _expression_eval(node.right, value)
+    if isinstance(node.op, (ast.LShift, ast.RShift)):
+        if not isinstance(left, int) or not isinstance(right, int) or right < 0:
+            raise ValueError("Invalid shift")
+        if isinstance(node.op, ast.RShift):
+            result = left >> min(right, 63)
+        elif left == 0:
+            result = 0
+        elif right >= 64:
+            raise OverflowError("Left shift exceeds 64 bits")
+        else:
+            result = left << right  # At most 127 bits before the range check.
+    elif isinstance(node.op, ast.Pow):
+        if isinstance(left, int) and isinstance(right, int) and right >= 0:
+            if left in (-1, 0, 1):
+                result = 1 if right == 0 else (left if left != -1 or right % 2 else 1)
+            elif right > 63:
+                raise OverflowError("Integer power exceeds 64 bits")
+            else:
+                # Each multiplication has two 64-bit operands; stop before the next step.
+                result = 1
+                for _ in range(right):
+                    result = _expression_number(result * left)
+        else:
+            result = math.pow(left, right)
+    else:
+        result = _EXPRESSION_BINARY[type(node.op)](left, right)
+    return _expression_number(result)
+
+
+def curve_expression(raw_value, expression):
+    """Evaluate bounded numeric curve arithmetic; failures preserve the original numeric input."""
+    if not expression:
+        return raw_value
+    if isinstance(raw_value, str):
+        raw_value = binding_float(raw_value)
+    else:
+        binding_float(raw_value)
+    try:
+        node = _curve_expression_code(expression)
+        return _expression_eval(node, raw_value) if node is not None else raw_value
+    except Exception:
+        return raw_value
 
 
 def binding_integer(value):
@@ -555,6 +683,7 @@ class DataBinding:
         # Reads what the Modbus bindings and chart curves show; the link cards, in document
         # order, register their own links on the hub, hand it their settings and show its status.
         self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)
+        ui._modbus_poller = self.modbus_poller
         for widget_id in ['serial']:
             ui.widgets[widget_id].set_serial_handler(hub)
             ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)

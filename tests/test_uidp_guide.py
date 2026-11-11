@@ -40,11 +40,37 @@ class UidpGuideTests(unittest.TestCase):
         self.assertLess(size, 24000, f"docs/uidp-format.md is {size} bytes: keep it under 24 000, "
                                      "details belong in uidp-widgets.md")
 
-    def test_example_project_is_valid(self):
-        # The example is what an AI copies from first, and a misspelt property or option would do nothing.
-        match = re.search(r"## 一个完整的例子.*?```json\n(.*?)\n```", self.document, re.S)
-        self.assertIsNotNone(match, 'no ```json example under "## 一个完整的例子"')
-        self.assertEqual(check_uidp.problems(json.loads(match.group(1))), [])
+    def test_linked_local_templates_are_valid(self):
+        links = re.findall(r"\]\((\.\./examples/[^)]+\.uidp)\)", self.document)
+        self.assertTrue(links, "the guide should link to a working local project")
+        for link in links:
+            with self.subTest(template=link):
+                path = ROOT / "docs" / link
+                self.assertTrue(path.is_file())
+                self.assertEqual(check_uidp.problems(json.loads(path.read_text(encoding="utf-8"))), [])
+
+    def test_shared_sections_restore_every_property_without_hiding_differences(self):
+        document = _doc("uidp-widgets.md")
+        for anchor, title, members in uidp_reference.SHARED_GROUPS:
+            common = uidp_reference.shared_properties(members)
+            self.assertTrue(common)
+            self.assertIn(f'<a id="{anchor}"></a>', document)
+            for name in members:
+                meta = next(meta for meta in uidp_reference.WIDGETS if meta.type_name == name)
+                local = [prop for prop in meta.properties if prop not in common]
+                self.assertEqual(sorted(common + local, key=lambda prop: prop.name),
+                                 sorted(meta.properties, key=lambda prop: prop.name))
+                section = document.split(f"#### `{name}`", 1)[1].split("\n#### ", 1)[0]
+                self.assertIn(f"[{title}](#{anchor})", section)
+                for prop in common:
+                    self.assertNotIn(uidp_reference.property_line(prop), section)
+                for prop in local:
+                    self.assertIn(uidp_reference.property_line(prop), section)
+
+    def test_checker_accepts_per_curve_expression(self):
+        self.assertEqual(check_uidp.problems({"widgets": [{
+            "type": "RealtimeChart", "id": "chart", "properties": {
+                "_curve_0_expression": "value * 0.1", "curveExpression": ""}}]}), [])
 
     def test_checker_reports_misspellings(self):
         project = {"widgets": [

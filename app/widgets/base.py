@@ -56,6 +56,11 @@ class WidgetCategory(Enum):
     DISPLAY = N_("显示控件")
     CHART = N_("图表控件")
     COMM = N_("通信控件")
+    INDUSTRIAL_EQUIPMENT = N_("工业设备")
+    INDUSTRIAL_INSTRUMENT = N_("工业仪表")
+    AUTOMOTIVE = N_("汽车电子")
+    DIY = N_("电子 DIY")
+    EMBEDDED = N_("嵌入式")
 
 
 @dataclass

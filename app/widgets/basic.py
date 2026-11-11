@@ -21,6 +21,20 @@ def _modbus_functions(*codes):
     return [name for name, code in MODBUS_FUNCTIONS.items() if code in codes]
 
 
+def button_modbus_value(props):
+    """Encode a button's logical 1 as the FC05 wire value when sending or exporting."""
+    value = props.get("mbValue", 1)
+    if MODBUS_FUNCTIONS.get(props.get("mbFunc")) == 0x05:
+        if isinstance(value, str):
+            try:
+                value = int(value)
+            except ValueError:
+                return value
+        if type(value) in (int, float) and value == 1:
+            return 0xFF00
+    return value
+
+
 # ---------------------------------------------------------------------------
 # Widget metadata definitions
 # ---------------------------------------------------------------------------
@@ -371,10 +385,11 @@ def create_widget(type_name: str, props: dict, parent: QWidget = None) -> QWidge
     from app.widgets.chart import create_chart_widget
     from app.widgets.comm import create_comm_widget
     from app.widgets.composite import create_composite_widget
+    from app.widgets.industrial import create_industrial_widget
 
     for factory in (create_layout_widget, create_display_widget,
                     create_chart_widget, create_comm_widget,
-                    create_composite_widget):
+                    create_composite_widget, create_industrial_widget):
         result = factory(type_name, props, parent)
         if result is not None:
             return result
@@ -453,8 +468,9 @@ def apply_property(widget: QWidget, type_name: str, prop_name: str, value):
         from app.widgets.chart import apply_chart_property
         from app.widgets.comm import apply_comm_property
         from app.widgets.composite import apply_composite_property
+        from app.widgets.industrial import apply_industrial_property
 
         for applier in (apply_layout_property, apply_display_property,
                         apply_chart_property, apply_comm_property,
-                        apply_composite_property):
+                        apply_composite_property, apply_industrial_property):
             applier(widget, type_name, prop_name, value)

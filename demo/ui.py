@@ -654,10 +654,138 @@ class SignalConnections:
                 pass
 
 """Conversions shared by live bindings and standalone exported applications."""
+import ast
+from functools import lru_cache
 import math
+import operator
 import struct
 
 from i18n import tr
+
+
+_EXPRESSION_NODES = (
+    ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.Name,
+    ast.Load, ast.Constant, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
+    ast.Mod, ast.Pow, ast.LShift, ast.RShift, ast.BitOr, ast.BitXor, ast.BitAnd,
+    ast.Invert, ast.Not, ast.UAdd, ast.USub, ast.And, ast.Or, ast.Eq, ast.NotEq,
+    ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+)
+
+
+@lru_cache(maxsize=256)
+def _curve_expression_code(expression):
+    # Cache rejected expressions too: malformed project text is received on every sample.
+    try:
+        if len(expression) > 4096:
+            return None
+        tree = ast.parse(expression.strip(), mode="eval")
+        nodes = list(ast.walk(tree))
+        if len(nodes) > 512:
+            return None
+        for node in nodes:
+            if not isinstance(node, _EXPRESSION_NODES):
+                return None
+            if isinstance(node, ast.Name) and node.id != "value":
+                return None
+            if isinstance(node, ast.Constant) and type(node.value) not in (int, float, bool):
+                return None
+        return tree.body
+    except (SyntaxError, ValueError, TypeError, RecursionError):
+        return None
+
+
+def _expression_number(value):
+    if type(value) not in (int, float, bool):
+        raise ValueError("Expression requires a real number")
+    if isinstance(value, int):
+        if not -(1 << 63) <= value < (1 << 63):
+            raise OverflowError("Expression integer exceeds 64 bits")
+    elif not math.isfinite(value):
+        raise ValueError("Expression requires a finite number")
+    return value
+
+
+_EXPRESSION_BINARY = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+    ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod,
+    ast.BitAnd: operator.and_, ast.BitOr: operator.or_, ast.BitXor: operator.xor,
+}
+_EXPRESSION_COMPARE = {
+    ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
+    ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge,
+}
+
+
+def _expression_eval(node, value):
+    if isinstance(node, ast.Constant):
+        return _expression_number(node.value)
+    if isinstance(node, ast.Name):
+        return _expression_number(value)
+    if isinstance(node, ast.BoolOp):
+        for child in node.values:
+            result = _expression_eval(child, value)
+            if isinstance(node.op, ast.And) and not result:
+                return result
+            if isinstance(node.op, ast.Or) and result:
+                return result
+        return result
+    if isinstance(node, ast.Compare):
+        left = _expression_eval(node.left, value)
+        for op, child in zip(node.ops, node.comparators):
+            right = _expression_eval(child, value)
+            if not _EXPRESSION_COMPARE[type(op)](left, right):
+                return False
+            left = right
+        return True
+    if isinstance(node, ast.UnaryOp):
+        operand = _expression_eval(node.operand, value)
+        operation = {ast.UAdd: operator.pos, ast.USub: operator.neg,
+                     ast.Not: operator.not_, ast.Invert: operator.invert}[type(node.op)]
+        return _expression_number(operation(operand))
+    left = _expression_eval(node.left, value)
+    right = _expression_eval(node.right, value)
+    if isinstance(node.op, (ast.LShift, ast.RShift)):
+        if not isinstance(left, int) or not isinstance(right, int) or right < 0:
+            raise ValueError("Invalid shift")
+        if isinstance(node.op, ast.RShift):
+            result = left >> min(right, 63)
+        elif left == 0:
+            result = 0
+        elif right >= 64:
+            raise OverflowError("Left shift exceeds 64 bits")
+        else:
+            result = left << right  # At most 127 bits before the range check.
+    elif isinstance(node.op, ast.Pow):
+        if isinstance(left, int) and isinstance(right, int) and right >= 0:
+            if left in (-1, 0, 1):
+                result = 1 if right == 0 else (left if left != -1 or right % 2 else 1)
+            elif right > 63:
+                raise OverflowError("Integer power exceeds 64 bits")
+            else:
+                # Each multiplication has two 64-bit operands; stop before the next step.
+                result = 1
+                for _ in range(right):
+                    result = _expression_number(result * left)
+        else:
+            result = math.pow(left, right)
+    else:
+        result = _EXPRESSION_BINARY[type(node.op)](left, right)
+    return _expression_number(result)
+
+
+def curve_expression(raw_value, expression):
+    """Evaluate bounded numeric curve arithmetic; failures preserve the original numeric input."""
+    if not expression:
+        return raw_value
+    if isinstance(raw_value, str):
+        raw_value = binding_float(raw_value)
+    else:
+        binding_float(raw_value)
+    try:
+        node = _curve_expression_code(expression)
+        return _expression_eval(node, raw_value) if node is not None else raw_value
+    except Exception:
+        return raw_value
 
 
 def binding_integer(value):
@@ -902,7 +1030,7 @@ _STRUCT_FMT = {
 
 _DEFAULT_CURVE_CFG = {
     "name": "曲线1", "parseMode": "键值匹配",  # i18n: value
-    "key": "", "jsonPath": "",
+    "key": "", "jsonPath": "", "expression": "",
     "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)",  # i18n: value
     "frameHeader": "", "frameTail": "",
     "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",  # i18n: value
@@ -912,6 +1040,7 @@ _DEFAULT_CURVE_CFG = {
 # Virtual prop name -> per-curve storage suffix
 _CURVE_FIELD_MAP = {
     "curveName": "name", "curveParseMode": "parseMode",
+    "curveExpression": "expression",
     "curveKey": "key", "curveJsonPath": "jsonPath",
     "curveByteOffset": "byteOffset", "curveDataType": "dataType",
     "curveByteOrder": "byteOrder", "curveFrameHeader": "frameHeader",
@@ -1586,7 +1715,7 @@ class RealtimeLineChart(QWidget):
                 elif pm == "Modbus":
                     val = self._extract_modbus(cfg, data)
                 if val is not None:
-                    self.append_value(i, val)
+                    self.append_value(i, curve_expression(val, cfg.get("expression")))
             except (ValueError, TypeError, OverflowError, struct.error):
                 # Reject a bad sample without losing the other channels in this frame.
                 continue
@@ -1606,7 +1735,7 @@ class RealtimeLineChart(QWidget):
                 if payload is not None and off >= 0 and off + sz <= len(payload):
                     try:
                         val = struct.unpack(bo + fmt_c, payload[off:off + sz])[0]
-                        self.append_value(i, float(val))
+                        self.append_value(i, curve_expression(val, cfg.get("expression")))
                     except (ValueError, TypeError, OverflowError, struct.error):
                         pass
 
@@ -2849,7 +2978,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self.widgets['stop'].show()
         self.widgets['stop'].clicked.connect(lambda: self._send_text_command(str('STOP'), '\r\n'))
 
-        self.widgets['chart'] = RealtimeLineChart(self._page); self.widgets['chart'].configure('[{"name": "温度", "parseMode": "键值匹配", "key": "temperature", "jsonPath": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器"}, {"name": "压力", "parseMode": "键值匹配", "key": "pressure", "jsonPath": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器"}]', 200); self.widgets['chart'].set_title('实时采样')
+        self.widgets['chart'] = RealtimeLineChart(self._page); self.widgets['chart'].configure('[{"name": "温度", "parseMode": "键值匹配", "key": "temperature", "jsonPath": "", "expression": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器"}, {"name": "压力", "parseMode": "键值匹配", "key": "pressure", "jsonPath": "", "expression": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器"}]', 200); self.widgets['chart'].set_title('实时采样')
         self.widgets['chart'].setGeometry(24, 355, 642, 310)
         self.widgets['chart'].show()
 
