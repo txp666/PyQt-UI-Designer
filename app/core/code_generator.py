@@ -671,10 +671,13 @@ def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
         if mode == "Modbus":
             slave = int(props.get("mbSlave", 1))
             addr = int(props.get("mbAddress", 0))
+            holding = props.get("mbArea") == "保持寄存器"  # i18n: value
+            function = 6 if holding else 5
+            on_value = 1 if holding else 0xFF00
             result.append(
                 f"        {switch_ref}.checkedChanged.connect("
-                f"lambda c: self._send_modbus({slave}, 5, {addr}, "
-                f"0xFF00 if c else 0x0000))")
+                f"lambda c: self._send_modbus({slave}, {function}, {addr}, "
+                f"{on_value} if c else 0))")
         elif on_cmd or off_cmd:
             result.append(
                 f"        {switch_ref}.checkedChanged.connect("
@@ -1033,6 +1036,9 @@ def _extract_bindings(widgets: list) -> list:
                     if w["type"] == "LEDIndicator":
                         entry["onValue"] = str(props.get("onValue", "1"))
                         entry["offValue"] = str(props.get("offValue", "0"))
+                    elif w["type"] == "ToggleSwitch":
+                        entry["onCondition"] = props.get("onCondition", "非零为开")  # i18n: value
+                        entry["onValue"] = str(props.get("onValue", "1"))
                     bindings.append(entry)
             _walk(w.get("children", []))
     _walk(widgets)
@@ -1332,7 +1338,9 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
             lines.append(f"{indent}    # Fluent normally moves its handle in the blocked valueChanged signal.")
             lines.append(f"{indent}    {control}._adjustHandlePos()")
     elif wtype == "ToggleSwitch":
-        lines.append(f"{indent}    value = binding_boolean(value)")
+        condition = b.get("onCondition", "非零为开")  # i18n: value
+        on_value = b.get("onValue", "1")
+        lines.append(f"{indent}    value = binding_switch(value, {condition!r}, {on_value!r})")
         lines.append(f"{indent}    with QSignalBlocker(w._switch):")
         lines.append(f"{indent}        w._switch.setChecked(value)")
     else:

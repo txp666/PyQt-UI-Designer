@@ -17,7 +17,7 @@ from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
 from app.core.slider_limits import slider_of
 from app.core.binding_values import (
-    binding_boolean, binding_decimals, binding_float, binding_integer, binding_led,
+    binding_boolean, binding_decimals, binding_float, binding_integer, binding_led, binding_switch,
     modbus_need, modbus_value,
 )
 
@@ -62,7 +62,9 @@ class BindingEntry:
                  mb_fc_filter: int = -1, mb_area: str = "保持寄存器",  # i18n: value
                  mb_period: int = 0,
                  led_on_value: str = "1", led_off_value: str = "0",
-                 decimals: str = "自动"):  # i18n: value
+                 decimals: str = "自动",  # i18n: value
+                 switch_on_condition: str = "非零为开",  # i18n: value
+                 switch_on_value: str = "1"):
         self.widget_id = widget_id
         self.prop_name = prop_name
         self.type_name = type_name
@@ -77,6 +79,8 @@ class BindingEntry:
         self.expression = expression
         self.led_on_value = led_on_value
         self.led_off_value = led_off_value
+        self.switch_on_condition = switch_on_condition
+        self.switch_on_value = switch_on_value
         self.frame_header = self._hex_to_bytes(frame_header)
         self.frame_tail = self._hex_to_bytes(frame_tail)
         self._raw_frames = RawFrameBuffer(self.frame_header, self.frame_tail)
@@ -316,6 +320,8 @@ class DataBindingEngine(QObject):
                 mb_period=int(binding.get("mbPeriod", 0)),
                 led_on_value=str(props.get("onValue", "1")),
                 led_off_value=str(props.get("offValue", "0")),
+                switch_on_condition=props.get("onCondition", "非零为开"),  # i18n: value
+                switch_on_value=str(props.get("onValue", "1")),
                 decimals=str(props.get("decimals", "自动")),  # i18n: value
             )
             self._bindings.append(entry)
@@ -391,7 +397,7 @@ class DataBindingEngine(QObject):
         # Device feedback updates the display without sending the value back
         # as another user command (or showing a user-action notification).
         if binding.type_name == "ToggleSwitch" and prop == "checked":
-            value = binding_boolean(value)
+            value = binding_switch(value, binding.switch_on_condition, binding.switch_on_value)
             with QSignalBlocker(widget._switch):
                 widget._switch.setChecked(value)
             return

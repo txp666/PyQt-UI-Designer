@@ -302,9 +302,11 @@ class PreviewCanvas(QWidget):
                     def _on_toggle(checked, _on=on_cmd, _off=off_cmd,
                                    _m=mode, _n=newline, _p=props, _t=tpl):
                         if _m == "Modbus":
-                            val = 0xFF00 if checked else 0x0000
+                            holding = _p.get("mbArea") == "保持寄存器"  # i18n: value
+                            val = (1 if holding else 0xFF00) if checked else 0
                             self._send_modbus_frame(
-                                {**_p, "mbFunc": "05 写单线圈"}, val)  # i18n: value
+                                {**_p, "mbFunc": "06 写单寄存器" if holding else "05 写单线圈",  # i18n: value
+                                 "mbDataType": "uint16"}, val)
                         else:
                             c = _on if checked else _off
                             if c:

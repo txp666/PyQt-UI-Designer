@@ -199,6 +199,23 @@ class BindingResilienceTests(unittest.TestCase):
             assert changes == [], changes
         """)
 
+    def test_switch_state_rules_in_preview_and_export(self):
+        self.run_both([
+            bound("ToggleSwitch", "nonzero"),
+            bound("ToggleSwitch", "exact", properties={"onCondition": "等于指定值", "onValue": "5"}),
+            bound("ToggleSwitch", "zero", properties={"onCondition": "等于指定值", "onValue": "0"}),
+        ], """
+            for value in (0, 1, 5, -1):
+                emit_data({"nonzero": value, "exact": value, "zero": value})
+                assert widgets["nonzero"]._switch.isChecked() == (value != 0)
+                assert widgets["exact"]._switch.isChecked() == (value == 5)
+                assert widgets["zero"]._switch.isChecked() == (value == 0)
+            emit_data({"exact": 5})
+            emit_data({"exact": "invalid"})
+            assert widgets["exact"]._switch.isChecked()
+            assert changes == [], changes
+        """)
+
     def test_explicit_expressions_run_before_conversion_and_keep_failure_fallback(self):
         self.run_both([
             bound("SpinBox", "scale", {"key": "raw", "expression": "value / 10"}),

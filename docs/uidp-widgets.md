@@ -106,10 +106,13 @@
 
 - `label`（标签，文本）默认 `"开关"`
 - `checked`（默认开启，true/false）默认 `false`
+- `onCondition`（开启判定，选项）默认 `"非零为开"`，可选 `"非零为开"` `"等于指定值"`
+- `onValue`（判定值，文本）默认 `"1"`
 - `onCommand`（开启命令，命令）默认 `""`
 - `offCommand`（关闭命令，命令）默认 `""`
 - `dataType`（数据类型，选项）默认 `"HEX字符串"`，可选 `"HEX字符串"` `"uint8"` `"int8"` `"uint16"` `"int16"` `"uint32"` `"int32"` `"float32"`
-- `mbAddress`（线圈地址，整数）默认 `0`，范围 0–65535
+- `mbArea`（地址类型，选项）默认 `"线圈"`，可选 `"线圈"` `"保持寄存器"`
+- `mbAddress`（线圈/寄存器地址，整数）默认 `0`，范围 0–65535
 - `notify`（切换通知，true/false）默认 `false`
 - `notifyTitle`（通知标题，文本）默认 `"提示"`
 - `notifyContent`（通知内容，文本）默认 `"开关已切换"`
