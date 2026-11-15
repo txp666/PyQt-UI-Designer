@@ -140,7 +140,7 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 - **按寄存器地址绑定**：本程序发出的读请求会被记下，响应里的寄存器同时按地址命名（如保持寄存器 `hr100`），绑定可选寄存器区和地址；轮询 PLC 的几块地址时数据不会串
 - 串口、TCP、UDP、MQTT 都提供五种解析模式（行文本、HEX 二进制帧、Modbus RTU、Modbus TCP、Modbus ASCII），并能自动识别行协议格式；HEX 二进制帧支持帧头帧尾、长度字段、校验、定长和空闲分帧，可以在工程或每张链路卡片上分别设置
 
-- **经典 S7comm**：使用独立 S7 连接卡片，按绝对 DB/M/I/Q 地址进行有类型读取和定向写入，BOOL 使用原生单个位写入。预览、源码导出和 Nuitka 打包共用后端，见 [S7 配置与示例](docs/s7.md)。
+- **经典 S7comm**：使用独立 S7 连接卡片，按绝对 DB/M/I/Q 地址进行有类型读取和定向写入，BOOL 使用原生单个位写入。预览、源码导出和 Nuitka 打包共用后端，见 [S7 配置与示例](docs/s7.md)；可使用 [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) 进行本地 PLC 模拟。
 
 ### 命令发送
 
