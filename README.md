@@ -1,39 +1,13 @@
 <p align="center">
-  <img src="logo.png" width="120" alt="PyQt UI Designer">
+  <img src="logo.png" width="110" alt="PyQt UI Designer">
   <h1 align="center">PyQt UI Designer</h1>
-  <p align="center">A visual HMI designer for hardware engineers</p>
-  <p align="center">
-    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/github/v/release/txp666/PyQt-UI-Designer?style=flat-square" alt="Release"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/txp666/PyQt-UI-Designer?style=flat-square" alt="License"></a>
-    <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey?style=flat-square" alt="Platform">
-    <a href="https://www.bilibili.com/video/BV13KHG6VEvL"><img src="https://img.shields.io/badge/Video-Bilibili-00A1D6?style=flat-square&logo=bilibili&logoColor=white" alt="Video"></a>
-    <a href="https://hmi.modusignal.cn/#python"><img src="https://img.shields.io/badge/Website-hmi.modusignal.cn-2ea44f?style=flat-square" alt="Website"></a>
-  </p>
-  <p align="center">
-    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows" alt="Download"></a>
-  </p>
-  <p align="center">
-    English •
-    <a href="README_zh.md">简体中文</a> •
-    <a href="https://hmi.modusignal.cn/#python">Website</a> •
-    <a href="https://hmi.modusignal.cn/guide/">User guide</a> •
-    <a href="#demo-video">Demo video</a> •
-    <a href="#quick-start">Quick start</a> •
-    <a href="#features">Features</a> •
-    <a href="docs/protocol.md">Protocol</a> •
-    <a href="#faq">FAQ</a> •
-    <a href="#c-version-fluenthmi-studio">C++ version</a>
-  </p>
+  <p align="center">A Python visual HMI designer for hardware engineers · built on <a href="https://github.com/zhiyiYo/PyQt-Fluent-Widgets">PyQt-Fluent-Widgets</a></p>
+  <p align="center">English · <a href="README_zh.md">简体中文</a> · <a href="https://hmi.modusignal.cn/#python">Website</a> · <a href="https://hmi.modusignal.cn/guide/">User guide</a> · <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest">Download</a></p>
 </p>
 
----
+PyQt UI Designer is the Python/PyQt5 visual HMI designer in the [modusignal](https://github.com/txp666/modusignal) tool family. Drag widgets onto a canvas, configure their properties and bind serial, TCP, UDP or MQTT data, then export **editable Python source** and package a standalone Windows or macOS app with Nuitka. It shares the `.uidp` format with [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) and the supported Custom Device features in modusignal.
 
-**PyQt UI Designer** is a no-code / low-code designer for desktop control and monitoring apps (上位机) for hardware. Drag widgets onto a canvas, set their properties, and bind them to serial, TCP, UDP or MQTT data, and it generates a standalone PyQt5 app that it can package as an exe on Windows or an `.app` on macOS. No more writing the UI, the communication code and the protocol parsing from scratch for every hardware project.
-
-> **Language**: the designer's interface is in English or Simplified Chinese (Settings → Language); the online user guide and the documents in `docs/` are in Chinese.
-
-> **Try the C++ version, [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio)**: it opens the same `.uidp` projects, with a smaller download and faster startup, and exports an app in under a second without Python or a compiler. See [C++ version: FluentHMI Studio](#c-version-fluenthmi-studio) below.
+> **Language**: choose English or Simplified Chinese in Settings → Language.
 
 ## Demo video
 
@@ -57,15 +31,15 @@ The same project runs live once it is connected to a device (the data in the scr
 
 ## C++ version: FluentHMI Studio
 
-[FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) is a C++/Qt 6 rewrite of this project with a UI built on [FluentQtWidgets](https://github.com/txp666/FluentQtWidgets); its current version is 0.1.0. It reads and writes the same `.uidp` projects, and its widgets, properties, parser modes, data bindings and command encoding match this project one to one, so a project made here can be opened, previewed and exported there as it is. Compared with this project:
+[FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) is the native C++/Qt 6 counterpart, built on [FluentQtWidgets](https://github.com/txp666/FluentQtWidgets). The two designers exchange `.uidp` projects within their supported widget and protocol features; Studio also has native CAN support that this Python designer does not provide.
 
-- **Exporting needs no Python or compiler**: export copies a prebuilt runner and adds the project and its images, which takes about 0.3 s. This project first generates Python source and then compiles it with Nuitka, and the downloaded designer needs Python and build tools installed separately before it can package.
-- **The preview is the finished app**: the preview and the exported app are the same runner, so what you see in the preview is what you get after export.
-- **Smaller downloads**: 17.7 MB on Windows (this project: 52.0 MB); on macOS a single 32.7 MB universal package covers both Apple Silicon and Intel, and the apps it exports are universal too (this project has one package per architecture, 51.7 / 60.3 MB).
-- **Faster startup, less memory**: on the same Mac it takes 0.7–1.1 s to show its window (this project: 1.5–2.2 s) and uses 71–85 MB of memory after startup (this project: 126–137 MB).
-- **In-app updates**: it checks for new versions from the settings page or at startup, downloads them and verifies the SHA-256, and swaps in the new version when you restart or quit.
+| Workflow | PyQt UI Designer | FluentHMI Studio |
+| --- | --- | --- |
+| Export | Generates editable Python source; Nuitka can package it as an executable app | Copies a prebuilt runtime and adds the project and its assets; no Python or compiler is needed to export |
+| Preview | Runs inside the designer; standalone code is generated for export | Uses the same runtime for preview and exported apps |
+| Further development | Edit the exported Python project | Develop against the C++ repository; C++ source-project export is on its roadmap |
 
-What it doesn't have yet: exporting a source project you can keep editing, and the live chart's cursor and data save / load. If you need those, keep using this project. For the full comparison and how it was measured, see [Compared with the Python version](https://github.com/txp666/FluentHMI-Studio/blob/main/README.md#compared-with-the-python-version) in the FluentHMI Studio README.
+Studio includes the live chart cursor and CSV/JSON history save/load. For platform packaging, feature scope and recorded measurements, see [Compared with the Python version](https://github.com/txp666/FluentHMI-Studio/blob/main/README.md#compared-with-the-python-version).
 
 ## Quick start
 
@@ -361,6 +335,17 @@ PyQt-UI-Designer/
 ## Feedback and contributing
 
 Bug reports and feature requests are welcome as [Issues](https://github.com/txp666/PyQt-UI-Designer/issues). Pull requests are welcome too.
+
+## Related projects
+
+| Project | Role |
+| --- | --- |
+| [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) | Native C++/Qt 6 HMI designer with standalone runtime export |
+| [PyQt UI Designer](https://github.com/txp666/PyQt-UI-Designer) | Python/PyQt5 HMI designer with editable Python source export and Nuitka packaging |
+| [modusignal](https://github.com/txp666/modusignal) | Browser device debugger and `.uidp` Custom Device editor, within browser transport limits |
+| [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) | Independent desktop and CLI classic S7comm server for testing S7 clients |
+
+The HMI tools share `.uidp` projects where their widgets and transports are supported. FluentPLC Simulator uses its own `.plcsim.json` format. S7 client support is not currently implemented in FluentHMI Studio, PyQt UI Designer or modusignal.
 
 ## License
 
