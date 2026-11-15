@@ -9,12 +9,12 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
 from qfluentwidgets import (
     ScrollArea, ExpandLayout, SettingCardGroup,
     SwitchSettingCard, ComboBoxSettingCard, CustomColorSettingCard,
-    PrimaryPushSettingCard, OptionsSettingCard,
+    PrimaryPushSettingCard, PushSettingCard, SettingCard, PushButton, OptionsSettingCard,
     FluentIcon as FIF, InfoBar, InfoBarPosition,
     setTheme, setThemeColor, Theme,
 )
 
-from app.common.config import cfg, APP_VERSION, isWin11
+from app.common.config import cfg, APP_NAME, APP_VERSION, isWin11
 from app.common.signal_bus import signalBus
 from app.common.update_checker import UpdateCheckThread, RELEASE_URL
 from app.core.i18n import tr
@@ -131,17 +131,46 @@ class SettingInterface(ScrollArea):
         # about
         self.aboutGroup = SettingCardGroup(tr("关于"), self._container)
         self.aboutCard = PrimaryPushSettingCard(
-            tr("检查更新"), FIF.INFO, "PyQt UI Designer",
-            tr("版本 %1  •  面向硬件工程师的可视化上位机设计工具", APP_VERSION),
+            tr("检查更新"), FIF.INFO, APP_NAME,
+            tr("版本 %1 · GPL-3.0\nPython/PyQt5 上位机设计器，支持源码导出与 Nuitka 打包", APP_VERSION),
             parent=self.aboutGroup,
         )
+        self.aboutCard.setFixedHeight(92)
         self.aboutCard.clicked.connect(self._check_update)
         self.aboutGroup.addSettingCard(self.aboutCard)
+
+        self.repositoryCard = SettingCard(
+            FIF.GITHUB, tr("GitHub 仓库"),
+            "https://github.com/txp666/PyQt-UI-Designer", parent=self.aboutGroup,
+        )
+        for text, suffix in ((tr("打开仓库"), ""), (tr("问题反馈"), "/issues"),
+                             (tr("版本发布"), "/releases")):
+            button = PushButton(text, self.repositoryCard)
+            url = "https://github.com/txp666/PyQt-UI-Designer" + suffix
+            button.clicked.connect(lambda _checked=False, url=url: QDesktopServices.openUrl(QUrl(url)))
+            self.repositoryCard.hBoxLayout.addWidget(button, 0, Qt.AlignRight)
+            self.repositoryCard.hBoxLayout.addSpacing(8)
+        self.repositoryCard.hBoxLayout.addSpacing(8)
+        self.aboutGroup.addSettingCard(self.repositoryCard)
+
+        self.relatedGroup = SettingCardGroup(tr("相关工具"), self._container)
+        for title, description, url in (
+            ("FluentHMI Studio", tr("原生 C++/Qt 6 上位机设计器与运行时导出"),
+             "https://github.com/txp666/FluentHMI-Studio"),
+            ("modusignal", tr("浏览器设备调试与可视化上位机工作区"),
+             "https://github.com/txp666/modusignal"),
+            ("FluentPLC Simulator", tr("独立的经典 S7comm 服务端，用于客户端测试"),
+             "https://github.com/txp666/FluentPLC-Simulator"),
+        ):
+            card = PushSettingCard(tr("打开仓库"), FIF.LINK, title, description, self.relatedGroup)
+            card.clicked.connect(lambda url=url: QDesktopServices.openUrl(QUrl(url)))
+            self.relatedGroup.addSettingCard(card)
 
         self._layout.addWidget(self.personalGroup)
         self._layout.addWidget(self.designerGroup)
         self._layout.addWidget(self.serialGroup)
         self._layout.addWidget(self.aboutGroup)
+        self._layout.addWidget(self.relatedGroup)
 
         self._update_thread = None
         self._update_connections = SignalConnections(self)
