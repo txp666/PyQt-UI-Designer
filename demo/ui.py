@@ -12,9 +12,9 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QFrame, QGroupBox, QTabWidget, QTextEdit, QCheckBox,
     QSizePolicy, QHeaderView, QAbstractItemView, QTableWidget, QTableWidgetItem,
-    QSpinBox, QPushButton, QFileDialog, QLineEdit,
+    QSpinBox, QPushButton, QFileDialog, QLineEdit, QGraphicsView, QGraphicsScene,
 )
-from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient
+from PyQt5.QtGui import QColor, QPainter, QFont, QPen, QConicalGradient, QTransform
 
 from qfluentwidgets import (
     PushButton, PrimaryPushButton, BodyLabel, StrongBodyLabel,
@@ -2882,6 +2882,32 @@ class DataRecvCard(CardWidget):
         self._trim()
 
 
+class CanvasView(QGraphicsView):
+    """Fit the complete design to the window, preserving widget coordinates and input."""
+    def __init__(self, canvas, parent=None):
+        super().__init__(parent)
+        self._canvas = canvas
+        self._scene = QGraphicsScene(self)
+        self.setScene(self._scene)
+        self._scene.addWidget(canvas)
+        self.setFrameShape(QFrame.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setAlignment(Qt.AlignCenter)
+        self.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing | QPainter.SmoothPixmapTransform)
+        self.setStyleSheet("QGraphicsView { background: transparent; border: none; }")
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not hasattr(self, "_canvas") or self.viewport().width() <= 0 or self.viewport().height() <= 0:
+            return
+        rect = QRectF(self._canvas.rect())
+        self.setSceneRect(rect)
+        factor = min(self.viewport().width() / rect.width(), self.viewport().height() / rect.height())
+        self.setTransform(QTransform.fromScale(factor, factor))
+        self.centerOn(rect.center())
+
+
 class MainUI(TitleBarLifecycleMixin, FluentWindow):
     def __init__(self):
         super().__init__()
@@ -2896,14 +2922,9 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self._theme_containers = []
         self._create_widgets()
 
-        scroll = ScrollArea()
-        scroll.setObjectName("scrollPage")
-        scroll.enableTransparentBackground()  # before the page is in it: it would also clear the page's
-        scroll.setWidget(self._page)
-        scroll.setWidgetResizable(False)
-        scroll.setAlignment(Qt.AlignCenter)
-
-        self.addSubInterface(scroll, FIF.HOME, tr("主界面"))
+        self._canvas_view = CanvasView(self._page)
+        self._canvas_view.setObjectName("scrollPage")
+        self.addSubInterface(self._canvas_view, FIF.HOME, tr("主界面"))
         self.apply_theme()
         self._external_connections = SignalConnections(self)
         self._external_connections.connect(

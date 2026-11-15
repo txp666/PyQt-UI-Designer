@@ -175,6 +175,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 
 ### Export and packaging
 
+- Exported applications scale the complete canvas to fit the window, including controls, text and charts, with centered margins when the aspect ratio differs. Canvas size and widget coordinates remain the design reference, so existing projects need no changes. Export older applications again to include this behavior.
 - One-click export to a standalone Python project (`main.py`, `ui.py`, `comm_hub.py`, `serial_handler.py`, `tcp_handler.py`, `mqtt_handler.py`, `data_binding.py`, `theme_support.py`, `i18n.py`)
 - Built-in one-click packaging with Nuitka, showing the compiler output live; when it finishes it cleans up the build cache, renames the output and zips it
 - A custom app name, used for the window title and the packaged output

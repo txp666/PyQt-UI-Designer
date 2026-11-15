@@ -173,6 +173,7 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 
 ### 导出与打包
 
+- 导出的独立应用会随窗口等比例缩放整张画布，控件、文字和图表一起缩放；窗口比例不同时居中留白。工程中的画布尺寸和控件坐标仍作为设计基准，已有工程无需修改；已导出的旧应用需重新导出。
 - 一键导出为可独立运行的 Python 项目（`main.py`、`ui.py`、`comm_hub.py`、`serial_handler.py`、`tcp_handler.py`、`mqtt_handler.py`、`data_binding.py`、`theme_support.py`、`i18n.py`）
 - 内置 Nuitka 一键打包，实时显示编译输出；完成后自动清理编译缓存、重命名并压缩为 zip
 - 自定义上位机名称，会同步到窗口标题和打包产物
