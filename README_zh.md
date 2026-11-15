@@ -1,37 +1,13 @@
 <p align="center">
-  <img src="logo.png" width="120" alt="PyQt UI Designer">
+  <img src="logo.png" width="110" alt="PyQt UI Designer">
   <h1 align="center">PyQt UI Designer</h1>
-  <p align="center">面向硬件工程师的可视化上位机设计工具</p>
-  <p align="center">
-    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/github/v/release/txp666/PyQt-UI-Designer?style=flat-square" alt="Release"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/txp666/PyQt-UI-Designer?style=flat-square" alt="License"></a>
-    <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey?style=flat-square" alt="Platform">
-    <a href="https://www.bilibili.com/video/BV13KHG6VEvL"><img src="https://img.shields.io/badge/Video-Bilibili-00A1D6?style=flat-square&logo=bilibili&logoColor=white" alt="Video"></a>
-    <a href="https://hmi.modusignal.cn/#python"><img src="https://img.shields.io/badge/Website-hmi.modusignal.cn-2ea44f?style=flat-square" alt="Website"></a>
-  </p>
-  <p align="center">
-    <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows" alt="Download"></a>
-  </p>
-  <p align="center">
-    <a href="README.md">English</a> •
-    简体中文 •
-    <a href="https://hmi.modusignal.cn/#python">官网</a> •
-    <a href="https://hmi.modusignal.cn/guide/">使用说明</a> •
-    <a href="#演示视频">演示视频</a> •
-    <a href="#快速开始">快速开始</a> •
-    <a href="#功能特性">功能特性</a> •
-    <a href="docs/protocol.md">协议文档</a> •
-    <a href="#常见问题">常见问题</a> •
-    <a href="#c-版-fluenthmi-studio">C++ 版</a>
-  </p>
+  <p align="center">面向硬件工程师的 Python 可视化上位机设计器 · 基于 <a href="https://github.com/zhiyiYo/PyQt-Fluent-Widgets">PyQt-Fluent-Widgets</a></p>
+  <p align="center"><a href="README.md">English</a> · 简体中文 · <a href="https://hmi.modusignal.cn/#python">官网</a> · <a href="https://hmi.modusignal.cn/guide/">使用说明</a> · <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest">下载</a></p>
 </p>
 
----
+PyQt UI Designer 是 [modusignal](https://github.com/txp666/modusignal) 工具系列中的 Python/PyQt5 可视化上位机设计器。拖拽控件、配置属性并绑定串口、TCP、UDP 或 MQTT 数据，然后导出**可编辑的 Python 源码**，再用 Nuitka 打包成独立的 Windows 或 macOS 应用。它与 [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) 和 modusignal「自定义设备」中支持的功能共享 `.uidp` 格式。
 
-**PyQt UI Designer** 是一个零代码 / 低代码的桌面上位机设计器。拖拽控件、配置属性、绑定串口、TCP、UDP 或 MQTT 数据，就能生成可独立运行的 PyQt5 上位机程序，并在 Windows 打包为 exe、在 macOS 打包为 `.app`。不必再为每个硬件项目从零手写界面、通信收发和协议解析。
-
-> **推荐试试 C++ 版 [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio)**：打开同一种 `.uidp` 工程，安装包更小、启动更快，导出应用不到一秒，不需要 Python 和编译器。详见下方 [C++ 版 FluentHMI Studio](#c-版-fluenthmi-studio)。
+> **语言**：在「设置 → 语言」中选择 English 或简体中文。
 
 ## 演示视频
 
@@ -55,15 +31,15 @@
 
 ## C++ 版 FluentHMI Studio
 
-[FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) 是本项目的 C++/Qt 6 重写版，界面基于 [FluentQtWidgets](https://github.com/txp666/FluentQtWidgets)，目前是 0.1.0。它直接读写同一种 `.uidp` 工程，控件、属性、解析模式、数据绑定和命令编码规则与本项目一一对应，在这里做好的工程可以直接用它打开、预览和导出。和本项目相比：
+[FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) 是对应的原生 C++/Qt 6 设计器，界面基于 [FluentQtWidgets](https://github.com/txp666/FluentQtWidgets)。两种设计器可在各自支持的控件与协议范围内交换 `.uidp` 工程；Studio 还提供此 Python 设计器没有的原生 CAN 功能。
 
-- **导出不需要 Python 和编译器**：导出时复制预编译的运行器，再放入工程和图片，约 0.3 秒完成。本项目要先生成 Python 源码再用 Nuitka 编译，下载版要打包还得另装 Python 与编译工具。
-- **预览即成品**：预览和导出的应用是同一个运行器，预览里看到的就是导出后的效果。
-- **安装包更小**：Windows 17.7 MB（本项目 52.0 MB）；macOS 只有一个 universal 包，32.7 MB，Apple Silicon 和 Intel 通用，导出的应用同样是 universal（本项目两种架构各一个包，51.7 / 60.3 MB）。
-- **启动更快、内存更少**：在同一台 Mac 上，启动到出现窗口 0.7–1.1 秒（本项目 1.5–2.2 秒），启动后内存 71–85 MB（本项目 126–137 MB）。
-- **应用内更新**：在设置页或启动时检查新版本，下载并校验 SHA-256，重启或退出时自动换上新版本。
+| 工作流 | PyQt UI Designer | FluentHMI Studio |
+| --- | --- | --- |
+| 导出 | 生成可编辑 Python 源码，再用 Nuitka 打包可执行应用 | 复制预编译运行时并加入工程与资源，导出不需要 Python 或编译器 |
+| 预览 | 在设计器内运行，导出时生成独立代码 | 预览与导出应用使用同一个运行时 |
+| 继续开发 | 修改导出的 Python 工程 | 基于 C++ 仓库开发；C++ 源码工程导出仍在路线图中 |
 
-它目前还没有的：导出可以继续修改的源码工程，以及实时曲线的游标和数据保存 / 加载；需要这些功能时请继续使用本项目。完整对比和测量方法见 FluentHMI Studio README 的[与 Python 版相比](https://github.com/txp666/FluentHMI-Studio/blob/main/README_zh.md#与-python-版相比)。
+Studio 已包含实时曲线游标及 CSV/JSON 历史数据保存/加载。平台打包、功能范围和已有测量记录见[与 Python 版相比](https://github.com/txp666/FluentHMI-Studio/blob/main/README_zh.md#与-python-版相比)。
 
 ## 快速开始
 
@@ -359,6 +335,17 @@ PyQt-UI-Designer/
 ## 反馈与贡献
 
 遇到问题或有功能建议，欢迎提交 [Issue](https://github.com/txp666/PyQt-UI-Designer/issues)。也欢迎提交 PR。
+
+## 相关项目
+
+| 项目 | 定位 |
+| --- | --- |
+| [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) | 原生 C++/Qt 6 上位机设计器，导出独立运行时应用 |
+| [PyQt UI Designer](https://github.com/txp666/PyQt-UI-Designer) | Python/PyQt5 上位机设计器，导出可编辑 Python 源码并用 Nuitka 打包 |
+| [modusignal](https://github.com/txp666/modusignal) | 浏览器设备调试台与 `.uidp` 自定义设备编辑器，通信受浏览器能力限制 |
+| [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) | 独立桌面与命令行经典 S7comm 服务端，用于测试 S7 客户端 |
+
+三种 HMI 工具可在各自支持的控件与通信范围内交换 `.uidp` 工程。FluentPLC Simulator 使用独立的 `.plcsim.json` 格式；FluentHMI Studio、PyQt UI Designer 和 modusignal 当前均未实现 S7 客户端。
 
 ## 许可证
 

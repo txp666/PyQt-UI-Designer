@@ -948,5 +948,14 @@
  "开启判定": "ON condition",
  "判定值": "Comparison value",
  "非零为开": "Nonzero is ON",
- "等于指定值": "Equals comparison value"
+ "等于指定值": "Equals comparison value",
+ "GitHub 仓库": "GitHub repository",
+ "原生 C++/Qt 6 上位机设计器与运行时导出": "Native C++/Qt 6 HMI designer and runtime export",
+ "打开仓库": "Open repository",
+ "浏览器设备调试与可视化上位机工作区": "Browser device debugging and visual HMI workspace",
+ "版本 %1 · GPL-3.0\nPython/PyQt5 上位机设计器，支持源码导出与 Nuitka 打包": "Version %1 · GPL-3.0\nPython/PyQt5 HMI designer with source export and Nuitka packaging",
+ "版本发布": "Releases",
+ "独立的经典 S7comm 服务端，用于客户端测试": "Independent classic S7comm server for client testing",
+ "相关工具": "Related tools",
+ "问题反馈": "Issues"
 }
