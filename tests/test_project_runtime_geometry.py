@@ -131,6 +131,58 @@ class ProjectRuntimeGeometryTests(unittest.TestCase):
             check_payloads([])
         ''')
 
+    def test_export_fits_window_and_keeps_input_and_live_data(self):
+        project = ProjectData()
+        project.canvas_width, project.canvas_height = 1200, 800
+        project.widgets = [
+            item("send", "PushButton", {"command": "RUN", "commandNewline": "无"}, (40, 40, 120, 40)),
+            item("group", "GroupBox", geometry=(400, 40, 300, 160), children=[
+                item("entry", "LineEdit", {"sendOnEnter": True, "commandNewline": "无"}, (20, 50, 200, 36)),
+            ]),
+            item("status", "Label", geometry=(40, 110, 160, 40), binding={"key": "count"}),
+            item("trend", "RealtimeChart", {"curveCount": 1, "_curve_0_key": "temperature"}, (40, 240, 600, 320)),
+        ]
+        self.run_both(project, r'''
+            from PyQt5.QtCore import QPoint, QPointF, QRectF
+            if os.environ["APPLICATION_MODE"] == "preview":
+                from app.core.data_binding import bindingEngine
+                bindingEngine.load_bindings_from_project(project.widgets)
+                bindingEngine.start()
+            expected, scales = [], []
+            for index, size in enumerate(((700, 550), (1600, 1000), (1000, 500))):
+                window.resize(*size)
+                app.processEvents(); app.processEvents()
+                serial.dataReceived.emit({"count": index, "temperature": 20 + index})
+                assert widgets["status"].text() == str(index), widgets["status"].text()
+                assert list(widgets["trend"]._data[0]) == list(range(20, 21 + index))
+                if os.environ["APPLICATION_MODE"] == "export":
+                    view, page = window._canvas_view, window._page
+                    assert (page.width(), page.height()) == (1200, 800)
+                    assert widgets["entry"].mapTo(page, QPoint()) == QPoint(420, 90)
+                    scale = view.transform().m11()
+                    scales.append(scale)
+                    assert scale == view.transform().m22()
+                    shown = view.mapFromScene(QRectF(page.rect())).boundingRect()
+                    assert shown.left() >= -1 and shown.top() >= -1
+                    assert shown.right() <= view.viewport().width() + 1
+                    assert shown.bottom() <= view.viewport().height() + 1
+                    def click(control):
+                        point = view.mapFromScene(QPointF(control.mapTo(page, control.rect().center())))
+                        QTest.mouseClick(view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+                        app.processEvents()
+                    click(widgets["send"])
+                    expected.append(b"RUN")
+                    widgets["entry"].clear()
+                    click(widgets["entry"])
+                    QTest.keyClicks(view, "42")
+                    QTest.keyClick(view, Qt.Key_Return)
+                    expected.append(b"42")
+                    assert widgets["entry"].text() == "42"
+                check_payloads(expected)
+            if scales:
+                assert min(scales) < 1 < max(scales), scales
+        ''')
+
     def test_tab_coordinates_keep_free_managed_hidden_and_nested_pages_in_place(self):
         tabs = CanvasItem.from_dict(item("tabs", "TabWidget", {
             "tabNames": "Free\nManaged\nNested", "currentTab": 0, "_tabLayout_1": "垂直",
