@@ -185,6 +185,9 @@ SWITCH_META = WidgetMeta(
     properties=[
         PropDef("label", N_("标签"), PropType.STRING, N_("开关")),
         PropDef("checked", N_("默认开启"), PropType.BOOL, False),
+        PropDef("onCondition", N_("开启判定"), PropType.ENUM, "非零为开",  # i18n: value
+                options=["非零为开", "等于指定值"]),  # i18n: value
+        PropDef("onValue", N_("判定值"), PropType.STRING, "1"),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
                 options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
         PropDef("onCommand", N_("开启命令"), PropType.COMMAND, ""),
@@ -202,7 +205,9 @@ SWITCH_META = WidgetMeta(
         PropDef("commandNewline", N_("换行符"), PropType.ENUM, "\\r\\n",
                 options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
         PropDef("mbSlave", N_("从站地址"), PropType.INT, 1, min_val=1, max_val=247),
-        PropDef("mbAddress", N_("线圈地址"), PropType.INT, 0, min_val=0, max_val=65535),
+        PropDef("mbArea", N_("地址类型"), PropType.ENUM, "线圈",  # i18n: value
+                options=["线圈", "保持寄存器"]),  # i18n: value
+        PropDef("mbAddress", N_("线圈/寄存器地址"), PropType.INT, 0, min_val=0, max_val=65535),
         PropDef("notify", N_("切换通知"), PropType.BOOL, False),
         PropDef("notifyTitle", N_("通知标题"), PropType.STRING, N_("提示")),
         PropDef("notifyContent", N_("通知内容"), PropType.STRING, N_("开关已切换")),

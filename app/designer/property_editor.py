@@ -74,12 +74,12 @@ _MODE_VISIBILITY = {
     "HEX":    {"command", "onCommand", "offCommand", "commandTemplate",
                "frameHeader", "frameTail", "dataType", "byteOrder"},
     "JSON":   {"command", "onCommand", "offCommand", "commandTemplate", "commandJsonNewline"},
-    "Modbus": {"mbSlave", "mbFunc", "mbAddress", "mbValue", "mbDataType", "mbRegOrder"},
+    "Modbus": {"mbSlave", "mbFunc", "mbArea", "mbAddress", "mbValue", "mbDataType", "mbRegOrder"},
 }
 _MODE_FIELDS = {
     "command", "onCommand", "offCommand", "commandNewline", "commandTemplate", "commandJsonNewline",
     "frameHeader", "frameTail", "dataType", "byteOrder",
-    "mbSlave", "mbFunc", "mbAddress", "mbValue", "mbDataType", "mbRegOrder",
+    "mbSlave", "mbFunc", "mbArea", "mbAddress", "mbValue", "mbDataType", "mbRegOrder",
 }
 
 _SEND_TOGGLE_FIELDS = {"commandMode", "commands"}
@@ -410,6 +410,8 @@ class PropertyEditor(ScrollArea):
 
             cur_mode = item.properties.get("commandMode", "文本")  # i18n: value
             self._apply_mode_visibility(cur_mode)
+            if item.type_name == "ToggleSwitch":
+                self._apply_switch_condition_visibility()
 
             if ("sendOnEnter" in self._prop_rows
                     or "sendOnSelect" in self._prop_rows
@@ -875,6 +877,11 @@ class PropertyEditor(ScrollArea):
             if name in self._prop_rows:
                 self._show_row(self._prop_rows[name][1], name in visible)
 
+    def _apply_switch_condition_visibility(self):
+        if "onValue" in self._prop_rows:
+            self._show_row(self._prop_rows["onValue"][1],
+                           self._current_item.properties.get("onCondition") == "等于指定值")  # i18n: value
+
     def _apply_link_parser_visibility(self):
         """A link card's Modbus rows show while it parses Modbus itself: the role and the default slave,
         then the polling period and response timeout for a master, the slave settings for a slave."""
@@ -999,6 +1006,8 @@ class PropertyEditor(ScrollArea):
         elif prop_name == "bitProfile" and hasattr(self, "_bit_profile_editor"):
             self._bit_profile_editor.current = str(value)
             self._bit_profile_editor._reload_names()
+        elif prop_name == "onCondition" and self._current_item.type_name == "ToggleSwitch":
+            self._apply_switch_condition_visibility()
         elif prop_name == "commandMode":
             self._apply_mode_visibility(value)
             toggles = [name for name in ("sendOnEnter", "sendOnSelect", "sendOnChange") if name in self._prop_rows]

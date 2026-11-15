@@ -239,6 +239,7 @@
  "垂直": "Vertical",
  "垂直居中": "Center vertically",
  "垂直布局": "Vertical layout",
+ "地址类型": "Address type",
  "垂直镜像": "Mirror vertically",
  "基础控件": "Basic",
  "复制": "Copy",
@@ -585,6 +586,7 @@
  "粘贴": "Paste",
  "纵向等距分布": "Distribute vertically",
  "线圈": "Coil",
+ "线圈/寄存器地址": "Coil/register address",
  "线圈地址": "Coil address",
  "线圈数量": "Coil count",
  "线圈起始": "Coil start",
@@ -942,5 +944,9 @@
  "每圈脉冲数": "Pulses per turn",
  "每圈脉冲数必须为正整数": "Pulses per turn must be a positive integer",
  "%1 计数 · %2 圈 · %3": "%1 counts · %2 turns · %3",
- "最低 C%1 %2 V · 最高 C%3 %4 V · Δ %5 mV": "Lowest C%1 %2 V · Highest C%3 %4 V · Δ %5 mV"
+ "最低 C%1 %2 V · 最高 C%3 %4 V · Δ %5 mV": "Lowest C%1 %2 V · Highest C%3 %4 V · Δ %5 mV",
+ "开启判定": "ON condition",
+ "判定值": "Comparison value",
+ "非零为开": "Nonzero is ON",
+ "等于指定值": "Equals comparison value"
 }

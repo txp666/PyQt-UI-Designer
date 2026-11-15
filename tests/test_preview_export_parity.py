@@ -225,7 +225,7 @@ class PreviewExportParityTests(unittest.TestCase):
             check_payloads([])
         """)
 
-    def test_modbus_switch_always_writes_coils_in_preview_and_export(self):
+    def test_modbus_switch_writes_selected_area_in_preview_and_export(self):
         self.run_both([
             control("normal", "ToggleSwitch", {
                 "commandMode": "Modbus", "mbSlave": 2, "mbAddress": 7,
@@ -234,16 +234,24 @@ class PreviewExportParityTests(unittest.TestCase):
                 "commandMode": "Modbus", "mbSlave": 2, "mbAddress": 7,
                 "mbFunc": "06 写单寄存器",
             }, 1),
+            control("register", "ToggleSwitch", {
+                "commandMode": "Modbus", "mbSlave": 2, "mbAddress": 7,
+                "mbArea": "保持寄存器",
+            }, 2),
         ], r"""
             expected = []
-            for name in ("normal", "legacy"):
+            for name, on, off in (
+                ("normal", "02050007ff003dc8", "0205000700007c38"),
+                ("legacy", "02050007ff003dc8", "0205000700007c38"),
+                ("register", "020600070001f9f8", "0206000700003838"),
+            ):
                 assert not widgets[name]._switch.isChecked()
                 click_switch(name)
                 assert widgets[name]._switch.isChecked()
-                expected.append(bytes.fromhex("02050007ff003dc8"))
+                expected.append(bytes.fromhex(on))
                 check_payloads(expected)
                 click_switch(name)
                 assert not widgets[name]._switch.isChecked()
-                expected.append(bytes.fromhex("0205000700007c38"))
+                expected.append(bytes.fromhex(off))
                 check_payloads(expected)
         """)

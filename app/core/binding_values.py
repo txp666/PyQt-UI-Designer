@@ -246,6 +246,13 @@ def binding_decimals(value, places="自动"):  # i18n: value
     return f"{number:.{places}f}"
 
 
+def binding_switch(value, on_condition="非零为开", on_value="1"):  # i18n: value
+    """A switch's receive-state rule, applied after its binding expression."""
+    if on_condition == "等于指定值":  # i18n: value
+        return binding_float(value) == binding_float(on_value)
+    return binding_boolean(value)
+
+
 def binding_led(value, on_value="1", off_value="0"):
     """Preserve custom LED states before falling back to boolean conversion."""
     text = str(value).strip()
