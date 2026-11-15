@@ -5,7 +5,7 @@
   <p align="center"><a href="README.md">English</a> · 简体中文 · <a href="https://hmi.modusignal.cn/#python">官网</a> · <a href="https://hmi.modusignal.cn/guide/">使用说明</a> · <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest">下载</a></p>
 </p>
 
-PyQt UI Designer 是 [modusignal](https://github.com/txp666/modusignal) 工具系列中的 Python/PyQt5 可视化上位机设计器。拖拽控件、配置属性并绑定串口、TCP、UDP 或 MQTT 数据，然后导出**可编辑的 Python 源码**，再用 Nuitka 打包成独立的 Windows 或 macOS 应用。它与 [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) 和 modusignal「自定义设备」中支持的功能共享 `.uidp` 格式。
+PyQt UI Designer 是 [modusignal](https://github.com/txp666/modusignal) 工具系列中的 Python/PyQt5 可视化上位机设计器。拖拽控件、配置属性并绑定串口、TCP、UDP、MQTT 或经典 S7comm 数据，然后导出**可编辑的 Python 源码**，再用 Nuitka 打包成独立的 Windows 或 macOS 应用。它与 [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) 和 modusignal「自定义设备」中支持的功能共享 `.uidp` 格式。
 
 > **语言**：在「设置 → 语言」中选择 English 或简体中文。
 
@@ -93,6 +93,8 @@ python main.py
 
 Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。依赖清单已包含 Apple Silicon 所需的 Qt 5 运行库条件，不要另行固定为只有 Intel 安装包的旧版 Qt。
 
+源码使用 S7 需初始化 Snap7 子模块并运行 `python scripts/build_snap7.py` 构建平台原生库，需要 CMake、Ninja 和 C++ 编译器，见 [S7 依赖配置](docs/s7.md#build-the-native-dependency)。打包应用随附原生库。
+
 ## 功能特性
 
 ### 可视化设计
@@ -138,6 +140,8 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 - **按寄存器地址绑定**：本程序发出的读请求会被记下，响应里的寄存器同时按地址命名（如保持寄存器 `hr100`），绑定可选寄存器区和地址；轮询 PLC 的几块地址时数据不会串
 - 串口、TCP、UDP、MQTT 都提供五种解析模式（行文本、HEX 二进制帧、Modbus RTU、Modbus TCP、Modbus ASCII），并能自动识别行协议格式；HEX 二进制帧支持帧头帧尾、长度字段、校验、定长和空闲分帧，可以在工程或每张链路卡片上分别设置
 
+- **经典 S7comm**：使用独立 S7 连接卡片，按绝对 DB/M/I/Q 地址进行有类型读取和定向写入，BOOL 使用原生单个位写入。预览、源码导出和 Nuitka 打包共用后端，见 [S7 配置与示例](docs/s7.md)。
+
 ### 命令发送
 
 - **文本模式**：可选换行符
@@ -172,21 +176,22 @@ https://raw.githubusercontent.com/txp666/PyQt-UI-Designer/main/docs/uidp-format.
 
 | 协议 | 状态 | 说明 |
 | --- | --- | --- |
+| **经典 S7comm** | ✅ 已支持 | S7-300/400；S7-1200/1500 的 PUT/GET 与非优化 DB，支持绝对 BOOL/BYTE/SINT/WORD/INT/DWORD/DINT/REAL，见 [S7 说明](docs/s7.md) |
 | **串口（Serial）** | ✅ 已支持 | RS-232/485/TTL，支持行文本、HEX 帧、Modbus RTU 解析 |
 | **TCP Client/Server** | ✅ 已支持 | TCP 客户端或服务端，服务端支持多个设备连入；解析模式与串口相同，另支持 Modbus TCP（MBAP），选 `modbus_tcp` 后 Modbus 命令自动按 MBAP 组帧 |
 | **MQTT** | ✅ 已支持 | 订阅 / 发布，支持通配符主题、用户名密码、QoS 0/1/2 和 TLS；每条消息按一帧解析，纯数值载荷可按主题名绑定 |
 | **UDP** | ✅ 已支持 | 本地端口加远程地址 / 端口，不填远程地址时回复最后发送方；每个数据报按一帧解析，每个发送方独立切帧；支持走 UDP 的 Modbus TCP、RTU 和 ASCII，可当主站或从站；填广播地址即广播 |
 
-通信部分采用模块化架构：每条链路实现同一组信号，由 `CommHub` 汇总后供绑定、图表、表格和日志使用，方便扩展更多协议，欢迎贡献 PR。链路细节见 [docs/protocol.md](docs/protocol.md#六传输链路串口tcpmqtt)。
+raw 通信部分采用模块化架构：串口、TCP、UDP、MQTT 实现同一组信号，由 `CommHub` 汇总后供绑定、图表、表格和日志使用，方便扩展更多协议，欢迎贡献 PR。链路细节见 [docs/protocol.md](docs/protocol.md#六传输链路串口tcpmqtt)。
 
 ## 使用说明
 
 完整的图文说明见[官网使用说明](https://hmi.modusignal.cn/guide/)，协议格式见 [docs/protocol.md](docs/protocol.md)。
 
 1. **设计界面**：从左侧控件面板把控件拖到画布上，在右侧属性编辑器里配置属性。
-2. **绑定数据**：选中显示类控件（数值显示、LED、进度条等），设置"绑定键"（设备数据中的字段名）和"解析模式"（键值匹配、JSON 路径、HEX 字节提取或 Modbus）。
-3. **配置命令**：选中交互类控件（按钮、开关、滑块等），设置发送模式（文本、HEX、JSON 或 Modbus）、命令内容，以及可选的 `{value}` 命令模板。
-4. **预览运行**：切换到"预览运行"页面，点击"运行预览"，用串口、TCP、UDP 或 MQTT 配置卡片连接设备后即可实时测试。
+2. **绑定数据**：选中显示类控件（数值显示、LED、进度条等），设置"绑定键"（设备数据中的字段名）和"解析模式"（键值匹配、JSON 路径、HEX 字节提取、Modbus 或 S7）。
+3. **配置命令**：选中交互类控件（按钮、开关、滑块等），设置发送模式（文本、HEX、JSON、Modbus 或 S7）、命令内容，以及可选的 `{value}` 命令模板。
+4. **预览运行**：切换到"预览运行"页面，点击"运行预览"，用串口、TCP、UDP、MQTT 或 S7 配置卡片连接设备后即可实时测试。
 5. **导出与打包**：导出代码的快捷键在 Windows 上是 `Ctrl+Shift+E`，在 Mac 上是 `⌘⇧E`，也可以点击导航栏的"导出代码"；在预览页面点击"一键打包"，选择目录后会自动导出、用 Nuitka 编译并压缩。打包需要本机有 C/C++ 编译器：macOS 使用 Xcode Command Line Tools，Windows 使用 Nuitka 支持的编译器（Python 3.13+ 使用 MSVC）。
 
 <details>
@@ -345,7 +350,7 @@ PyQt-UI-Designer/
 | [modusignal](https://github.com/txp666/modusignal) | 浏览器设备调试台与 `.uidp` 自定义设备编辑器，通信受浏览器能力限制 |
 | [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) | 独立桌面与命令行经典 S7comm 服务端，用于测试 S7 客户端 |
 
-三种 HMI 工具可在各自支持的控件与通信范围内交换 `.uidp` 工程。FluentPLC Simulator 使用独立的 `.plcsim.json` 格式；FluentHMI Studio、PyQt UI Designer 和 modusignal 当前均未实现 S7 客户端。
+三种 HMI 工具可在各自支持的控件与通信范围内交换 `.uidp` 工程。FluentPLC Simulator 使用独立的 `.plcsim.json` 格式；PyQt UI Designer 已提供经典 S7comm 客户端，见 [S7 配置说明](docs/s7.md)；网页版不支持 S7，FluentHMI Studio 的协议范围请查对应仓库。
 
 ## 许可证
 

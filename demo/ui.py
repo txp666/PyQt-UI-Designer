@@ -1005,6 +1005,7 @@ from qfluentwidgets import (
 from serial_handler import RawFrameBuffer
 
 
+
 from i18n import tr
 
 try:
@@ -1042,6 +1043,7 @@ _DEFAULT_CURVE_CFG = {
     "frameHeader": "", "frameTail": "",
     "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",  # i18n: value
     "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器",  # i18n: value
+    "sourceCardId": "", "s7": {"address": "DB1.DBD4", "dataType": "REAL", "period": 0},
 }
 
 # Virtual prop name -> per-curve storage suffix
@@ -1055,6 +1057,7 @@ _CURVE_FIELD_MAP = {
     "curveMbDataType": "mbDataType", "curveMbRegOrder": "mbRegOrder",
     "curveMbFcFilter": "mbFcFilter", "curveMbSlaveFilter": "mbSlaveFilter",
     "curveMbArea": "mbArea",
+    "curveSourceCardId": "sourceCardId", "curveS7": "s7",
 }
 
 
@@ -1699,6 +1702,20 @@ class RealtimeLineChart(QWidget):
 
     def on_raw(self, data):
         self._on_raw_data(data)
+
+    def on_s7(self, sample):
+        for index, config in enumerate(self._cfgs):
+            if config.get("parseMode") == "S7":
+                value = s7_sample_value(sample, config.get("sourceCardId", ""), config.get("s7", {}))
+                if value is not None:
+                    try:
+                        self.append_value(index, curve_expression(value, config.get("expression")))
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+
+    def s7_needs(self):
+        return [(cfg.get("sourceCardId", ""), cfg.get("s7", {})) for cfg in self._cfgs
+                if cfg.get("parseMode") == "S7"]
 
     def reset_stream(self):
         for frames in self._raw_frames:
@@ -3006,7 +3023,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         self.widgets['stop'].show()
         self.widgets['stop'].clicked.connect(lambda: self._send_text_command(str('STOP'), '\r\n'))
 
-        self.widgets['chart'] = RealtimeLineChart(self._page); self.widgets['chart'].configure('[{"name": "温度", "parseMode": "键值匹配", "key": "temperature", "jsonPath": "", "expression": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器"}, {"name": "压力", "parseMode": "键值匹配", "key": "pressure", "jsonPath": "", "expression": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器"}]', 200); self.widgets['chart'].set_title('实时采样')
+        self.widgets['chart'] = RealtimeLineChart(self._page); self.widgets['chart'].configure('[{"name": "温度", "parseMode": "键值匹配", "key": "temperature", "jsonPath": "", "expression": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器", "sourceCardId": "", "s7": {"address": "DB1.DBD4", "dataType": "REAL", "period": 0}}, {"name": "压力", "parseMode": "键值匹配", "key": "pressure", "jsonPath": "", "expression": "", "byteOffset": 0, "dataType": "float32", "byteOrder": "大端(BE)", "frameHeader": "", "frameTail": "", "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)", "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器", "sourceCardId": "", "s7": {"address": "DB1.DBD4", "dataType": "REAL", "period": 0}}]', 200); self.widgets['chart'].set_title('实时采样')
         self.widgets['chart'].setGeometry(24, 355, 642, 310)
         self.widgets['chart'].show()
 

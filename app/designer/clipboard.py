@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt
 
 from app.core.project import PROJECT_VERSION, ProjectData, resolved_asset_path
 from app.designer.canvas_item import CanvasItem
+from app.core.s7_values import project_uses_s7
 
 CLIPBOARD_MIME = "application/x-fluenthmi-widgets"
 
@@ -47,7 +48,7 @@ def clipboard_text(items, base_dir) -> str:
         data.pop("tabIndex", None)
         _absolute_images(data, base_dir)
         widgets.append(data)
-    return json.dumps({"version": PROJECT_VERSION, "widgets": widgets}, ensure_ascii=False, indent=2)
+    return json.dumps({"version": "1.1" if project_uses_s7(widgets) else PROJECT_VERSION, "widgets": widgets}, ensure_ascii=False, indent=2)
 
 
 def _widget_list(text):
@@ -78,7 +79,7 @@ def pasted_widgets(mime, serial):
         if not widgets:
             continue
         try:
-            ProjectData.validate({"serial": serial, "widgets": widgets})
+            ProjectData.validate({"serial": serial, "widgets": widgets}, allow_external_s7=True)
         except ValueError:
             continue
         return text, copy.deepcopy(widgets)
@@ -88,13 +89,34 @@ def pasted_widgets(mime, serial):
 def assign_ids(widgets, taken):
     """Keep each pasted widget's id unless the project has it already, else give it a new one the way the
     designer names a new widget. ``taken`` grows by the ids handed out."""
-    for data in widgets:
-        wid = data.get("id")
-        while not wid or wid in taken:
-            wid = f"{data['type']}_{uuid.uuid4().hex[:6]}"
-        data["id"] = wid
-        taken.add(wid)
-        assign_ids(data.get("children", []), taken)
+    renamed = {}
+
+    def assign(items):
+        for data in items:
+            previous = wid = data.get("id")
+            while not wid or wid in taken:
+                wid = f"{data['type']}_{uuid.uuid4().hex[:6]}"
+            data["id"] = wid
+            if data["type"] == "S7ConfigCard" and previous:
+                renamed[previous] = wid
+            taken.add(wid)
+            assign(data.get("children", []))
+
+    def references(items):
+        for data in items:
+            binding = data.get("binding") or {}
+            if binding.get("parseMode") == "S7" and binding.get("sourceCardId") in renamed:
+                binding["sourceCardId"] = renamed[binding["sourceCardId"]]
+            props = data.get("properties", {})
+            if props.get("commandMode") == "S7" and props.get("commandTargetId") in renamed:
+                props["commandTargetId"] = renamed[props["commandTargetId"]]
+            for key, value in list(props.items()):
+                if key.startswith("_curve_") and key.endswith("_sourceCardId") and value in renamed:
+                    props[key] = renamed[value]
+            references(data.get("children", []))
+
+    assign(widgets)
+    references(widgets)
 
 
 def _box(widgets):

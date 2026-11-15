@@ -15,6 +15,7 @@ from app.core.widget_registry import registry
 from app.core.i18n import tr
 from app.core.link_polling import PROJECT_PARSER
 from app.core.bit_profiles import normalize_bit_profiles
+from app.core.s7_values import project_uses_s7, s7_config, s7_point, encode_s7
 from PyQt5.QtCore import QSignalBlocker
 
 PROJECT_VERSION = "1.0"
@@ -68,7 +69,7 @@ class ProjectData:
 
     def to_dict(self) -> dict:
         document = {
-            "version": self.version,
+            "version": "1.1" if project_uses_s7(self.widgets) else "1.0",
             "appName": self.app_name,
             "canvas": {
                 "width": self.canvas_width,
@@ -110,12 +111,12 @@ class ProjectData:
         return proj
 
     @staticmethod
-    def validate(data):
+    def validate(data, allow_external_s7=False):
         """Reject invalid documents before touching the current scene."""
         if not isinstance(data, dict):
             raise ValueError(tr("项目根节点必须是对象"))
         normalize_bit_profiles(data.get("bitProfiles", {}))
-        if data.get("version", PROJECT_VERSION) != PROJECT_VERSION:
+        if data.get("version", PROJECT_VERSION) not in ("1.0", "1.1"):
             raise ValueError(tr("不支持的项目版本"))
         if not isinstance(data.get("appName", ""), str):
             raise ValueError(tr("应用名称必须是文本"))
@@ -136,6 +137,7 @@ class ProjectData:
         project_parser = serial.get("parser", "line")
         create_parser(project_parser, serial.get("parserConfig"))
         ids = set()
+        s7_cards, s7_references = set(), []
 
         def check_card_parser(item, props):
             card = item.get("id") or ""
@@ -164,6 +166,28 @@ class ProjectData:
                 props = item.get("properties", {})
                 if not isinstance(props, dict):
                     raise ValueError(tr("控件属性必须是对象"))
+                if item["type"] == "S7ConfigCard":
+                    if not wid:
+                        raise ValueError("S7 connection card requires an ID")
+                    s7_config(props)
+                    s7_cards.add(wid)
+                binding = item.get("binding")
+                if isinstance(binding, dict) and binding.get("parseMode") == "S7":
+                    s7_point(binding.get("s7"))
+                    s7_references.append(binding.get("sourceCardId"))
+                if props.get("commandMode") == "S7":
+                    command = props.get("s7Command", {})
+                    point = s7_point(command)
+                    s7_references.append(props.get("commandTargetId"))
+                    if item["type"] == "PushButton":
+                        encode_s7(command.get("value", "1"), point["dataType"])
+                    elif item["type"] == "ToggleSwitch":
+                        for key, default in (("onValue", "1"), ("offValue", "0")):
+                            encode_s7(command.get(key, default), point["dataType"])
+                for index in range(int(props.get("curveCount", 1)) if item["type"] == "RealtimeChart" else 0):
+                    if props.get(f"_curve_{index}_parseMode") == "S7":
+                        s7_point(props.get(f"_curve_{index}_s7"))
+                        s7_references.append(props.get(f"_curve_{index}_sourceCardId"))
                 if item["type"] == "RotaryEncoder":
                     ppr = props.get("pulsesPerTurn", 1024)
                     if type(ppr) not in (int, float) or not math.isfinite(ppr) or ppr <= 0 or int(ppr) != ppr:
@@ -187,6 +211,9 @@ class ProjectData:
                 walk(item.get("children", []), depth + 1)
 
         walk(data.get("widgets", []))
+        for source in s7_references:
+            if not isinstance(source, str) or not source or (source not in s7_cards and not allow_external_s7):
+                raise ValueError(tr("找不到 S7 连接卡片: %1", source or ""))
 
 
 class ProjectManager:

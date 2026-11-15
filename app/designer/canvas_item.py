@@ -20,7 +20,7 @@ HANDLE_SIZE = 8
 HANDLE_HALF = HANDLE_SIZE / 2
 MIN_SIZE = 30
 # The link cards: never shorter than their rows, and each can carry its own frame format.
-LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "UdpConfigCard", "MqttConfigCard")
+LINK_CARD_TYPES = ("SerialConfigCard", "TcpConfigCard", "UdpConfigCard", "MqttConfigCard", "S7ConfigCard")
 
 FREE_LAYOUT = "自由"  # i18n: value  (a container whose children keep their own places)
 LAYOUT_TYPES = {"HBoxLayout", "VBoxLayout", "FlexLayout", "GroupBox", "TabWidget", "CardContainer"}
@@ -459,6 +459,8 @@ class CanvasItem(QGraphicsRectItem):
             if name in _CURVE_FIELD_MAP:
                 ci = int(self.properties.get("currentCurve", 0))
                 self.properties[f"_curve_{ci}_{_CURVE_FIELD_MAP[name]}"] = value
+                if name in ("curveSourceCardId", "curveS7"):
+                    self.properties.pop(name, None)  # S7 uses only the shared per-curve disk fields
             if name in _CURVE_FIELD_MAP or name == "curveCount":
                 if hasattr(self._inner_widget, "load_from_props"):
                     self._inner_widget.load_from_props(self.properties)

@@ -56,6 +56,32 @@ def build_nuitka_command(project_dir, python_cmd, app_name, version="1.0.0",
         bundle = bundle_runtime_sources(project)
         args.append(f"--include-data-files={bundle}=runtime_sources.json")
 
+    native = project / "native"
+    designer_native = project / "app" / "resource" / "native"
+    if designer_native.is_dir():
+        native = designer_native
+    libraries = [path for path in native.glob("*snap7*") if path.suffix in (".dll", ".dylib", ".so")]
+    if libraries:
+        # DLLs must be Nuitka DLL entries: data-file inclusion skips dependency analysis and signing.
+        configuration = project / "build" / "snap7.nuitka-package.config.yml"
+        configuration.parent.mkdir(parents=True, exist_ok=True)
+        configuration.write_text(
+            "- module-name: 'app.core.s7_native'\n"
+            "  dlls:\n"
+            "    - from_filenames:\n"
+            "        relative_path: '../resource/native'\n"
+            "        prefixes: ['libsnap7', 'snap7']\n"
+            "      dest_path: 'native'\n"
+            "- module-name: 's7_native'\n"
+            "  dlls:\n"
+            "    - from_filenames:\n"
+            "        relative_path: 'native'\n"
+            "        prefixes: ['libsnap7', 'snap7']\n"
+            "      dest_path: 'native'\n", encoding="utf-8")
+        args.append(f"--user-package-configuration-file={configuration}")
+        for name in ("lgpl-3.0.txt", "gpl.txt", "SOURCE.txt"):
+            args.append(f"--include-data-files={native / name}=native/{name}")
+
     if platform == "win32":
         args += [
             "--windows-console-mode=disable",

@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 RUNTIME_FILES = ("bit_profiles.py", "industrial_runtime.py", "industrial_catalog.json", "theme_runtime.py", "protocol_parser.py", "serial_runtime.py",
+                 "s7_values.py", "s7_native.py", "s7_worker.py", "s7_runtime.py", "s7_card.py",
                  "tcp_runtime.py", "udp_runtime.py", "mqtt_runtime.py", "tls_runtime.py", "comm_runtime.py",
                  "chart_history.py", "chart_runtime.py", "gauge_runtime.py", "image_runtime.py", "table_runtime.py",
                  "log_runtime.py", "serial_card.py", "link_polling.py", "link_card.py", "tcp_card.py",

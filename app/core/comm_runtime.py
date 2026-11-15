@@ -29,11 +29,15 @@ class CommHub(QObject):
     error = pyqtSignal(str)
     slaveLog = pyqtSignal(str, str)  # a slave's log line and its level
     linksChanged = pyqtSignal()  # a link was registered or taken off
+    s7SampleReceived = pyqtSignal(dict)
+    s7WriteCompleted = pyqtSignal(dict)
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)
         self._links = []        # the registered links, in the order they came
         self._connections = {}  # id(link) -> its forwarding connections
+        self._s7_links = {}
+        self._s7_connections = {}
         self._config = None     # the project's serial settings, once configured
         self.raw_encoding = "utf-8"  # of the bytes rawReceived is carrying right now
         if config:
@@ -67,6 +71,44 @@ class CommHub(QObject):
         self.linksChanged.emit()
         if link.is_connected:
             self.connectionChanged.emit(True)
+
+    @property
+    def s7_links(self):
+        return dict(self._s7_links)
+
+    def add_s7_link(self, source_id, link):
+        previous = self._s7_links.get(source_id)
+        if previous is link:
+            return
+        if previous is not None:
+            self.remove_s7_link(source_id)
+        self._s7_links[source_id] = link
+        self._s7_connections[source_id] = [
+            (link.sampleReceived, link.sampleReceived.connect(self.s7SampleReceived)),
+            (link.writeCompleted, link.writeCompleted.connect(self.s7WriteCompleted)),
+            (link.destroyed, link.destroyed.connect(partial(self._forget_s7, source_id, id(link)))),
+        ]
+
+    def _forget_s7(self, source_id, link_id, *_):
+        if id(self._s7_links.get(source_id)) == link_id:
+            self._s7_links.pop(source_id, None)
+            self._s7_connections.pop(source_id, None)
+
+    def remove_s7_link(self, source_id):
+        link = self._s7_links.pop(source_id, None)
+        if link is not None:
+            link.disconnect()
+        for signal, connection in self._s7_connections.pop(source_id, ()):
+            try:
+                signal.disconnect(connection)
+            except (TypeError, RuntimeError):
+                pass
+
+    def write_s7(self, source_id, point, value):
+        link = self._s7_links.get(source_id)
+        if link is None:
+            raise ValueError("S7 connection card is unavailable: " + source_id)
+        return link.write(point, value)
 
     def remove_link(self, link):
         """Take a link off: the hub no longer forwards it, sends over it or disconnects it."""
@@ -138,6 +180,8 @@ class CommHub(QObject):
 
     def disconnect(self):
         for link in list(self._links):
+            link.disconnect()
+        for link in list(self._s7_links.values()):
             link.disconnect()
 
     def _on_link_state(self, _state):

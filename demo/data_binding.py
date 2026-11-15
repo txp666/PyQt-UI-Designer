@@ -694,7 +694,7 @@ class DataBinding:
         for widget_id in ['serial']:
             ui.widgets[widget_id].set_serial_handler(hub)
             ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)
-        for w in ui.widgets.values():
+        for widget_id, w in ui.widgets.items():
             if hasattr(w, "set_serial_handler"):
                 w.set_serial_handler(hub)  # the receive card, log box and data table listen to it
             if isinstance(w, RealtimeLineChart):

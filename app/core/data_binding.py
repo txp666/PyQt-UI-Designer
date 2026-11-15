@@ -9,6 +9,7 @@ Supports four parse modes:
     output (serialDataReceived)
 """
 import struct
+import weakref
 from typing import Dict, Any, Optional, List
 
 from PyQt5.QtCore import QObject, QSignalBlocker
@@ -16,6 +17,7 @@ from PyQt5.QtCore import QObject, QSignalBlocker
 from app.common.signal_bus import signalBus
 from app.core.protocol_parser import RawFrameBuffer
 from app.core.slider_limits import slider_of
+from app.core.s7_values import s7_sample_value
 from app.core.binding_values import (
     binding_boolean, binding_decimals, binding_float, binding_integer, binding_led, binding_switch,
     modbus_need, modbus_value,
@@ -26,6 +28,7 @@ from app.core.industrial_runtime import INDUSTRIAL_TYPES, binding_has_path
 # The property a binding writes into, per widget type (docs/uidp-format.md lists it with each widget).
 BIND_PROPERTIES = {
     "Label": "text",
+    "LineEdit": "text",
     "LEDIndicator": "on",
     "NumericDisplay": "value",
     "ProgressBar": "value",
@@ -34,6 +37,7 @@ BIND_PROPERTIES = {
     "ToggleSwitch": "checked",
     "Slider": "value",
     "SpinBox": "value",
+    "ComboBox": "currentIndex",
 }
 
 BIND_PROPERTIES.update({name: "value" for name in INDUSTRIAL_TYPES})
@@ -64,7 +68,7 @@ class BindingEntry:
                  led_on_value: str = "1", led_off_value: str = "0",
                  decimals: str = "自动",  # i18n: value
                  switch_on_condition: str = "非零为开",  # i18n: value
-                 switch_on_value: str = "1"):
+                 switch_on_value: str = "1", source_card_id: str = "", s7=None):
         self.widget_id = widget_id
         self.prop_name = prop_name
         self.type_name = type_name
@@ -81,6 +85,8 @@ class BindingEntry:
         self.led_off_value = led_off_value
         self.switch_on_condition = switch_on_condition
         self.switch_on_value = switch_on_value
+        self.source_card_id = source_card_id
+        self.s7 = dict(s7 or {})
         self.frame_header = self._hex_to_bytes(frame_header)
         self.frame_tail = self._hex_to_bytes(frame_tail)
         self._raw_frames = RawFrameBuffer(self.frame_header, self.frame_tail)
@@ -247,6 +253,7 @@ class DataBindingEngine(QObject):
         signalBus.serialDataReceived.connect(self._on_data)
         signalBus.serialRawReceived.connect(self._on_raw)
         signalBus.serialDisconnected.connect(self.reset_stream)
+        signalBus.s7SampleReceived.connect(self._on_s7)
 
     def reset_stream(self):
         for binding in self._bindings:
@@ -266,6 +273,12 @@ class DataBindingEngine(QObject):
 
     def register_widget(self, widget_id: str, widget):
         self._widget_map[widget_id] = widget
+        reference = weakref.ref(widget)
+        widget.destroyed.connect(lambda *_: self._forget_widget(widget_id, reference))
+
+    def _forget_widget(self, widget_id, reference):
+        if self._widget_map.get(widget_id) is reference():
+            self._widget_map.pop(widget_id, None)
 
     def add_binding(self, binding: BindingEntry):
         self._bindings.append(binding)
@@ -291,6 +304,7 @@ class DataBindingEngine(QObject):
                 or (pm == "JSON路径" and binding.get("jsonPath"))  # i18n: value
                 or (pm == "HEX字节提取")  # i18n: value
                 or (pm == "Modbus")
+                or (pm == "S7")
             )
             if not has_config:
                 self._walk_bindings(wd.get("children", []))
@@ -323,6 +337,7 @@ class DataBindingEngine(QObject):
                 switch_on_condition=props.get("onCondition", "非零为开"),  # i18n: value
                 switch_on_value=str(props.get("onValue", "1")),
                 decimals=str(props.get("decimals", "自动")),  # i18n: value
+                source_card_id=binding.get("sourceCardId", ""), s7=binding.get("s7"),
             )
             self._bindings.append(entry)
             self._walk_bindings(wd.get("children", []))
@@ -344,6 +359,30 @@ class DataBindingEngine(QObject):
             if callable(curves):
                 needs.extend((widget_id, *need, True) for need in curves())
         return needs
+
+    def s7_needs(self):
+        needs = []
+        for binding in self._bindings:
+            widget = self._widget_map.get(binding.widget_id)
+            if binding.parse_mode == "S7" and widget is not None and widget.isVisible():
+                needs.append((binding.source_card_id, binding.s7))
+        for widget in self._widget_map.values():
+            curves = getattr(widget, "s7_needs", None)
+            if callable(curves):
+                needs.extend(curves())
+        return needs
+
+    def _on_s7(self, sample):
+        if not self._active:
+            return
+        for binding in self._bindings:
+            if binding.parse_mode == "S7":
+                value = s7_sample_value(sample, binding.source_card_id, binding.s7)
+                if value is not None:
+                    widget = self._widget_map.get(binding.widget_id)
+                    if binding.type_name == "LineEdit" and widget is not None and widget.hasFocus() and not widget.isReadOnly():
+                        continue
+                    self._push_value(binding, value)
 
     @staticmethod
     def _default_bind_prop(type_name: str) -> str:
@@ -393,6 +432,10 @@ class DataBindingEngine(QObject):
 
     def _apply_to_widget(self, widget, binding: BindingEntry, value):
         prop = binding.prop_name
+        if binding.type_name == "ComboBox":
+            with QSignalBlocker(widget):
+                widget.setCurrentIndex(binding_integer(value))
+            return
 
         # Device feedback updates the display without sending the value back
         # as another user command (or showing a user-action notification).

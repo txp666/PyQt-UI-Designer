@@ -4,6 +4,7 @@
 
 - [取值、实时曲线、转换表达式](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/data.md)
 - [链路、帧配置、Modbus](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/connections.md)
+- [经典 S7comm：连接、绑定、定向写入和 UIDP 1.1](s7.md)
 - [命令下发](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/commands.md)
 - [汽车电子、电子 DIY 与嵌入式](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/electronics.md)
 - CAN 工程使用 FluentHMI Studio。[CAN 专题](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/can.md)
@@ -19,6 +20,7 @@
 - [ADC 采集板](../examples/tutorials/07-ADC采集板.uidp)
 - [温控仪模拟器](../examples/tutorials/11-温控仪模拟器.uidp)
 - [双泵供水与压力、流量反馈](../examples/industrial/恒压供水泵站.uidp) · [工业控件回放](../examples/industrial/工业控件回放.uidp)
+- [经典 S7 双连接](../examples/s7/classic-s7.uidp) · [S7 运行方法与模拟器](s7.md)
 - [电子控件回放](../examples/industrial/电子控件回放.uidp) · [电子反馈数据](../examples/industrial/电子反馈.jsonl)
 
 ## Python 检查与导出
@@ -41,6 +43,6 @@ python tools/check_uidp.py 工程.uidp
 - 布局容器：`HBoxLayout` 水平布局（300×80）、`VBoxLayout` 垂直布局（200×200）、`FlexLayout` 弹性布局（400×200）、`GroupBox` 分组框（280×180）、`TabWidget` 选项卡（350×250）、`Separator` 分割线（200×2）、`CardContainer` 卡片容器（300×200）
 - 显示控件：`LEDIndicator` LED指示灯（140×30）、`NumericDisplay` 数值显示（160×90）、`ProgressBar` 进度条（250×20）、`ProgressRingDisplay` 进度环（120×130）、`ImageDisplay` 图片显示（200×150）
 - 图表控件：`RealtimeChart` 实时曲线（400×280）、`GaugeMeter` 仪表盘（180×180）、`DataTable` 数据表格（350×250）
-- 通信控件：`SerialConfigCard` 串口配置卡片（360×320）、`TcpConfigCard` TCP 配置卡片（360×250）、`UdpConfigCard` UDP 配置卡片（360×220）、`MqttConfigCard` MQTT 配置卡片（380×390）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ModbusSlaveTable` 从站寄存器表（260×300）
+- 通信控件：`S7ConfigCard` S7 配置卡片（500×200）、`SerialConfigCard` 串口配置卡片（360×320）、`TcpConfigCard` TCP 配置卡片（360×250）、`UdpConfigCard` UDP 配置卡片（360×220）、`MqttConfigCard` MQTT 配置卡片（380×390）、`DataSendCard` 数据发送卡片（350×140）、`DataRecvCard` 数据接收卡片（350×250）、`LogBox` 日志显示框（400×200）、`ModbusSlaveTable` 从站寄存器表（260×300）
 - [工业设备与工业仪表的类型和默认值](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/industrial.md)
 - [汽车电子、电子 DIY 与嵌入式的类型和默认值](https://raw.githubusercontent.com/txp666/FluentHMI-Studio/main/docs/uidp/electronics.md)

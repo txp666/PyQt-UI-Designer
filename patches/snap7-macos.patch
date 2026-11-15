@@ -1,0 +1,71 @@
+Snap7 modern macOS compatibility
+Base: davenardella/snap7 30f37da3114024a71ba93f7fd855c680b97a406f
+Applied only to the build-tree copy on APPLE; upstream submodule remains unchanged.
+Our minimum macOS 14.4 has native monotonic clocks and SO_NOSIGPIPE.
+
+diff --git a/src/sys/snap_sysutils.h b/src/sys/snap_sysutils.h
+--- a/src/sys/snap_sysutils.h
++++ b/src/sys/snap_sysutils.h
+@@ -28,9 +28,6 @@
+ //---------------------------------------------------------------------------
+ #include "snap_platform.h"
+ //---------------------------------------------------------------------------
+-#ifdef OS_OSX
+-# define CLOCK_MONOTONIC 0
+-#endif
+ 
+ longword SysGetTick();
+ void SysSleep(longword Delay_ms);
+diff --git a/src/sys/snap_sysutils.cpp b/src/sys/snap_sysutils.cpp
+--- a/src/sys/snap_sysutils.cpp
++++ b/src/sys/snap_sysutils.cpp
+@@ -26,17 +26,7 @@
+ 
+ #include "snap_sysutils.h"
+ 
+-#ifdef OS_OSX
+-int clock_gettime(int clk_id, struct timespec* t) 
+-{
+-    struct timeval now;
+-    int rv = gettimeofday(&now, NULL);
+-    if (rv) return rv;
+-    t->tv_sec  = now.tv_sec;
+-    t->tv_nsec = now.tv_usec * 1000;
+-    return 0;
+-}
+-#endif
++// Modern macOS provides native clock_gettime(CLOCK_MONOTONIC).
+ 
+ //---------------------------------------------------------------------------
+ longword SysGetTick()
+diff --git a/src/sys/snap_msgsock.h b/src/sys/snap_msgsock.h
+--- a/src/sys/snap_msgsock.h
++++ b/src/sys/snap_msgsock.h
+@@ -29,7 +29,7 @@
+ #include "snap_platform.h"
+ #include "snap_sysutils.h"
+ //----------------------------------------------------------------------------
+-#if defined(OS_WINDOWS) || defined (OS_SOLARIS) || defined(OS_OSX)
++#if (defined(OS_WINDOWS) || defined(OS_SOLARIS) || defined(OS_OSX)) && !defined(MSG_NOSIGNAL)
+ # define MSG_NOSIGNAL    0
+ #endif
+ //----------------------------------------------------------------------------
+diff --git a/src/sys/snap_msgsock.cpp b/src/sys/snap_msgsock.cpp
+--- a/src/sys/snap_msgsock.cpp
++++ b/src/sys/snap_msgsock.cpp
+@@ -269,6 +269,15 @@
+     int NoDelay = 1;
+ 	int KeepAlive = 1;
+     LastTcpError=0;
++#ifdef OS_OSX
++    // Both CreateSocket() and accepted SetSocket() use this path. Avoid
++    // SIGPIPE on a disconnected peer without changing process-wide signals.
++    int NoSigPipe = 1;
++    SockCheck(setsockopt(FSocket, SOL_SOCKET, SO_NOSIGPIPE,
++                         (char*)&NoSigPipe, sizeof(NoSigPipe)));
++    if (LastTcpError != 0)
++        return;
++#endif
+     SockCheck(setsockopt(FSocket, IPPROTO_TCP, TCP_NODELAY,(char*)&NoDelay, sizeof(NoDelay)));
+ 
+ 	if (LastTcpError==0)

@@ -18,6 +18,7 @@ class CommManager(CommHub):
         self.disconnected.connect(signalBus.serialDisconnected)
         self.error.connect(signalBus.serialError)
         self.slaveLog.connect(signalBus.serialSlaveLog)
+        self.s7SampleReceived.connect(signalBus.s7SampleReceived)
 
 
 commHub = CommManager()
