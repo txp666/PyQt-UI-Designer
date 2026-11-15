@@ -25,6 +25,7 @@ class SignalBus(QObject):
     serialDataSent = pyqtSignal(bytes)        # data that was sent
     serialError = pyqtSignal(str)
     serialSlaveLog = pyqtSignal(str, str)     # a Modbus slave's log line and its level
+    s7SampleReceived = pyqtSignal(dict)
 
     # preview signals
     previewStarted = pyqtSignal()

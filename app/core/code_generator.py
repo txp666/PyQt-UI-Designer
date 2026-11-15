@@ -12,11 +12,15 @@ from app.core.project import LINK_CARD_TYPES, ProjectData
 from app.common.runtime_sources import runtime_source
 from app.core.i18n import tr
 from app.core.industrial_runtime import INDUSTRIAL_CATALOG, INDUSTRIAL_TYPES
+from app.core.s7_values import project_uses_s7
 
 
 def _runtime(name):
     """A runtime source as an export embeds it: it imports its translations from the export's i18n.py."""
-    return runtime_source(name).replace("from .i18n import ", "from i18n import ")
+    source = runtime_source(name).replace("from .i18n import ", "from i18n import ")
+    for module in ("s7_values", "s7_native", "s7_worker", "s7_runtime", "slider_limits", "slider_release"):
+        source = source.replace("from ." + module + " import ", "from " + module + " import ")
+    return source
 
 
 def generate_project(project: ProjectData, output_dir: str, theme_mode=None, theme_color=None, language=None):
@@ -69,6 +73,14 @@ def generate_project(project: ProjectData, output_dir: str, theme_mode=None, the
         "comm_hub.py": _gen_comm_hub(),
         "data_binding.py": _gen_data_binding(bindings, widget_types, _link_card_ids(widgets)),
     }
+    if project_uses_s7(widgets):
+        for name in ("s7_values.py", "s7_native.py", "s7_worker.py", "s7_runtime.py", "s7_card.py",
+                     "slider_limits.py", "slider_release.py"):
+            files[name] = _runtime(name)
+        from app.core.s7_native import native_library_path
+        library = native_library_path()
+        for name in (library.name, "lgpl-3.0.txt", "gpl.txt", "SOURCE.txt"):
+            assets["native/" + name] = (library.parent / name).read_bytes()
     files["i18n.py"] = _gen_i18n(files, {} if language == "zh_CN" else english_table())
     for name, source in files.items():
         if name.endswith(".py"):
@@ -288,6 +300,7 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
         '',
         'from i18n import tr, N_',
         'from serial_handler import _list_all_ports',
+        *(['from s7_card import S7ConfigCard'] if project_uses_s7(widgets) else []),
         '',
         'try:',
         '    import serial',
@@ -330,7 +343,7 @@ def _gen_ui(widgets: List[Dict], canvas_w: int, canvas_h: int, app_name: str = "
     if "NumericDisplay" in widget_types:
         lines.append(_numeric_display_class())
     if "RealtimeChart" in widget_types:
-        lines.append(_realtime_chart_class())
+        lines.append(_realtime_chart_class(project_uses_s7(widgets)))
     if widget_types & INDUSTRIAL_TYPES:
         used_symbols = [entry for entry in INDUSTRIAL_CATALOG if entry["type"] in widget_types]
         source = _runtime("industrial_runtime.py").replace(
@@ -449,7 +462,7 @@ class MainUI(TitleBarLifecycleMixin, FluentWindow):
         for w in items:
             p = w.get("properties", {})
             if (p.get("command") or p.get("onCommand") or p.get("offCommand")
-                    or p.get("commandMode") == "Modbus"
+                    or p.get("commandMode") in ("Modbus", "S7")
                     or p.get("sendOnEnter") or p.get("sendOnSelect")
                     or p.get("sendOnChange")):
                 return True
@@ -606,6 +619,9 @@ _NOTIFY_TYPE_MAP = {"成功": "success", "信息": "info", "警告": "warning", 
 def _gen_command_connection(wid: str, wtype: str, props: dict) -> list:
     """Generate command connection lines for a widget (sent over the communication hub)."""
     mode = props.get("commandMode", "文本")  # i18n: value
+    if mode == "S7":
+        return [f"        self.widgets[{wid!r}]._s7_command_properties = {props!r}",
+                f"        self.widgets[{wid!r}]._s7_command_type = {wtype!r}"]
     newline = props.get("commandNewline", "\\r\\n")
     suffix = _NEWLINE_CODE_MAP.get(newline, "\r\n")
     tpl = props.get("commandTemplate", "{value}")
@@ -892,6 +908,11 @@ def _widget_create_code(wid: str, wtype: str, props: dict, parent_var: str = "se
     if wtype in ("LogBox", "LogDisplayBox"):
         return (f"self.widgets[{wid!r}] = LogDisplayBox({pv}); "
                 f"self.widgets[{wid!r}].set_max_lines({p('maxLines', 500)})")
+    if wtype == "S7ConfigCard":
+        code = [f"self.widgets[{wid!r}] = S7ConfigCard({pv})"]
+        for key, value in props.items():
+            code.append(f"self.widgets[{wid!r}].set_config_value({key!r}, {value!r})")
+        return "; ".join(code)
     if wtype in LINK_CARD_TYPES:
         from app.core.serial_card import SerialConfigCard
         from app.core.tcp_card import TcpConfigCard
@@ -986,7 +1007,7 @@ def _link_card_ids(widgets: list) -> list:
 
     def walk(items):
         for w in items:
-            if w["type"] in LINK_CARD_TYPES:
+            if w["type"] in LINK_CARD_TYPES and w["type"] != "S7ConfigCard":
                 ids.append(w["id"])
             walk(w.get("children", []))
     walk(widgets)
@@ -1005,6 +1026,7 @@ def _extract_bindings(widgets: list) -> list:
                     or (pm == "JSON路径" and b.get("jsonPath"))  # i18n: value
                     or (pm == "HEX字节提取")  # i18n: value
                     or (pm == "Modbus")
+                    or (pm == "S7")
                 )
                 if has_config:
                     props = w.get("properties", {})
@@ -1012,6 +1034,7 @@ def _extract_bindings(widgets: list) -> list:
                         "widget_id": w["id"],
                         "type": w["type"],
                         "parseMode": pm,
+                        "sourceCardId": b.get("sourceCardId", ""), "s7": b.get("s7", {}),
                         "key": b.get("key", ""),
                         "jsonPath": b.get("jsonPath", ""),
                         "byteOffset": int(b.get("byteOffset", 0)),
@@ -1046,12 +1069,16 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
     has_parsed = any(b["parseMode"] in ("键值匹配", "JSON路径", "Modbus") for b in bindings)  # i18n: value
     has_hex = any(b["parseMode"] == "HEX字节提取" for b in bindings)  # i18n: value
     has_chart = widget_types and "RealtimeChart" in widget_types
+    has_s7 = bool(widget_types and "S7ConfigCard" in widget_types) or any(b["parseMode"] == "S7" for b in bindings)
 
     lines = [
         '# coding: utf-8',
         '"""Auto-generated data binding."""',
         'import struct',
         'from PyQt5.QtCore import QSignalBlocker',
+        *(['from s7_runtime import S7Poller, wire_s7_commands',
+           'from s7_values import s7_sample_value',
+           'from PyQt5.sip import isdeleted'] if has_s7 else []),
     ]
     if any(binding["type"] in ("StatusWordPanel", "DigitalTimingChart", "RotaryEncoder", "BmsCellMatrix", "DcPowerSupply") for binding in bindings):
         lines.append('from ui import binding_has_path')
@@ -1113,6 +1140,8 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         '        # order, register their own links on the hub, hand it their settings and show its status.',
         '        self.modbus_poller = ModbusPoller(hub, self.modbus_needs, ui)',
         '        ui._modbus_poller = self.modbus_poller',
+        *(['        self.s7_poller = S7Poller(hub, self.s7_needs, ui)',
+           '        self._connections.connect(hub.s7SampleReceived, self._on_s7)'] if has_s7 else []),
     ]
     for binding in bindings:
         if binding["type"] in INDUSTRIAL_TYPES:
@@ -1124,7 +1153,11 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
             '            ui.widgets[widget_id].set_modbus_poller(self.modbus_poller)',
         ]
     lines += [
-        '        for w in ui.widgets.values():',
+        '        for widget_id, w in ui.widgets.items():',
+        *(['            if hasattr(w, "set_hub"):',
+           '                w.set_hub(hub, widget_id)',
+           '            if hasattr(w, "_s7_command_properties"):',
+           '                wire_s7_commands(w, w._s7_command_type, w._s7_command_properties, hub, ui._command_error)'] if has_s7 else []),
         '            if hasattr(w, "set_serial_handler"):',
         '                w.set_serial_handler(hub)  # the receive card, log box and data table listen to it',
     ]
@@ -1135,6 +1168,7 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
             '                w._serial_connections.connect(hub.dataReceived, w.on_parsed)',
             '                w._serial_connections.connect(hub.rawReceived, w.on_raw)',
             '                w._serial_connections.connect(hub.disconnected, w.reset_stream)',
+            *(['                w._serial_connections.connect(hub.s7SampleReceived, w.on_s7)'] if has_s7 else []),
         ]
 
     if has_hex:
@@ -1152,6 +1186,8 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
         lines.append('        self._connections.connect(self.hub.rawReceived, self._on_raw)')
         lines.append('        self._connections.connect(self.hub.disconnected, self._reset_stream)')
     lines.append('        self.modbus_poller.start()  # reads once a link that parses Modbus can send')
+    if has_s7:
+        lines.append('        self.s7_poller.start()')
     if widget_types and widget_types & {"SerialConfigCard", "TcpConfigCard", "UdpConfigCard", "ModbusSlaveTable"}:
         lines += [
             '        # The slaves of the link cards in the slave role: a register table shows the first one\'s, and',
@@ -1202,6 +1238,25 @@ def _gen_data_binding(bindings: list, widget_types: set = None, link_cards: list
             lines.append(f'    def _raw_binding_{index}(self, raw):')
             _gen_binding_apply(lines, b, source="raw")
 
+    if has_s7:
+        lines.append('    def _on_s7(self, data):')
+        s7_bindings = [binding for binding in bindings if binding["parseMode"] == "S7"]
+        for binding in s7_bindings:
+            fragment = []
+            _gen_binding_apply(fragment, binding, source="s7")
+            lines.append('        try:')
+            lines.extend('    ' + line if line else '' for line in fragment)
+            lines.extend(['        except (TypeError, ValueError, OverflowError):', '            pass'])
+        if not s7_bindings:
+            lines.append('        pass')
+        needs = [(binding["widget_id"], binding["sourceCardId"], binding["s7"]) for binding in s7_bindings]
+        lines += ['', '    def s7_needs(self):', '        needs = []',
+                  f'        for widget_id, source, point in {needs!r}:',
+                  '            w = self.ui.widgets.get(widget_id)',
+                  '            if w is not None and not isdeleted(w) and w.isVisible(): needs.append((source, point))',
+                  '        for w in self.ui.widgets.values():',
+                  '            if not isdeleted(w) and hasattr(w, "s7_needs"): needs.extend(w.s7_needs())',
+                  '        return needs', '']
     lines += _gen_modbus_needs(bindings)
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1243,7 +1298,10 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     pm = b["parseMode"]
     strict_sample = wtype in ("StatusWordPanel", "DigitalTimingChart", "RotaryEncoder", "BmsCellMatrix", "DcPowerSupply")
 
-    if source == "parsed":
+    if source == "s7":
+        lines.append(f"        value = s7_sample_value(data, {b.get('sourceCardId', '')!r}, {b.get('s7', {})!r})")
+        lines.append("        if value is not None:")
+    elif source == "parsed":
         if pm == "键值匹配":  # i18n: value
             key = b["key"]
             condition = f"{key!r} in data" if strict_sample else f"{key!r} in data and data[{key!r}] is not None"
@@ -1309,7 +1367,9 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
     lines.append(f"{indent}w = self.ui.widgets.get({wid!r})")
     lines.append(f"{indent}if w:")
 
-    if wtype in ("Label", "LineEdit"):
+    if wtype == "LineEdit" and source == "s7":
+        lines.append(f"{indent}    if not w.hasFocus() or w.isReadOnly(): w.setText(str(value))")
+    elif wtype in ("Label", "LineEdit"):
         lines.append(f"{indent}    w.setText(str(value))")
     elif wtype == "NumericDisplay":
         lines.append(f"{indent}    w.set_value(str(value))")
@@ -1340,6 +1400,9 @@ def _gen_binding_apply(lines: list, b: dict, source: str):
         lines.append(f"{indent}    value = binding_switch(value, {condition!r}, {on_value!r})")
         lines.append(f"{indent}    with QSignalBlocker(w._switch):")
         lines.append(f"{indent}        w._switch.setChecked(value)")
+    elif wtype == "ComboBox":
+        lines.append(f"{indent}    with QSignalBlocker(w):")
+        lines.append(f"{indent}        w.setCurrentIndex(binding_integer(value))")
     else:
         lines.append(f"{indent}    if hasattr(w, 'setText'): w.setText(str(value))")
     lines.append("")
@@ -1452,13 +1515,15 @@ class NumericDisplay(QWidget):
 '''
 
 
-def _realtime_chart_class() -> str:
+def _realtime_chart_class(enable_s7=False) -> str:
     runtime = _runtime("chart_runtime.py").replace(
         "from .chart_history import ChartHistory", "").replace(
         "from .binding_values import modbus_need, modbus_value, curve_expression", "").replace(
         "from .signal_lifetime import SignalConnections", "").replace(
         "from .protocol_parser import RawFrameBuffer",
         "from serial_handler import RawFrameBuffer")
+    if not enable_s7:
+        runtime = runtime.replace("from s7_values import s7_sample_value", "")
     return (_runtime("signal_lifetime.py") + "\n"
             + _runtime("binding_values.py") + "\n"
             + _runtime("chart_history.py") + "\n" + runtime)

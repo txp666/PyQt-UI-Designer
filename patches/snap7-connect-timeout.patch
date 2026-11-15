@@ -1,0 +1,107 @@
+Snap7 bounded TCP connection attempts
+Base: davenardella/snap7 30f37da3114024a71ba93f7fd855c680b97a406f
+Applied only to a build-tree copy. PingTimeout bounds TCP connect; no protocol changes.
+
+diff --git a/src/sys/snap_msgsock.h b/src/sys/snap_msgsock.h
+--- a/src/sys/snap_msgsock.h
++++ b/src/sys/snap_msgsock.h
+@@ -37,7 +37,7 @@
+ // i.e. raw socket pinger is not more used.
+ // Thanks to Rolf Stalder that made it ;)
+ //----------------------------------------------------------------------------
+-#ifdef PLATFORM_UNIX
++#if defined(PLATFORM_UNIX) || defined(OS_OSX)
+     #define NON_BLOCKING_CONNECT
+ #endif
+ #ifdef NON_BLOCKING_CONNECT
+diff --git a/src/sys/snap_msgsock.cpp b/src/sys/snap_msgsock.cpp
+--- a/src/sys/snap_msgsock.cpp
++++ b/src/sys/snap_msgsock.cpp
+@@ -398,10 +398,12 @@
+ 							}
+ 						} // still connecting
+ 					} 
+-					else if (n == 0) { 
+-						// connected immediatly
+-						GetLocal();
+-						ClientHandle = LocalSin.sin_addr.s_addr;
++					else if (n == 0) {
++						if (fcntl(FSocket, F_SETFL, flags) != -1) {
++							GetLocal();
++							ClientHandle = LocalSin.sin_addr.s_addr;
++						} else
++							LastTcpError = GetLastSocketError();
+ 					}
+ 				}
+ 				else {
+@@ -422,6 +424,62 @@
+ //
+ int TMsgSocket::SckConnect()
+ {
++#ifdef OS_WINDOWS
++    SetSin(RemoteSin, RemoteAddress, RemotePort);
++    if (LastTcpError == 0)
++    {
++        CreateSocket();
++        if (LastTcpError == 0)
++        {
++            u_long nonBlocking = 1;
++            if (ioctlsocket(FSocket, FIONBIO, &nonBlocking) == SOCKET_ERROR)
++                LastTcpError = GetLastSocketError();
++            else
++            {
++                int result = connect(FSocket, (struct sockaddr*)&RemoteSin, sizeof(RemoteSin));
++                if (result == SOCKET_ERROR)
++                {
++                    int error = GetLastSocketError();
++                    if (error == WSAEWOULDBLOCK || error == WSAEINPROGRESS || error == WSAEALREADY)
++                    {
++                        fd_set writable, exceptional;
++                        FD_ZERO(&writable); FD_ZERO(&exceptional);
++                        FD_SET(FSocket, &writable); FD_SET(FSocket, &exceptional);
++                        struct timeval timeout;
++                        timeout.tv_sec = PingTimeout / 1000;
++                        timeout.tv_usec = (PingTimeout % 1000) * 1000;
++                        result = select(0, NULL, &writable, &exceptional, PingTimeout ? &timeout : NULL);
++                        if (result == 0)
++                            LastTcpError = WSAETIMEDOUT;
++                        else if (result == SOCKET_ERROR)
++                            LastTcpError = GetLastSocketError();
++                        else
++                        {
++                            int length = sizeof(error);
++                            error = 0;
++                            if (getsockopt(FSocket, SOL_SOCKET, SO_ERROR, (char*)&error, &length) == SOCKET_ERROR)
++                                LastTcpError = GetLastSocketError();
++                            else
++                                LastTcpError = error;
++                        }
++                    }
++                    else
++                        LastTcpError = error;
++                }
++                nonBlocking = 0;
++                if (ioctlsocket(FSocket, FIONBIO, &nonBlocking) == SOCKET_ERROR && LastTcpError == 0)
++                    LastTcpError = GetLastSocketError();
++                if (LastTcpError == 0)
++                {
++                    GetLocal();
++                    ClientHandle = LocalSin.sin_addr.s_addr;
++                }
++            }
++        }
++    }
++    Connected = LastTcpError == 0;
++    return LastTcpError;
++#else
+     int Result;
+     SetSin(RemoteSin, RemoteAddress, RemotePort);
+     if (LastTcpError==0)
+@@ -445,6 +503,7 @@
+     }
+     Connected=LastTcpError==0;
+     return LastTcpError;
++#endif
+ }
+ #endif
+ //---------------------------------------------------------------------------

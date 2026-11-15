@@ -10,7 +10,9 @@
 
 适用于 `PushButton`、`LineEdit`、`ComboBox`、`ToggleSwitch`、`Slider`、`SpinBox`。
 
-- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"`
+- `commandMode`（发送模式，选项）默认 `"文本"`，可选 `"文本"` `"HEX"` `"JSON"` `"Modbus"` `"S7"`
+- `commandTargetId`（S7 连接，文本）默认 `""`
+- `s7Command`（S7 写入，对象）默认 `{"address": "DB1.DBX0.0", "dataType": "BOOL", "value": "1", "onValue": "1", "offValue": "0"}`
 - `commandTemplate`（发送模板，文本）默认 `"{value}"`
 - `commandJsonNewline`（换行符，选项）默认 `"无"`，可选 `"无"` `"\\r\\n"` `"\\n"` `"\\r"`
 - `frameHeader`（帧头(HEX)，文本）默认 `""`
@@ -67,7 +69,7 @@
 
 #### `LineEdit` 输入框
 
-默认尺寸 200×36，最小 30×20
+默认尺寸 200×36，最小 30×20；绑定数据时写入 `text`
 
 另见[命令控件共有属性](#command-common)。
 
@@ -83,7 +85,7 @@
 
 #### `ComboBox` 下拉框
 
-默认尺寸 160×36，最小 30×20
+默认尺寸 160×36，最小 30×20；绑定数据时写入 `currentIndex`
 
 另见[命令控件共有属性](#command-common)。
 
@@ -264,7 +266,7 @@
 - `curveCount`（曲线数量，整数）默认 `1`，范围 1–8
 - `currentCurve`（当前编辑曲线，整数）默认 `0`，范围 0–7
 - `curveName`（曲线名称，文本）默认 `"曲线1"`
-- `curveParseMode`（解析模式，选项）默认 `"键值匹配"`，可选 `"键值匹配"` `"JSON路径"` `"HEX字节提取"` `"Modbus"`
+- `curveParseMode`（解析模式，选项）默认 `"键值匹配"`，可选 `"键值匹配"` `"JSON路径"` `"HEX字节提取"` `"Modbus"` `"S7"`
 - `curveKey`（匹配键，文本）默认 `""`
 - `curveJsonPath`（JSON路径，文本）默认 `""`
 - `curveByteOffset`（字节偏移，整数）默认 `0`，范围 0–9999
@@ -299,6 +301,22 @@
 - `maxRows`（最大行数，整数）默认 `500`，范围 10–50000
 
 ### 通信控件
+
+#### `S7ConfigCard` S7 配置卡片
+
+默认尺寸 500×200，最小 280×110
+
+- `title`（标题，文本）默认 `"S7 配置"`
+- `host`（地址，文本）默认 `"127.0.0.1"`
+- `port`（端口，整数）默认 `102`，范围 1–65535
+- `rack`（Rack，整数）默认 `0`，范围 0–7
+- `slot`（Slot，整数）默认 `1`，范围 0–31
+- `connectionType`（连接类型，整数）默认 `1`，范围 1–3，1 PG / 2 OP / 3 S7 Basic
+- `period`（默认轮询(ms)，整数）默认 `500`，范围 1–60000
+- `timeout`（响应超时(ms)，整数）默认 `1000`，范围 1–60000
+- `autoConnect`（自动连接，true/false）默认 `false`
+- `autoReconnect`（自动重连，true/false）默认 `true`
+- `reconnectInterval`（重连间隔(ms)，整数）默认 `1000`，范围 1–60000
 
 #### `SerialConfigCard` 串口配置卡片
 

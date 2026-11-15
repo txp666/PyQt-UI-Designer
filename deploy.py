@@ -19,6 +19,8 @@ def main():
     parser.add_argument("--archive-name", default=APP_NAME, help="Output name")
     options = parser.parse_args()
     root = Path(__file__).resolve().parent
+    from scripts.build_snap7 import build
+    build(root)
     result = subprocess.run(
         build_nuitka_command(root, [sys.executable], APP_NAME, options.version,
                              bundle_id=APP_BUNDLE_ID, description=APP_DESCRIPTION,

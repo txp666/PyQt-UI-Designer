@@ -49,8 +49,10 @@ PUSH_BUTTON_META = WidgetMeta(
         PropDef("text", N_("文本"), PropType.STRING, N_("按钮")),
         PropDef("enabled", N_("启用"), PropType.BOOL, True),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus", "S7"]),  # i18n: value
         PropDef("command", N_("发送内容"), PropType.COMMAND, ""),
+        PropDef("commandTargetId", N_("S7 连接"), PropType.STRING, ""),
+        PropDef("s7Command", N_("S7 写入"), PropType.OBJECT, {"address": "DB1.DBX0.0", "dataType": "BOOL", "value": "1", "onValue": "1", "offValue": "0"}),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
         PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
                 options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
@@ -114,7 +116,9 @@ LINE_EDIT_META = WidgetMeta(
         PropDef("readOnly", N_("只读"), PropType.BOOL, False),
         PropDef("sendOnEnter", N_("回车发送"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus", "S7"]),  # i18n: value
+        PropDef("commandTargetId", N_("S7 连接"), PropType.STRING, ""),
+        PropDef("s7Command", N_("S7 写入"), PropType.OBJECT, {"address": "DB1.DBX0.0", "dataType": "BOOL", "value": "1", "onValue": "1", "offValue": "0"}),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
         PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
                 options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
@@ -150,7 +154,9 @@ COMBO_BOX_META = WidgetMeta(
         PropDef("sendOnSelect", N_("选中发送"), PropType.BOOL, False),
         PropDef("commands", N_("发送命令表"), PropType.TEXT, "",),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus", "S7"]),  # i18n: value
+        PropDef("commandTargetId", N_("S7 连接"), PropType.STRING, ""),
+        PropDef("s7Command", N_("S7 写入"), PropType.OBJECT, {"address": "DB1.DBX0.0", "dataType": "BOOL", "value": "1", "onValue": "1", "offValue": "0"}),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
         PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
                 options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
@@ -189,9 +195,11 @@ SWITCH_META = WidgetMeta(
                 options=["非零为开", "等于指定值"]),  # i18n: value
         PropDef("onValue", N_("判定值"), PropType.STRING, "1"),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus", "S7"]),  # i18n: value
         PropDef("onCommand", N_("开启命令"), PropType.COMMAND, ""),
         PropDef("offCommand", N_("关闭命令"), PropType.COMMAND, ""),
+        PropDef("commandTargetId", N_("S7 连接"), PropType.STRING, ""),
+        PropDef("s7Command", N_("S7 写入"), PropType.OBJECT, {"address": "DB1.DBX0.0", "dataType": "BOOL", "value": "1", "onValue": "1", "offValue": "0"}),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
         PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
                 options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
@@ -232,7 +240,9 @@ SLIDER_META = WidgetMeta(
                 description="在滑块两端显示最小值和最大值"),  # i18n: ignore
         PropDef("sendOnChange", N_("变化发送"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus", "S7"]),  # i18n: value
+        PropDef("commandTargetId", N_("S7 连接"), PropType.STRING, ""),
+        PropDef("s7Command", N_("S7 写入"), PropType.OBJECT, {"address": "DB1.DBX0.0", "dataType": "BOOL", "value": "1", "onValue": "1", "offValue": "0"}),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
         PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
                 options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value
@@ -269,7 +279,9 @@ SPIN_BOX_META = WidgetMeta(
         PropDef("suffix", N_("后缀"), PropType.STRING, ""),
         PropDef("sendOnChange", N_("变化发送"), PropType.BOOL, False),
         PropDef("commandMode", N_("发送模式"), PropType.ENUM, "文本",  # i18n: value
-                options=["文本", "HEX", "JSON", "Modbus"]),  # i18n: value
+                options=["文本", "HEX", "JSON", "Modbus", "S7"]),  # i18n: value
+        PropDef("commandTargetId", N_("S7 连接"), PropType.STRING, ""),
+        PropDef("s7Command", N_("S7 写入"), PropType.OBJECT, {"address": "DB1.DBX0.0", "dataType": "BOOL", "value": "1", "onValue": "1", "offValue": "0"}),
         PropDef("commandTemplate", N_("发送模板"), PropType.STRING, "{value}"),
         PropDef("commandJsonNewline", N_("换行符"), PropType.ENUM, "无",  # i18n: value
                 options=["无", "\\r\\n", "\\n", "\\r"]),  # i18n: value

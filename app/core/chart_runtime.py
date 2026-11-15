@@ -20,6 +20,7 @@ from qfluentwidgets import (
 from .chart_history import ChartHistory
 from .protocol_parser import RawFrameBuffer
 from .binding_values import modbus_need, modbus_value, curve_expression
+from .s7_values import s7_sample_value
 from .signal_lifetime import SignalConnections
 from .i18n import tr
 
@@ -58,6 +59,7 @@ _DEFAULT_CURVE_CFG = {
     "frameHeader": "", "frameTail": "",
     "regIndex": 0, "mbDataType": "uint16", "mbRegOrder": "大端(AB CD)",  # i18n: value
     "mbFcFilter": -1, "mbSlaveFilter": -1, "mbArea": "保持寄存器",  # i18n: value
+    "sourceCardId": "", "s7": {"address": "DB1.DBD4", "dataType": "REAL", "period": 0},
 }
 
 # Virtual prop name -> per-curve storage suffix
@@ -71,6 +73,7 @@ _CURVE_FIELD_MAP = {
     "curveMbDataType": "mbDataType", "curveMbRegOrder": "mbRegOrder",
     "curveMbFcFilter": "mbFcFilter", "curveMbSlaveFilter": "mbSlaveFilter",
     "curveMbArea": "mbArea",
+    "curveSourceCardId": "sourceCardId", "curveS7": "s7",
 }
 
 
@@ -715,6 +718,20 @@ class RealtimeLineChart(QWidget):
 
     def on_raw(self, data):
         self._on_raw_data(data)
+
+    def on_s7(self, sample):
+        for index, config in enumerate(self._cfgs):
+            if config.get("parseMode") == "S7":
+                value = s7_sample_value(sample, config.get("sourceCardId", ""), config.get("s7", {}))
+                if value is not None:
+                    try:
+                        self.append_value(index, curve_expression(value, config.get("expression")))
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+
+    def s7_needs(self):
+        return [(cfg.get("sourceCardId", ""), cfg.get("s7", {})) for cfg in self._cfgs
+                if cfg.get("parseMode") == "S7"]
 
     def reset_stream(self):
         for frames in self._raw_frames:

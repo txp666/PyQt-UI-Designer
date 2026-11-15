@@ -21,6 +21,7 @@ class RealtimeLineChart(RuntimeChart):
         self._serial_connections.connect(signalBus.serialDataReceived, self._on_parsed_data)
         self._serial_connections.connect(signalBus.serialRawReceived, self._on_raw_data)
         self._serial_connections.connect(signalBus.serialDisconnected, self.reset_stream)
+        self._serial_connections.connect(signalBus.s7SampleReceived, self.on_s7)
 
     def stop_listening(self):
         if not self._listening:
@@ -34,7 +35,7 @@ class RealtimeLineChart(RuntimeChart):
 # Metadata
 # ---------------------------------------------------------------------------
 
-_PARSE_MODES = ["键值匹配", "JSON路径", "HEX字节提取", "Modbus"]  # i18n: value
+_PARSE_MODES = ["键值匹配", "JSON路径", "HEX字节提取", "Modbus", "S7"]  # i18n: value
 _HEX_DTYPES = ["uint8", "int8", "uint16", "int16", "uint32", "int32", "float32"]
 _HEX_BORDER = ["大端(BE)", "小端(LE)"]  # i18n: value
 _MB_DTYPES = ["uint16", "int16", "uint32", "int32", "float32"]

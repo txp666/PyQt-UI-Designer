@@ -552,7 +552,28 @@ SLAVE_TABLE_META = WidgetMeta(
     ],
 )
 
+from app.core.s7_card import S7ConfigCard
+
+S7_CONFIG_META = WidgetMeta(
+    type_name="S7ConfigCard", display_name=N_("S7 配置卡片"), category=WidgetCategory.COMM,
+    icon="GLOBE", default_width=500, default_height=200, min_width=280, min_height=110,
+    properties=[
+        PropDef("title", N_("标题"), PropType.STRING, N_("S7 配置")),
+        PropDef("host", N_("地址"), PropType.STRING, "127.0.0.1"),
+        PropDef("port", N_("端口"), PropType.INT, 102, min_val=1, max_val=65535),
+        PropDef("rack", "Rack", PropType.INT, 0, min_val=0, max_val=7),
+        PropDef("slot", "Slot", PropType.INT, 1, min_val=0, max_val=31),
+        PropDef("connectionType", N_("连接类型"), PropType.INT, 1, min_val=1, max_val=3,
+                description="1 PG / 2 OP / 3 S7 Basic"),
+        PropDef("period", N_("默认轮询(ms)"), PropType.INT, 500, min_val=1, max_val=60000),
+        PropDef("timeout", N_("响应超时(ms)"), PropType.INT, 1000, min_val=1, max_val=60000),
+        PropDef("autoConnect", N_("自动连接"), PropType.BOOL, False),
+        PropDef("autoReconnect", N_("自动重连"), PropType.BOOL, True),
+        PropDef("reconnectInterval", N_("重连间隔(ms)"), PropType.INT, 1000, min_val=1, max_val=60000),
+    ])
+
 ALL_COMPOSITE = [
+    S7_CONFIG_META,
     SERIAL_CONFIG_META, TCP_CONFIG_META, UDP_CONFIG_META, MQTT_CONFIG_META,
     DATA_SEND_META, DATA_RECV_META, LOG_BOX_META, SLAVE_TABLE_META,
 ]
@@ -568,6 +589,11 @@ def register_composite_widgets():
 
 
 def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget:
+    if type_name == "S7ConfigCard":
+        widget = S7ConfigCard(parent)
+        for key, value in props.items():
+            widget.set_config_value(key, value)
+        return widget
     if type_name in _RUNTIME_CARDS:
         w = _RUNTIME_CARDS[type_name](parent)
         for prop, method, default in w.PROPERTY_SETTERS:
@@ -596,7 +622,9 @@ def create_composite_widget(type_name: str, props: dict, parent=None) -> QWidget
 
 
 def apply_composite_property(widget, type_name: str, prop_name: str, value):
-    if type_name in _RUNTIME_CARDS:
+    if type_name == "S7ConfigCard":
+        widget.set_config_value(prop_name, value)
+    elif type_name in _RUNTIME_CARDS:
         for prop, method, _default in widget.PROPERTY_SETTERS:
             if prop == prop_name:
                 getattr(widget, method)(value)

@@ -30,7 +30,7 @@ with contextlib.redirect_stdout(io.StringIO()):  # qfluentwidgets prints an adve
     from app.widgets.layout import register_layout_widgets
     from app.widgets.industrial import register_industrial_widgets
 
-PARSE_MODES = ("键值匹配", "JSON路径", "HEX字节提取", "Modbus")
+PARSE_MODES = ("键值匹配", "JSON路径", "HEX字节提取", "Modbus", "S7")
 # Modbus binding (and chart curve) fields that take one of a few values, and those values.
 MODBUS_BINDING_OPTIONS = {"mbArea": tuple(MODBUS_AREAS), "mbDataType": MODBUS_DATA_TYPES,
                           "mbRegOrder": MODBUS_ORDERS}

@@ -1,0 +1,398 @@
+{
+  "version": "1.1",
+  "appName": "Classic S7 HMI",
+  "canvas": {
+    "width": 1000,
+    "height": 760,
+    "gridSize": 10
+  },
+  "widgets": [
+    {
+      "id": "heading",
+      "type": "Label",
+      "geometry": {
+        "x": 20,
+        "y": 12,
+        "w": 960,
+        "h": 30
+      },
+      "properties": {
+        "text": "Classic S7 HMI",
+        "fontSize": 22,
+        "bold": true
+      }
+    },
+    {
+      "id": "plc-main",
+      "type": "S7ConfigCard",
+      "geometry": {
+        "x": 20,
+        "y": 54,
+        "w": 960,
+        "h": 110
+      },
+      "properties": {
+        "title": "Main PLC",
+        "host": "127.0.0.1",
+        "port": 1102,
+        "rack": 0,
+        "slot": 1,
+        "connectionType": 1,
+        "period": 100,
+        "timeout": 800,
+        "autoConnect": false,
+        "autoReconnect": false,
+        "reconnectInterval": 1000
+      }
+    },
+    {
+      "id": "plc-other",
+      "type": "S7ConfigCard",
+      "geometry": {
+        "x": 20,
+        "y": 174,
+        "w": 960,
+        "h": 110
+      },
+      "properties": {
+        "title": "Other PLC",
+        "host": "127.0.0.1",
+        "port": 1103,
+        "rack": 0,
+        "slot": 1,
+        "connectionType": 1,
+        "period": 100,
+        "timeout": 800,
+        "autoConnect": false,
+        "autoReconnect": false,
+        "reconnectInterval": 1000
+      }
+    },
+    {
+      "id": "main-temp",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 20,
+        "y": 300,
+        "w": 228,
+        "h": 96
+      },
+      "properties": {
+        "title": "Main REAL",
+        "value": "0",
+        "unit": "",
+        "fontSize": 30
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "plc-main",
+        "s7": {
+          "address": "DB1.DBD16",
+          "dataType": "REAL",
+          "period": 100
+        }
+      }
+    },
+    {
+      "id": "other-temp",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 264,
+        "y": 300,
+        "w": 228,
+        "h": 96
+      },
+      "properties": {
+        "title": "Other REAL",
+        "value": "0",
+        "unit": "",
+        "fontSize": 30
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "plc-other",
+        "s7": {
+          "address": "DB1.DBD16",
+          "dataType": "REAL",
+          "period": 100
+        }
+      }
+    },
+    {
+      "id": "main-speed",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 508,
+        "y": 300,
+        "w": 228,
+        "h": 96
+      },
+      "properties": {
+        "title": "Main INT",
+        "value": "0",
+        "unit": "",
+        "fontSize": 30
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "plc-main",
+        "s7": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "period": 100
+        }
+      }
+    },
+    {
+      "id": "other-speed",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 752,
+        "y": 300,
+        "w": 228,
+        "h": 96
+      },
+      "properties": {
+        "title": "Other INT",
+        "value": "0",
+        "unit": "",
+        "fontSize": 30
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "plc-other",
+        "s7": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "period": 100
+        }
+      }
+    },
+    {
+      "id": "start",
+      "type": "ToggleSwitch",
+      "geometry": {
+        "x": 20,
+        "y": 414,
+        "w": 228,
+        "h": 50
+      },
+      "properties": {
+        "label": "Start / BOOL",
+        "checked": false,
+        "commandMode": "S7",
+        "commandTargetId": "plc-main",
+        "s7Command": {
+          "address": "DB1.DBX0.0",
+          "dataType": "BOOL",
+          "value": "1",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "plc-main",
+        "s7": {
+          "address": "DB1.DBX0.0",
+          "dataType": "BOOL",
+          "period": 100
+        }
+      }
+    },
+    {
+      "id": "speed-input",
+      "type": "LineEdit",
+      "geometry": {
+        "x": 264,
+        "y": 414,
+        "w": 228,
+        "h": 40
+      },
+      "properties": {
+        "text": "2401",
+        "placeholderText": "Speed + Enter",
+        "sendOnEnter": true,
+        "commandMode": "S7",
+        "commandTargetId": "plc-main",
+        "s7Command": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "value": "1",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      }
+    },
+    {
+      "id": "write-other",
+      "type": "PushButton",
+      "geometry": {
+        "x": 508,
+        "y": 414,
+        "w": 228,
+        "h": 40
+      },
+      "properties": {
+        "text": "Write other: -2222",
+        "commandMode": "S7",
+        "commandTargetId": "plc-other",
+        "s7Command": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "value": "-2222",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      }
+    },
+    {
+      "id": "dword-value",
+      "type": "Label",
+      "geometry": {
+        "x": 752,
+        "y": 414,
+        "w": 228,
+        "h": 40
+      },
+      "properties": {
+        "text": "DWORD",
+        "fontSize": 18
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "plc-main",
+        "s7": {
+          "address": "DB1.DBD12",
+          "dataType": "DWORD",
+          "period": 100
+        }
+      }
+    },
+    {
+      "id": "slider",
+      "type": "Slider",
+      "geometry": {
+        "x": 20,
+        "y": 478,
+        "w": 228,
+        "h": 36
+      },
+      "properties": {
+        "minimum": -30000,
+        "maximum": 30000,
+        "value": 0,
+        "sendOnChange": true,
+        "commandMode": "S7",
+        "commandTargetId": "plc-main",
+        "s7Command": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "value": "1",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      }
+    },
+    {
+      "id": "spin",
+      "type": "SpinBox",
+      "geometry": {
+        "x": 264,
+        "y": 478,
+        "w": 228,
+        "h": 40
+      },
+      "properties": {
+        "minimum": -30000,
+        "maximum": 30000,
+        "value": 0,
+        "sendOnChange": true,
+        "commandMode": "S7",
+        "commandTargetId": "plc-main",
+        "s7Command": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "value": "1",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      }
+    },
+    {
+      "id": "speed-combo",
+      "type": "ComboBox",
+      "geometry": {
+        "x": 508,
+        "y": 478,
+        "w": 228,
+        "h": 40
+      },
+      "properties": {
+        "items": "Low\nHigh",
+        "currentIndex": 0,
+        "commands": "1200\n2400",
+        "sendOnSelect": true,
+        "commandMode": "S7",
+        "commandTargetId": "plc-main",
+        "s7Command": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "value": "1",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      }
+    },
+    {
+      "id": "trend",
+      "type": "RealtimeChart",
+      "geometry": {
+        "x": 20,
+        "y": 540,
+        "w": 716,
+        "h": 200
+      },
+      "properties": {
+        "title": "PLC sine",
+        "curveCount": 1,
+        "_curve_0_name": "Sine (20–80)",
+        "_curve_0_parseMode": "S7",
+        "_curve_0_sourceCardId": "plc-main",
+        "_curve_0_s7": {
+          "address": "DB1.DBD20",
+          "dataType": "REAL",
+          "period": 100
+        }
+      }
+    },
+    {
+      "id": "temperature-gauge",
+      "type": "GaugeMeter",
+      "geometry": {
+        "x": 752,
+        "y": 462,
+        "w": 228,
+        "h": 180
+      },
+      "properties": {
+        "title": "Temperature",
+        "unit": "°C",
+        "minimum": -50,
+        "maximum": 150
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "plc-main",
+        "s7": {
+          "address": "DB1.DBD16",
+          "dataType": "REAL",
+          "period": 0
+        }
+      }
+    }
+  ],
+  "serial": {
+    "parser": "line"
+  }
+}

@@ -30,6 +30,7 @@ nuitka-crash-report.xml
 
 # Packaging output
 *.zip
+app/resource/native/
 
 # OS
 .DS_Store
@@ -42,6 +43,7 @@ output/
 !demo/project.uidp
 !examples/tutorials/*.uidp
 !examples/industrial/*.uidp
+!examples/s7/*.uidp
 
 # Cursor
 .cursor/

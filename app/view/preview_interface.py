@@ -27,6 +27,7 @@ from app.widgets.basic import button_modbus_value, create_widget
 from app.core.project import ProjectData
 from app.core.data_binding import bindingEngine
 from app.core.modbus_poller import ModbusPoller
+from app.core.s7_runtime import S7Poller, wire_s7_commands
 from app.core.signal_lifetime import SignalConnections
 from app.core.slider_limits import slider_of
 from app.core.slider_release import SendOnRelease
@@ -46,6 +47,7 @@ class PreviewCanvas(QWidget):
         self._widgets = []
         self._asset_base_dir = None
         self._modbus_poller = None
+        self._s7_poller = None
         self._slave_devices = []  # the slaves of the link cards in the 从站 role, in document order
         self._update_style()
 
@@ -68,6 +70,7 @@ class PreviewCanvas(QWidget):
         # Reads what the Modbus bindings and chart curves show; the link cards, created in document
         # order, register their own links on the hub, hand it their settings and show its status.
         self._modbus_poller = ModbusPoller(commHub, bindingEngine.modbus_needs, self)
+        self._s7_poller = S7Poller(commHub, bindingEngine.s7_needs, self)
 
         for wd in project.widgets:
             self._create_widget_recursive(wd, self)
@@ -76,6 +79,7 @@ class PreviewCanvas(QWidget):
             if hasattr(widget, "set_slave_device"):  # a register table shows the first slave's
                 widget.set_slave_device(self._slave_devices[0] if self._slave_devices else None)
         self._modbus_poller.start()
+        self._s7_poller.start()
 
     def start_slaves(self):
         """The bindings are up: every slave publishes its whole data table, so bound widgets show it."""
@@ -122,6 +126,9 @@ class PreviewCanvas(QWidget):
                 bindingEngine.register_widget(widget_id, widget)
 
             self._wire_commands(widget, type_name, props)
+            if type_name == "S7ConfigCard":
+                from app.core.comm_manager import commHub
+                widget.set_hub(commHub, widget_id)
             self._wire_slave_writes(widget, type_name, wd.get("binding") or {})
             if hasattr(widget, "set_modbus_poller"):  # a link card: its own link, its settings, the poller's status
                 from app.core.comm_manager import commHub
@@ -280,6 +287,10 @@ class PreviewCanvas(QWidget):
     def _wire_commands(self, widget: QWidget, type_name: str, props: dict):
         """Connect command properties to sending over the communication hub."""
         mode = props.get("commandMode", "文本")  # i18n: value
+        if mode == "S7":
+            from app.core.comm_manager import commHub
+            wire_s7_commands(widget, type_name, props, commHub, self._command_error)
+            return
         newline = props.get("commandNewline", "\\r\\n")
         tpl = props.get("commandTemplate", "{value}")
 
@@ -358,12 +369,18 @@ class PreviewCanvas(QWidget):
                 sw.checkedChanged.connect(lambda _: emit())
 
     def clear(self):
+        if self._s7_poller is not None:
+            self._s7_poller.stop()
+            self._s7_poller.deleteLater()
+            self._s7_poller = None
         if self._modbus_poller is not None:
             self._modbus_poller.stop()
             self._modbus_poller.deleteLater()
             self._modbus_poller = None
         self._slave_devices = []
         for w in self._widgets:
+            if hasattr(w, "set_hub"):
+                w.set_hub(None)
             if hasattr(w, "stop_listening"):
                 w.stop_listening()
             if hasattr(w, "set_modbus_poller"):  # a link card: its link disconnects and leaves the hub now

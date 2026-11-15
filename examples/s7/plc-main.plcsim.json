@@ -1,0 +1,199 @@
+{
+  "format": "FluentPLC-Simulator",
+  "version": 1,
+  "name": "main",
+  "server": {
+    "bindAddress": "127.0.0.1",
+    "port": 1102,
+    "memorySize": 256
+  },
+  "tags": [
+    {
+      "name": "Start",
+      "address": "DB1.DBX0.0",
+      "dataType": "BOOL",
+      "initialValue": false,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Neighbour",
+      "address": "DB1.DBX0.7",
+      "dataType": "BOOL",
+      "initialValue": true,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Signed byte",
+      "address": "DB1.DBB1",
+      "dataType": "SINT",
+      "initialValue": -12,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Speed",
+      "address": "DB1.DBW2",
+      "dataType": "INT",
+      "initialValue": -1234,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Status byte",
+      "address": "DB1.DBB4",
+      "dataType": "BYTE",
+      "initialValue": 170,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Unsigned word",
+      "address": "DB1.DBW6",
+      "dataType": "WORD",
+      "initialValue": 50000,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Signed count",
+      "address": "DB1.DBD8",
+      "dataType": "DINT",
+      "initialValue": -123456789,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Unsigned count",
+      "address": "DB1.DBD12",
+      "dataType": "DWORD",
+      "initialValue": 4000000000,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Temperature",
+      "address": "DB1.DBD16",
+      "dataType": "REAL",
+      "initialValue": 23.5,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Sine",
+      "address": "DB1.DBD20",
+      "dataType": "REAL",
+      "initialValue": 50.0,
+      "mode": "sine",
+      "minimum": 20,
+      "maximum": 80,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Heartbeat",
+      "address": "DB1.DBX24.0",
+      "dataType": "BOOL",
+      "initialValue": false,
+      "mode": "toggle",
+      "minimum": 0,
+      "maximum": 1,
+      "periodSeconds": 2,
+      "source": ""
+    },
+    {
+      "name": "Memory bit",
+      "address": "M0.0",
+      "dataType": "BOOL",
+      "initialValue": false,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Memory neighbour",
+      "address": "M0.7",
+      "dataType": "BOOL",
+      "initialValue": true,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Memory byte",
+      "address": "MB1",
+      "dataType": "BYTE",
+      "initialValue": 34,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Input word",
+      "address": "IW2",
+      "dataType": "INT",
+      "initialValue": 321,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Output real",
+      "address": "QD4",
+      "dataType": "REAL",
+      "initialValue": 7.25,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 4,
+      "source": ""
+    },
+    {
+      "name": "Running output",
+      "address": "Q0.0",
+      "dataType": "BOOL",
+      "initialValue": false,
+      "mode": "follow",
+      "minimum": 0,
+      "maximum": 1,
+      "periodSeconds": 4,
+      "source": "DB1.DBX0.0"
+    }
+  ]
+}

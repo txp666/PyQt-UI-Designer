@@ -1,0 +1,3 @@
+[submodule "third_party/snap7"]
+	path = third_party/snap7
+	url = https://github.com/davenardella/snap7.git

@@ -1,0 +1,2 @@
+# Snap7 patches retain upstream line endings and context whitespace.
+patches/*.patch -text -whitespace

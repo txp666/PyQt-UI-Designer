@@ -29,6 +29,7 @@ from app.core.command_runtime import MODBUS_ORDERS
 from app.core.link_polling import PROJECT_PARSER
 from app.core.modbus_slave import MASTER_ROLE, SLAVE_ROLE
 from app.core.data_binding import BIND_PROPERTIES
+from app.core.s7_values import S7_TYPES, DEFAULT_POINT
 from app.core.modbus_master import MODBUS_PARSERS
 from app.core.project import LINK_CARD_TYPES
 from app.core.protocol_parser import (
@@ -77,7 +78,7 @@ _MODE_VISIBILITY = {
     "Modbus": {"mbSlave", "mbFunc", "mbArea", "mbAddress", "mbValue", "mbDataType", "mbRegOrder"},
 }
 _MODE_FIELDS = {
-    "command", "onCommand", "offCommand", "commandNewline", "commandTemplate", "commandJsonNewline",
+    "commandTargetId", "command", "onCommand", "offCommand", "commandNewline", "commandTemplate", "commandJsonNewline",
     "frameHeader", "frameTail", "dataType", "byteOrder",
     "mbSlave", "mbFunc", "mbArea", "mbAddress", "mbValue", "mbDataType", "mbRegOrder",
 }
@@ -380,6 +381,8 @@ class PropertyEditor(ScrollArea):
             geo_layout.addRow(BodyLabel(label_text), spin)
 
         self._layout.addWidget(geo_card)
+        self._s7_command_section = None
+        self._s7_curve_section = None
 
         # properties card
         if meta.properties:
@@ -403,10 +406,19 @@ class PropertyEditor(ScrollArea):
 
             self._layout.addWidget(props_card)
 
-            if item.type_name in LINK_CARD_TYPES:
+            if item.type_name in LINK_CARD_TYPES and item.type_name != "S7ConfigCard":
                 self._apply_link_parser_visibility()
                 self._card_frame_section = self._card_frame_format()
                 self._layout.addWidget(self._card_frame_section)
+
+            if "commandMode" in self._editors:
+                self._s7_command_section, self._command_s7_values = self._s7_section(
+                    tr("S7 写入"), item.properties.get("commandTargetId", ""),
+                    item.properties.get("s7Command", {}), "command")
+                self._layout.addWidget(self._s7_command_section)
+
+            if item.type_name == "RealtimeChart":
+                self._load_s7_curve_section(item)
 
             cur_mode = item.properties.get("commandMode", "文本")  # i18n: value
             self._apply_mode_visibility(cur_mode)
@@ -448,7 +460,7 @@ class PropertyEditor(ScrollArea):
 
             bd = item.binding or {}
 
-            modes = ["键值匹配", "JSON路径", "HEX字节提取", "Modbus"]  # i18n: value
+            modes = ["键值匹配", "JSON路径", "HEX字节提取", "Modbus", "S7"]  # i18n: value
             cur_pm = bd.get("parseMode", modes[0])
             self._bind_mode_combo = _value_combo(modes, cur_pm, self._on_bind_mode_changed)
             binding_rows.add(BodyLabel(tr("解析模式")), self._bind_mode_combo)
@@ -554,9 +566,97 @@ class PropertyEditor(ScrollArea):
             binding_rows.add(BodyLabel(tr("转换表达式")), self._bind_expr_edit)
 
             self._layout.addWidget(binding_card)
+            self._s7_binding_section, self._binding_s7_values = self._s7_section(
+                tr("S7 数据源"), bd.get("sourceCardId", ""), bd.get("s7", {}), "binding")
+            self._layout.addWidget(self._s7_binding_section)
             self._apply_bind_mode_visibility(cur_pm)
 
         self._layout.addStretch()
+
+    def _s7_section(self, title, source_id, point, kind):
+        section = CardWidget()
+        layout = QFormLayout(section)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.addRow(StrongBodyLabel(title))
+        source = ComboBox()
+        source.addItem(tr("选择 S7 连接"), userData="")
+        scene = self._current_item.scene()
+        if scene is not None and hasattr(scene, "all_canvas_items"):
+            for card in scene.all_canvas_items():
+                if card.type_name == "S7ConfigCard":
+                    source.addItem(f"{card.widget_id} · {card.properties.get('host', '127.0.0.1')}", userData=card.widget_id)
+        if source_id and source.findData(source_id) < 0:
+            source.addItem(source_id, userData=source_id)
+        _select_value(source, source_id)
+        layout.addRow(BodyLabel(tr("S7 连接")), source)
+        values = dict(DEFAULT_POINT)
+        values.update(point or {})
+        editors = {}
+        fields = [("address", tr("S7 地址")), ("dataType", tr("数据类型"))]
+        if kind != "command":
+            fields.append(("period", tr("采集周期(ms)")))
+        elif self._current_item.type_name == "ToggleSwitch":
+            fields.extend((("onValue", tr("开启写入值")), ("offValue", tr("关闭写入值"))))
+        elif self._current_item.type_name == "PushButton":
+            fields.append(("value", tr("写入值")))
+        for key, label in fields:
+            if key == "dataType":
+                editor = _value_combo(list(S7_TYPES), values[key])
+            elif key == "period":
+                editor = SpinBox()
+                editor.setRange(0, 60000)
+                editor.setValue(values[key])
+                _fluent_tooltip(editor, tr("0 = 使用连接默认周期"))
+            else:
+                editor = LineEdit()
+                editor.setText(str(values.get(key, "0" if key == "offValue" else "1")))
+                if key == "address":
+                    editor.setPlaceholderText("DB1.DBD4 / M0.0 / QW2")
+            editors[key] = editor
+            layout.addRow(BodyLabel(label), editor)
+
+        def read():
+            config = dict(point or {})
+            for key, editor in editors.items():
+                config[key] = (editor.currentData() if key == "dataType" else editor.value()
+                               if key == "period" else editor.text().strip())
+            return source.currentData() or "", config
+
+        def changed(*_):
+            if self._updating:
+                return
+            target, config = read()
+            if kind == "binding":
+                self._on_binding_changed("s7")
+            elif kind == "command":
+                self._on_prop_changed("commandTargetId", target)
+                self._on_prop_changed("s7Command", config)
+            else:
+                self._on_prop_changed("curveSourceCardId", target)
+                self._on_prop_changed("curveS7", config)
+
+        source.currentIndexChanged.connect(changed)
+        for editor in editors.values():
+            if isinstance(editor, ComboBox):
+                editor.currentIndexChanged.connect(changed)
+            elif hasattr(editor, "valueChanged"):
+                editor.valueChanged.connect(changed)
+            else:
+                editor.textChanged.connect(changed)
+        return section, read
+
+    def _load_s7_curve_section(self, item):
+        index = int(item.properties.get("currentCurve", 0))
+        section, _read = self._s7_section(tr("S7 曲线数据源"),
+            item.properties.get(f"_curve_{index}_sourceCardId", ""),
+            item.properties.get(f"_curve_{index}_s7", {}), "curve")
+        old = self._s7_curve_section
+        self._s7_curve_section = section
+        if old is None:
+            self._layout.addWidget(section)
+        else:
+            self._layout.replaceWidget(old, section)
+            old.deleteLater()
 
     def _add_bit_profile_editor(self, name="default"):
         project = self._project()
@@ -873,6 +973,8 @@ class PropertyEditor(ScrollArea):
     def _apply_mode_visibility(self, mode: str):
         """Show/hide command-related property rows based on commandMode."""
         visible = _MODE_VISIBILITY.get(mode, set())
+        if self._s7_command_section is not None:
+            self._s7_command_section.setVisible(mode == "S7")
         for name in _MODE_FIELDS:
             if name in self._prop_rows:
                 self._show_row(self._prop_rows[name][1], name in visible)
@@ -899,7 +1001,7 @@ class PropertyEditor(ScrollArea):
         A Modbus-mode control sends whether or not the toggle is on, so its fields stay visible."""
         all_fields = _SEND_TOGGLE_FIELDS | _MODE_FIELDS
         mode = self._current_item.properties.get("commandMode", "文本") if self._current_item else "文本"  # i18n: value
-        if not enabled and mode != "Modbus":
+        if not enabled and mode not in ("Modbus", "S7"):
             for name in all_fields:
                 if name in self._prop_rows:
                     self._show_row(self._prop_rows[name][1], False)
@@ -912,6 +1014,8 @@ class PropertyEditor(ScrollArea):
     def _apply_chart_parse_visibility(self, mode: str):
         """Show/hide chart per-curve property rows based on curveParseMode."""
         visible = _CHART_PARSE_VIS.get(mode, set())
+        if self._s7_curve_section is not None:
+            self._s7_curve_section.setVisible(mode == "S7")
         for name in _CHART_PARSE_ALL:
             if name in self._prop_rows:
                 self._show_row(self._prop_rows[name][1], name in visible)
@@ -1035,6 +1139,7 @@ class PropertyEditor(ScrollArea):
               and self._current_item.type_name == "RealtimeChart"):
             if prop_name == "currentCurve":
                 self._load_curve_editors(self._current_item)
+                self._load_s7_curve_section(self._current_item)
                 ci = int(value)
                 pm = self._current_item.properties.get(
                     f"_curve_{ci}_parseMode", "键值匹配")  # i18n: value
@@ -1048,6 +1153,7 @@ class PropertyEditor(ScrollArea):
                         self._editors["currentCurve"].setValue(0)
                         self._updating = False
                     self._load_curve_editors(self._current_item)
+                    self._load_s7_curve_section(self._current_item)
                     pm = self._current_item.properties.get(
                         "_curve_0_parseMode", "键值匹配")  # i18n: value
                     self._apply_chart_parse_visibility(pm)
@@ -1100,6 +1206,7 @@ class PropertyEditor(ScrollArea):
         is_json = mode == "JSON路径"  # i18n: value
         is_hex = mode == "HEX字节提取"  # i18n: value
         is_mb = mode == "Modbus"
+        self._s7_binding_section.setVisible(mode == "S7")
         for field, shown in ((self._bind_key_edit, is_kv), (self._bind_json_edit, is_json),
                              *((field, is_hex) for field in (
                                  self._bind_offset_spin, self._bind_dtype_combo, self._bind_order_combo,
@@ -1132,6 +1239,7 @@ class PropertyEditor(ScrollArea):
             or (pm == "JSON路径" and json_path)  # i18n: value
             or (pm == "HEX字节提取")  # i18n: value
             or (pm == "Modbus")
+            or (pm == "S7")
         )
         if has_config:
             self._current_item.binding = {
@@ -1154,5 +1262,9 @@ class PropertyEditor(ScrollArea):
             }
         else:
             self._current_item.binding = None
+        if pm == "S7":
+            source, point = self._binding_s7_values()
+            self._current_item.binding = {"parseMode": "S7", "sourceCardId": source,
+                                          "s7": point, "expression": expr or None}
         self.edited.emit((self._current_item.widget_id, "binding", field))
         signalBus.canvasChanged.emit()

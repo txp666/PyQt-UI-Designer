@@ -5,7 +5,7 @@
   <p align="center">English · <a href="README_zh.md">简体中文</a> · <a href="https://hmi.modusignal.cn/#python">Website</a> · <a href="https://hmi.modusignal.cn/guide/">User guide</a> · <a href="https://github.com/txp666/PyQt-UI-Designer/releases/latest">Download</a></p>
 </p>
 
-PyQt UI Designer is the Python/PyQt5 visual HMI designer in the [modusignal](https://github.com/txp666/modusignal) tool family. Drag widgets onto a canvas, configure their properties and bind serial, TCP, UDP or MQTT data, then export **editable Python source** and package a standalone Windows or macOS app with Nuitka. It shares the `.uidp` format with [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) and the supported Custom Device features in modusignal.
+PyQt UI Designer is the Python/PyQt5 visual HMI designer in the [modusignal](https://github.com/txp666/modusignal) tool family. Drag widgets onto a canvas, configure their properties and bind serial, TCP, UDP, MQTT or classic S7comm data, then export **editable Python source** and package a standalone Windows or macOS app with Nuitka. It shares the `.uidp` format with [FluentHMI Studio](https://github.com/txp666/FluentHMI-Studio) and the supported Custom Device features in modusignal.
 
 > **Language**: choose English or Simplified Chinese in Settings → Language.
 
@@ -91,6 +91,8 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+To use S7 from source, initialize the Snap7 submodule and build its platform library with `python scripts/build_snap7.py`; this requires CMake, Ninja and a C++ compiler. See [S7 dependency setup](docs/s7.md#build-the-native-dependency). Packaged builds include the native library.
+
 On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python. The requirements file already has the conditions that pick a Qt 5 runtime with Apple Silicon support, so don't pin an older Qt that only has Intel packages.
 
 ## Features
@@ -138,6 +140,8 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **Binding by register address**: read requests sent from here are remembered, so the registers in a response are also named by address (holding register 100 is `hr100`) and a binding can pick a register table and an address; polling several address blocks of a PLC doesn't mix them up
 - Serial, TCP, UDP and MQTT all offer five parser modes (line text, binary HEX frame, Modbus RTU, Modbus TCP, Modbus ASCII) and can detect the format of a line protocol automatically; binary HEX frames are framed by header and footer, length field, checksum, fixed length or idle gap, set for the project or for each link card
 
+- **Classic S7comm**: typed absolute DB/M/I/Q reads and targeted writes through an S7 connection card, including native single-bit BOOL writes. Preview, source export and Nuitka use the same backend. See [S7 setup and example](docs/s7.md).
+
 ### Sending commands
 
 - **Text mode**: optional line ending
@@ -172,12 +176,13 @@ The [Python .uidp entry](docs/uidp-format.md) links the shared format, task-spec
 
 | Protocol | Status | Notes |
 | --- | --- | --- |
+| **Classic S7comm** | ✅ Supported | S7-300/400; PUT/GET and non-optimized DB access on S7-1200/1500. Absolute BOOL/BYTE/SINT/WORD/INT/DWORD/DINT/REAL; [native dependency and example](docs/s7.md) |
 | **Serial** | ✅ Supported | RS-232/485/TTL, with line text, HEX frame and Modbus RTU parsing |
 | **TCP Client/Server** | ✅ Supported | TCP client or server; the server accepts several devices. Same parser modes as serial, plus Modbus TCP (MBAP): with `modbus_tcp` selected, Modbus commands are framed as MBAP automatically |
 | **MQTT** | ✅ Supported | Subscribe / publish, with wildcard topics, username and password, QoS 0/1/2 and TLS; each message is parsed as one frame, and a payload that is just a number can be bound by its topic name |
 | **UDP** | ✅ Supported | Local port and remote host / port; with no remote, replies go to the last sender. Each datagram is one frame, each sender is framed separately; Modbus TCP over UDP, RTU and ASCII too, as master or slave; broadcast by entering a broadcast address |
 
-The communication layer is modular: every link implements the same set of signals, and `CommHub` gathers them for bindings, charts, tables and logs, which makes it easy to add more protocols. PRs are welcome. See [docs/protocol.md](docs/protocol.md#六传输链路串口tcpmqtt) for details of each link.
+The raw communication layer is modular: serial/TCP/UDP/MQTT implement the same set of signals, and `CommHub` gathers them for bindings, charts, tables and logs, which makes it easy to add more protocols. PRs are welcome. See [docs/protocol.md](docs/protocol.md#六传输链路串口tcpmqtt) for details of each link.
 
 ## How to use it
 
@@ -345,7 +350,7 @@ Bug reports and feature requests are welcome as [Issues](https://github.com/txp6
 | [modusignal](https://github.com/txp666/modusignal) | Browser device debugger and `.uidp` Custom Device editor, within browser transport limits |
 | [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) | Independent desktop and CLI classic S7comm server for testing S7 clients |
 
-The HMI tools share `.uidp` projects where their widgets and transports are supported. FluentPLC Simulator uses its own `.plcsim.json` format. S7 client support is not currently implemented in FluentHMI Studio, PyQt UI Designer or modusignal.
+The HMI tools share `.uidp` projects where their widgets and transports are supported. FluentPLC Simulator uses its own `.plcsim.json` format. PyQt UI Designer includes a classic S7comm client; see [S7 setup](docs/s7.md). The browser editor does not support S7. Check FluentHMI Studio for its current protocol scope.
 
 ## License
 
