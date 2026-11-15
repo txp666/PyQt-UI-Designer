@@ -140,7 +140,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 - **Binding by register address**: read requests sent from here are remembered, so the registers in a response are also named by address (holding register 100 is `hr100`) and a binding can pick a register table and an address; polling several address blocks of a PLC doesn't mix them up
 - Serial, TCP, UDP and MQTT all offer five parser modes (line text, binary HEX frame, Modbus RTU, Modbus TCP, Modbus ASCII) and can detect the format of a line protocol automatically; binary HEX frames are framed by header and footer, length field, checksum, fixed length or idle gap, set for the project or for each link card
 
-- **Classic S7comm**: typed absolute DB/M/I/Q reads and targeted writes through an S7 connection card, including native single-bit BOOL writes. Preview, source export and Nuitka use the same backend. See [S7 setup and example](docs/s7.md).
+- **Classic S7comm**: typed absolute DB/M/I/Q reads and targeted writes through an S7 connection card, including native single-bit BOOL writes. Preview, source export and Nuitka use the same backend. See [S7 setup and example](docs/s7.md); use [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) for local PLC simulation.
 
 ### Sending commands
 
