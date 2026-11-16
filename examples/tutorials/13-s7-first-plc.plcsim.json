@@ -1,0 +1,67 @@
+{
+  "format": "FluentPLC-Simulator",
+  "version": 1,
+  "name": "S7 first PLC lab",
+  "server": {
+    "bindAddress": "127.0.0.1",
+    "port": 1102,
+    "memorySize": 256
+  },
+  "tags": [
+    {
+      "name": "Pump enable",
+      "address": "DB1.DBX0.0",
+      "dataType": "BOOL",
+      "initialValue": false,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 8,
+      "source": ""
+    },
+    {
+      "name": "Neighbour bit (keep ON)",
+      "address": "DB1.DBX0.7",
+      "dataType": "BOOL",
+      "initialValue": true,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 8,
+      "source": ""
+    },
+    {
+      "name": "Speed feedback",
+      "address": "DB1.DBW2",
+      "dataType": "INT",
+      "initialValue": 900,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 3000,
+      "periodSeconds": 8,
+      "source": ""
+    },
+    {
+      "name": "Temperature",
+      "address": "DB1.DBD4",
+      "dataType": "REAL",
+      "initialValue": 23.5,
+      "mode": "manual",
+      "minimum": 0,
+      "maximum": 100,
+      "periodSeconds": 8,
+      "source": ""
+    },
+    {
+      "name": "Pressure",
+      "address": "DB1.DBD8",
+      "dataType": "REAL",
+      "initialValue": 1.2,
+      "mode": "sine",
+      "minimum": 0.8,
+      "maximum": 1.6,
+      "periodSeconds": 8,
+      "source": ""
+    }
+  ]
+}

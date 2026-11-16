@@ -1,0 +1,297 @@
+{
+  "version": "1.1",
+  "appName": "S7 PLC 联调入门",
+  "canvas": {
+    "width": 1000,
+    "height": 760,
+    "gridSize": 10
+  },
+  "serial": {
+    "parser": "line"
+  },
+  "widgets": [
+    {
+      "id": "heading",
+      "type": "Label",
+      "geometry": {
+        "x": 20,
+        "y": 10,
+        "w": 960,
+        "h": 35
+      },
+      "properties": {
+        "text": "第一次 S7 PLC 联调",
+        "fontSize": 26,
+        "bold": true
+      }
+    },
+    {
+      "id": "subtitle",
+      "type": "Label",
+      "geometry": {
+        "x": 20,
+        "y": 48,
+        "w": 960,
+        "h": 28
+      },
+      "properties": {
+        "text": "读取数值、绘制压力曲线，再写入启停和转速。",
+        "fontSize": 14
+      }
+    },
+    {
+      "id": "lesson-plc",
+      "type": "S7ConfigCard",
+      "geometry": {
+        "x": 20,
+        "y": 90,
+        "w": 960,
+        "h": 110
+      },
+      "properties": {
+        "title": "本地 PLC · 127.0.0.1:1102",
+        "host": "127.0.0.1",
+        "port": 1102,
+        "rack": 0,
+        "slot": 1,
+        "connectionType": 1,
+        "period": 200,
+        "timeout": 1000,
+        "autoConnect": false,
+        "autoReconnect": true,
+        "reconnectInterval": 1000
+      }
+    },
+    {
+      "id": "temperature",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 20,
+        "y": 220,
+        "w": 224,
+        "h": 100
+      },
+      "properties": {
+        "title": "温度",
+        "value": "0",
+        "unit": "°C",
+        "decimals": "1",
+        "fontSize": 32
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "lesson-plc",
+        "s7": {
+          "address": "DB1.DBD4",
+          "dataType": "REAL",
+          "period": 0
+        }
+      }
+    },
+    {
+      "id": "pressure",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 264,
+        "y": 220,
+        "w": 224,
+        "h": 100
+      },
+      "properties": {
+        "title": "压力",
+        "value": "0",
+        "unit": "bar",
+        "decimals": "2",
+        "fontSize": 32
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "lesson-plc",
+        "s7": {
+          "address": "DB1.DBD8",
+          "dataType": "REAL",
+          "period": 0
+        }
+      }
+    },
+    {
+      "id": "speed",
+      "type": "NumericDisplay",
+      "geometry": {
+        "x": 508,
+        "y": 220,
+        "w": 224,
+        "h": 100
+      },
+      "properties": {
+        "title": "转速反馈",
+        "value": "0",
+        "unit": "rpm",
+        "decimals": "0",
+        "fontSize": 32
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "lesson-plc",
+        "s7": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "period": 0
+        }
+      }
+    },
+    {
+      "id": "temperature-gauge",
+      "type": "GaugeMeter",
+      "geometry": {
+        "x": 760,
+        "y": 220,
+        "w": 220,
+        "h": 210
+      },
+      "properties": {
+        "title": "温度",
+        "minimum": 0,
+        "maximum": 100,
+        "unit": "°C"
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "lesson-plc",
+        "s7": {
+          "address": "DB1.DBD4",
+          "dataType": "REAL",
+          "period": 0
+        }
+      }
+    },
+    {
+      "id": "run",
+      "type": "ToggleSwitch",
+      "geometry": {
+        "x": 20,
+        "y": 356,
+        "w": 224,
+        "h": 40
+      },
+      "properties": {
+        "label": "泵启停",
+        "checked": false,
+        "commandMode": "S7",
+        "commandTargetId": "lesson-plc",
+        "s7Command": {
+          "address": "DB1.DBX0.0",
+          "dataType": "BOOL",
+          "value": "1",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      },
+      "binding": {
+        "parseMode": "S7",
+        "sourceCardId": "lesson-plc",
+        "s7": {
+          "address": "DB1.DBX0.0",
+          "dataType": "BOOL",
+          "period": 0
+        }
+      }
+    },
+    {
+      "id": "speed-input",
+      "type": "LineEdit",
+      "geometry": {
+        "x": 264,
+        "y": 356,
+        "w": 224,
+        "h": 40
+      },
+      "properties": {
+        "text": "1500",
+        "placeholderText": "输入转速后按回车",
+        "sendOnEnter": true,
+        "commandMode": "S7",
+        "commandTargetId": "lesson-plc",
+        "s7Command": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "value": "1",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      }
+    },
+    {
+      "id": "preset",
+      "type": "PushButton",
+      "geometry": {
+        "x": 508,
+        "y": 356,
+        "w": 224,
+        "h": 40
+      },
+      "properties": {
+        "text": "恢复 900 rpm",
+        "commandMode": "S7",
+        "commandTargetId": "lesson-plc",
+        "s7Command": {
+          "address": "DB1.DBW2",
+          "dataType": "INT",
+          "value": "900",
+          "onValue": "1",
+          "offValue": "0"
+        }
+      }
+    },
+    {
+      "id": "hint",
+      "type": "Label",
+      "geometry": {
+        "x": 20,
+        "y": 410,
+        "w": 712,
+        "h": 28
+      },
+      "properties": {
+        "text": "按回车写入转速；上方数值由 PLC 重新读回。",
+        "fontSize": 13
+      }
+    },
+    {
+      "id": "pressure-trend",
+      "type": "RealtimeChart",
+      "geometry": {
+        "x": 20,
+        "y": 456,
+        "w": 960,
+        "h": 250
+      },
+      "properties": {
+        "title": "实时压力 · REAL",
+        "curveCount": 1,
+        "_curve_0_name": "压力 (bar)",
+        "_curve_0_parseMode": "S7",
+        "_curve_0_sourceCardId": "lesson-plc",
+        "_curve_0_s7": {
+          "address": "DB1.DBD8",
+          "dataType": "REAL",
+          "period": 0
+        }
+      }
+    },
+    {
+      "id": "alignment",
+      "type": "Label",
+      "geometry": {
+        "x": 20,
+        "y": 724,
+        "w": 960,
+        "h": 25
+      },
+      "properties": {
+        "text": "教程对齐 C++ / Py 0.7.0 · 模拟器 0.1.1 · UIDP 1.1",
+        "fontSize": 12
+      }
+    }
+  ]
+}

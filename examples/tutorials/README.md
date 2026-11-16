@@ -2,7 +2,7 @@
 
 这里是视频教程里一步步搭出来的工程。在设计器左侧点“打开项目”，选择对应的 `.uidp` 文件，就能接着改，或者直接预览运行、导出代码。
 
-视频里演示用的是模拟设备。连接真实设备时，只要下位机按下面的格式收发数据即可。串口参数默认 115200 8N1，第 2、11 个工程是 9600 8N1；第 10 个工程走以太网，不用串口。
+视频里演示用的是模拟设备。连接真实设备时，只要下位机按下面的格式收发数据即可。串口参数默认 115200 8N1，第 2、11 个工程是 9600 8N1；第 10 个工程走 Modbus TCP，第 13 个工程走经典 S7comm，都不用串口。
 
 | 工程 | 对应教程 | 数据格式 |
 | --- | --- | --- |
@@ -16,6 +16,7 @@
 | `08-电池放电测试.uidp` | 数据记录与回放 | 键值文本 |
 | `10-PLC恒压供水.uidp` | 用 Modbus TCP 监控 PLC | Modbus TCP |
 | `11-温控仪模拟器.uidp` | —（02 的模拟设备，上位机当从站） | Modbus RTU 从站 |
+| `13-S7PLC联调.uidp` / `13-S7-PLC-Monitor-en.uidp` | S7 PLC 联调视频教程（中 / 英文工程） | 经典 S7comm |
 
 ## 01 温湿度采集
 
@@ -139,3 +140,34 @@ PLC 用 Modbus TCP 通信，单元标识（从站地址）为 1。工程里默�
 - 主站写入的设定温度（hr1，06）和启停命令（线圈 0，05）实时显示在下面；右边的从站寄存器表可以直接双击改值，日志框记下每个请求和应答。
 
 读不存在的地址（比如保持寄存器 6）会回异常 02，从站规则见 [docs/protocol.md](../../docs/protocol.md) 第七节。
+
+
+## 13 S7 PLC 联调
+
+[视频与网站图文教程](https://hmi.modusignal.cn/tutorials/12-s7-plc/?lang=zh) · [English website](https://hmi.modusignal.cn/tutorials/12-s7-plc/?lang=en) · [仓库中文步骤](../../docs/tutorials/13-s7-plc.zh.md) · [English walkthrough](../../docs/tutorials/13-s7-plc.en.md)。网站编号为第 12 期，仓库示例编号为 13。
+
+配套文件：
+
+- [中文 HMI 工程](13-S7PLC联调.uidp)
+- [English HMI project](13-S7-PLC-Monitor-en.uidp)
+- [模拟器工程](13-s7-first-plc.plcsim.json)，由 FluentPLC Simulator 打开，不由 HMI 设计器打开
+
+本期对齐 **PyQt UI Designer 0.7.0、FluentHMI Studio 0.7.0、FluentPLC Simulator 0.1.1**，验证日期为 2026-11-16；两份 HMI 工程均为 UIDP **1.1**。C++ 独立运行时与 Py 原生预览已完成本机模拟器的读数、曲线、BOOL 邻位保留和 900→1500→900 rpm 写回验证。这里记录的是本期工程的软件快照，不代表旧教程也已重新验证。S7 旧版设计器无法打开 UIDP 1.1，详见 [S7 配置与范围](../../docs/s7.md)。
+
+1. 在模拟器打开配套 `.plcsim.json`，监听 `127.0.0.1:1102` 并启动服务。
+2. 在桌面 HMI 打开中文或英文 `.uidp`，切到预览。连接卡片默认手动连接：Rack 0、Slot 1、PG，采集周期 200 ms。
+3. 点击连接后，温度应显示 23.5 °C、速度 900 rpm，压力在 0.8–1.6 bar 间变化，曲线持续更新。
+4. 切换泵启用开关；输入 1500 后回车，速度反馈变为 1500；点击预设按钮可恢复 900。写入值在模拟器当前值表中同步显示。
+5. `DB1.DBX0.7` 初始为 ON，切换 `DB1.DBX0.0` 时该邻位应保持 ON。最后可在 Py 版导出源码或用 Nuitka 打包，C++ 版则导出独立运行应用。
+
+| 地址 | 类型 | 用途 |
+| --- | --- | --- |
+| `DB1.DBX0.0` | BOOL | 泵启用读写 |
+| `DB1.DBX0.7` | BOOL | 邻位保留检查 |
+| `DB1.DBW2` | INT | 速度读写，初值 900 |
+| `DB1.DBD4` | REAL | 温度，初值 23.5 |
+| `DB1.DBD8` | REAL | 动态压力与曲线 |
+
+English: open the paired simulator project in FluentPLC Simulator, start its loopback server on port 1102, then open the English HMI project in either desktop designer 0.7.0. In Preview, connect with rack 0 / slot 1 / PG. Read the live values, toggle Pump enable, enter 1500 rpm and press Enter, then use the preset button to return to 900. The neighbor bit at DB1.DBX0.7 stays on. The simulator project and UIDP project are separate formats.
+
+后续更新本期时，应一起核对中英文 `.uidp`、模拟器地址与初值、中英文图文步骤、这里的软件版本和验证日期，以及网站 / 视频的素材版本。视频源文件由 `~/video-workflow/projects/FluentHMI-Studio/tutorials/12-s7-plc/` 维护，网站素材与版本记录见 hmi-site 仓库 README。两款 HMI 的配套工程和图文步骤应保持一致；旧教程的版本记录应保留，未重新验证时不要只替换为最新版本号。
