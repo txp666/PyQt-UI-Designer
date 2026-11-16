@@ -142,6 +142,8 @@ Apple Silicon 请使用原生 arm64 Python，Intel Mac 使用 x86_64 Python。�
 
 - **经典 S7comm**：使用独立 S7 连接卡片，按绝对 DB/M/I/Q 地址进行有类型读取和定向写入，BOOL 使用原生单个位写入。预览、源码导出和 Nuitka 打包共用后端，见 [S7 配置与示例](docs/s7.md)；可使用 [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) 进行本地 PLC 模拟。
 
+新增 [S7 视频教程](https://hmi.modusignal.cn/tutorials/12-s7-plc/?lang=zh)，配套[图文步骤](docs/tutorials/13-s7-plc.zh.md)和[中英文工程](examples/tutorials/README.md#13-s7-plc-联调)。本期对齐桌面 HMI 0.7.0、模拟器 0.1.1、UIDP 1.1，视频为中文配音并提供中英文字幕。
+
 ### 命令发送
 
 - **文本模式**：可选换行符
