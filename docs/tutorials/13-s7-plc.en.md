@@ -23,7 +23,7 @@ The two HMI projects have the same IDs, addresses and commands; only visible tex
 | Pressure | `DB1.DBD8 / REAL` | Sine rule, 0.8–1.6 bar over an 8 s period; display and trend |
 
 
-Local evidence: the C++0.7.0 Studio Preview and exported Runtime performed real simulator reads/writes on1102. Py0.7.0 native PreviewCanvas was separately verified with the same project on a temporary21112 instance:REAL23.5,5trend samples,INT900→1500→900,BOOL128→129→128 with the neighboring bit preserved,and four GUI writes verified independently. The official screenshots and video record the C++ UI; this lesson did not build or record a Py exported application.
+Local evidence: the C++ 0.7.0 Studio Preview and exported Runtime performed real simulator reads and writes on port 1102. Py 0.7.0 native PreviewCanvas was separately verified with the same project on a temporary port 21112 instance: REAL 23.5, five trend samples, INT 900 → 1500 → 900, and BOOL byte 128 → 129 → 128 with the neighbor bit preserved. Four GUI writes were verified independently. The official screenshots and video record the C++ UI; this lesson did not build or record a Py exported application.
 
 ## 1. Start the simulator
 
@@ -56,6 +56,10 @@ Open the `.uidp` project. Its card ID is `lesson-plc`; the visible title can be 
 | Auto-connect | Off |
 
 Run Preview, then click **Connect** on the S7 card. Temperature should read **23.5 °C**, speed **900 rpm**, and pressure should vary between **0.8 and 1.6 bar**. The project starts disconnected so opening it alone does not connect.
+
+![The connected tutorial project in a C++ 0.7.0 exported application, light theme](https://hmi.modusignal.cn/tutorials/assets/12-s7-plc/v070/en/preview-light.webp)
+
+*Actual C++ 0.7.0 exported application connected to the local simulator. Preview uses the same S7 runtime.*
 
 ## 3. Read by address and type
 
