@@ -142,7 +142,7 @@ On Apple Silicon use a native arm64 Python; on an Intel Mac use an x86_64 Python
 
 - **Classic S7comm**: typed absolute DB/M/I/Q reads and targeted writes through an S7 connection card, including native single-bit BOOL writes. Preview, source export and Nuitka use the same backend. See [S7 setup and example](docs/s7.md); use [FluentPLC Simulator](https://github.com/txp666/FluentPLC-Simulator) for local PLC simulation.
 
-Follow the [S7 video tutorial](https://hmi.modusignal.cn/tutorials/12-s7-plc/?lang=en) with the [English walkthrough](docs/tutorials/13-s7-plc.en.md) and [bilingual example projects](examples/tutorials/README.md#13-s7-plc-联调). This lesson is aligned with desktop HMI 0.7.0, Simulator 0.1.1 and UIDP 1.1; its video has Chinese narration and Chinese/English subtitles.
+Follow the [S7 video tutorial](https://hmi.modusignal.cn/tutorials/12-s7-plc/?lang=en) with the [English walkthrough](docs/tutorials/13-s7-plc.en.md) and [bilingual example projects](examples/tutorials/README.md#13-s7-plc-联调). This lesson is aligned with desktop HMI 0.7.0, Simulator 0.1.1 and UIDP 1.1. The Bilibili video has Chinese narration and captions; the walkthrough and example projects are available in Chinese and English.
 
 ### Sending commands
 
